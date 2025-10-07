@@ -283,12 +283,22 @@ class TestCustomJsonEncoder:
 class TestSetupLogging:
     """Test suite for setup_logging function."""
 
+    def teardown_method(self):
+        """Clean up logger handlers after each test."""
+        # Clean up both the specific logger and root logger
+        logger = logging.getLogger("metabase_migration")
+        logger.handlers.clear()
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()
+
     def test_setup_logging_info_level(self):
         """Test setting up logging with INFO level."""
         logger = setup_logging("INFO")
 
         assert logger.level == logging.INFO
-        assert len(logger.handlers) > 0
+        # Handlers are on the root logger, not the specific logger
+        root_logger = logging.getLogger()
+        assert len(root_logger.handlers) > 0
 
     def test_setup_logging_debug_level(self):
         """Test setting up logging with DEBUG level."""

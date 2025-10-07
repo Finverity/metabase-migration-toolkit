@@ -35,6 +35,8 @@ class TestMetabaseImporterInit:
     def test_init_creates_client(self, sample_import_config):
         """Test that initialization creates a MetabaseClient."""
         with patch("import_metabase.MetabaseClient") as mock_client_class:
+            MetabaseImporter(sample_import_config)
+
             mock_client_class.assert_called_once_with(
                 base_url=sample_import_config.target_url,
                 username=sample_import_config.target_username,
