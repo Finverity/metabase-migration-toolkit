@@ -1,7 +1,7 @@
 # Metabase Migration Toolkit
 
-[![Tests](https://github.com/YOUR_USERNAME/metabase-migration-toolkit/actions/workflows/tests.yml/badge.svg)](https://github.com/YOUR_USERNAME/metabase-migration-toolkit/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/YOUR_USERNAME/metabase-migration-toolkit/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_USERNAME/metabase-migration-toolkit)
+[![Tests](https://github.com/Finverity/metabase-migration-toolkit/actions/workflows/tests.yml/badge.svg)](https://github.com/Finverity/metabase-migration-toolkit/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/Finverity/metabase-migration-toolkit/branch/main/graph/badge.svg)](https://codecov.io/gh/Finverity/metabase-migration-toolkit)
 [![PyPI version](https://badge.fury.io/py/metabase-migration-toolkit.svg)](https://badge.fury.io/py/metabase-migration-toolkit)
 [![Python Versions](https://img.shields.io/pypi/pyversions/metabase-migration-toolkit.svg)](https://pypi.org/project/metabase-migration-toolkit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -50,7 +50,7 @@ This toolkit consists of two Python CLI scripts, `export_metabase.py` and `impor
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Finverity/metabase-migration-toolkit.git
 cd metabase-migration-toolkit
 ```
 
@@ -454,8 +454,3 @@ We welcome contributions! Here's how to get started:
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-**Note**: Remember to update the badge URLs with your actual GitHub username and repository name before publishing.
-
