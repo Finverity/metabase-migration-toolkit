@@ -6,15 +6,16 @@ and exports cards (questions) and dashboards into a structured directory layout.
 It produces a `manifest.json` file that indexes the exported content, which is
 used by the import script.
 """
+
 import dataclasses
 import datetime
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from tqdm import tqdm
 
-from lib.client import MetabaseClient, MetabaseAPIError
+from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ExportConfig, get_export_args
 from lib.models import Card, Collection, Dashboard, Manifest, ManifestMeta
 from lib.utils import (
@@ -43,10 +44,12 @@ class MetabaseExporter:
         )
         self.export_dir = Path(config.export_dir)
         self.manifest = self._initialize_manifest()
-        self._collection_path_map: Dict[int, str] = {}
-        self._processed_collections: Set[int] = set()
-        self._exported_cards: Set[int] = set()  # Track exported cards to prevent duplicates
-        self._dependency_chain: List[int] = []  # Track current dependency chain for circular detection
+        self._collection_path_map: dict[int, str] = {}
+        self._processed_collections: set[int] = set()
+        self._exported_cards: set[int] = set()  # Track exported cards to prevent duplicates
+        self._dependency_chain: list[int] = (
+            []
+        )  # Track current dependency chain for circular detection
 
     def _initialize_manifest(self) -> Manifest:
         """Initializes the manifest with metadata."""
@@ -85,7 +88,9 @@ class MetabaseExporter:
                 collection_tree = [
                     c for c in collection_tree if c.get("id") in self.config.root_collection_ids
                 ]
-                logger.info(f"Export restricted to root collections: {self.config.root_collection_ids}")
+                logger.info(
+                    f"Export restricted to root collections: {self.config.root_collection_ids}"
+                )
 
             if not collection_tree:
                 logger.warning("No collections found to export.")
@@ -134,21 +139,27 @@ class MetabaseExporter:
         self.manifest.databases = {db["id"]: db["name"] for db in databases}
         logger.info(f"Found {len(self.manifest.databases)} databases.")
 
-    def _traverse_collections(self, collections: List[Dict], parent_path: str = "", parent_id: Optional[int] = None):
+    def _traverse_collections(
+        self, collections: list[dict], parent_path: str = "", parent_id: int | None = None
+    ):
         """Recursively traverses the collection tree and processes each collection."""
         for collection_data in tqdm(collections, desc="Processing Collections"):
             collection_id = collection_data.get("id")
 
             # Skip personal collections unless explicitly included
-            if collection_data.get("personal_owner_id") and collection_id not in (self.config.root_collection_ids or []):
-                logger.info(f"Skipping personal collection '{collection_data['name']}' (ID: {collection_id})")
+            if collection_data.get("personal_owner_id") and collection_id not in (
+                self.config.root_collection_ids or []
+            ):
+                logger.info(
+                    f"Skipping personal collection '{collection_data['name']}' (ID: {collection_id})"
+                )
                 continue
 
             # Handle "root" collection which is a special case
-            if isinstance(collection_id, str) and collection_id == 'root':
+            if isinstance(collection_id, str) and collection_id == "root":
                 logger.info("Processing root collection content...")
                 current_path = "collections"
-                self._process_collection_items('root', current_path)
+                self._process_collection_items("root", current_path)
             elif isinstance(collection_id, int):
                 if collection_id in self._processed_collections:
                     continue
@@ -186,12 +197,16 @@ class MetabaseExporter:
                 collection_meta_path = self.export_dir / current_path / "_collection.json"
                 write_json_file(collection_data, collection_meta_path)
 
-                logger.info(f"Processing collection '{collection_data['name']}' (ID: {collection_id})")
+                logger.info(
+                    f"Processing collection '{collection_data['name']}' (ID: {collection_id})"
+                )
                 self._process_collection_items(collection_id, current_path)
 
                 # Recurse into children, passing current collection_id as parent
                 if "children" in collection_data and collection_data["children"]:
-                    self._traverse_collections(collection_data["children"], current_path, collection_id)
+                    self._traverse_collections(
+                        collection_data["children"], current_path, collection_id
+                    )
 
     def _process_collection_items(self, collection_id: Any, base_path: str):
         """Fetches and processes all items (cards, dashboards) in a single collection."""
@@ -214,7 +229,8 @@ class MetabaseExporter:
         except MetabaseAPIError as e:
             logger.error(f"Failed to process items for collection {collection_id}: {e}")
 
-    def _extract_card_dependencies(self, card_data: Dict) -> Set[int]:
+    @staticmethod
+    def _extract_card_dependencies(card_data: dict) -> set[int]:
         """
         Extracts card IDs that this card depends on (references in source-table).
         Returns a set of card IDs that must be exported before this card.
@@ -247,7 +263,9 @@ class MetabaseExporter:
 
         return dependencies
 
-    def _export_card_with_dependencies(self, card_id: int, base_path: str, dependency_chain: Optional[List[int]] = None):
+    def _export_card_with_dependencies(
+        self, card_id: int, base_path: str, dependency_chain: list[int] | None = None
+    ):
         """
         Exports a card and recursively exports all its dependencies.
 
@@ -282,12 +300,16 @@ class MetabaseExporter:
             dependencies = self._extract_card_dependencies(card_data)
 
             if dependencies:
-                logger.info(f"Card {card_id} ('{card_data.get('name', 'Unknown')}') depends on cards: {sorted(dependencies)}")
+                logger.info(
+                    f"Card {card_id} ('{card_data.get('name', 'Unknown')}') depends on cards: {sorted(dependencies)}"
+                )
 
                 # Recursively export dependencies first
                 for dep_id in sorted(dependencies):
                     if dep_id not in self._exported_cards:
-                        logger.info(f"  -> Exporting dependency: Card {dep_id} (required by Card {card_id})")
+                        logger.info(
+                            f"  -> Exporting dependency: Card {dep_id} (required by Card {card_id})"
+                        )
 
                         # Try to fetch the dependency card to determine its collection
                         try:
@@ -300,18 +322,29 @@ class MetabaseExporter:
                             else:
                                 # Use a special "dependencies" folder for cards outside the export scope
                                 dep_base_path = "dependencies"
-                                logger.info(f"     Card {dep_id} is outside export scope, placing in '{dep_base_path}' folder")
+                                logger.info(
+                                    f"     Card {dep_id} is outside export scope, placing in '{dep_base_path}' folder"
+                                )
 
                             # Check if dependency is archived
-                            if dep_card_data.get("archived", False) and not self.config.include_archived:
-                                logger.warning(f"     Card {dep_id} is archived but --include-archived not set. Exporting anyway due to dependency.")
+                            if (
+                                dep_card_data.get("archived", False)
+                                and not self.config.include_archived
+                            ):
+                                logger.warning(
+                                    f"     Card {dep_id} is archived but --include-archived not set. Exporting anyway due to dependency."
+                                )
 
                             # Recursively export the dependency
-                            self._export_card_with_dependencies(dep_id, dep_base_path, current_chain)
+                            self._export_card_with_dependencies(
+                                dep_id, dep_base_path, current_chain
+                            )
 
                         except MetabaseAPIError as e:
                             logger.error(f"     Failed to fetch dependency card {dep_id}: {e}")
-                            logger.warning(f"     Card {card_id} may fail to import due to missing dependency {dep_id}")
+                            logger.warning(
+                                f"     Card {card_id} may fail to import due to missing dependency {dep_id}"
+                            )
 
             # Now export the card itself
             self._export_card(card_id, base_path, card_data)
@@ -319,7 +352,7 @@ class MetabaseExporter:
         except MetabaseAPIError as e:
             logger.error(f"Failed to fetch card {card_id} for dependency analysis: {e}")
 
-    def _export_card(self, card_id: int, base_path: str, card_data: Optional[Dict] = None):
+    def _export_card(self, card_id: int, base_path: str, card_data: dict | None = None):
         """
         Exports a single card.
 
@@ -341,12 +374,16 @@ class MetabaseExporter:
                 card_data = self.client.get_card(card_id)
 
             if not card_data.get("dataset_query"):
-                logger.warning(f"Card ID {card_id} ('{card_data['name']}') has no dataset_query. Skipping.")
+                logger.warning(
+                    f"Card ID {card_id} ('{card_data['name']}') has no dataset_query. Skipping."
+                )
                 return
 
             db_id = card_data.get("database_id") or card_data["dataset_query"].get("database")
             if db_id is None:
-                logger.warning(f"Card ID {card_id} ('{card_data['name']}') has no database ID. Skipping.")
+                logger.warning(
+                    f"Card ID {card_id} ('{card_data['name']}') has no database ID. Skipping."
+                )
                 return
 
             card_slug = sanitize_filename(card_data["name"])
@@ -412,7 +449,9 @@ class MetabaseExporter:
         except MetabaseAPIError as e:
             logger.error(f"Failed to export dashboard ID {dashboard_id}: {e}")
         except Exception as e:
-            logger.error(f"An unexpected error occurred while exporting dashboard ID {dashboard_id}: {e}")
+            logger.error(
+                f"An unexpected error occurred while exporting dashboard ID {dashboard_id}: {e}"
+            )
 
 
 if __name__ == "__main__":

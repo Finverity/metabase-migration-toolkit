@@ -128,6 +128,19 @@ extend-exclude = '''
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "build",
+    "dist",
+    "metabase_export",
+    "tmp",
+]
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -142,24 +155,14 @@ ignore = [
     "E501",  # line too long (handled by black)
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
-]
-exclude = [
-    ".git",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".venv",
-    "build",
-    "dist",
-    "metabase_export",
-    "tmp",
+    "N812",  # lowercase imported as non-lowercase (TOOL_VERSION is a constant)
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__.py
 "tests/*" = ["N802", "N803"]  # allow non-lowercase function names in tests
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["metabase_migration"]
 
 # ============================================================================

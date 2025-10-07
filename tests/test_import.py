@@ -3,15 +3,16 @@ Unit tests for import_metabase.py
 
 Tests the MetabaseImporter class and import logic.
 """
+
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 
 from import_metabase import MetabaseImporter
 from lib.config import ImportConfig
-from lib.models import DatabaseMap, UnmappedDatabase, ImportReport
+from lib.models import DatabaseMap, ImportReport
 
 
 class TestMetabaseImporterInit:
@@ -19,9 +20,9 @@ class TestMetabaseImporterInit:
 
     def test_init_with_config(self, sample_import_config):
         """Test MetabaseImporter initialization with config."""
-        with patch('import_metabase.MetabaseClient'):
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(sample_import_config)
-            
+
             assert importer.config == sample_import_config
             assert importer.export_dir == Path(sample_import_config.export_dir)
             assert importer.manifest is None
@@ -33,9 +34,7 @@ class TestMetabaseImporterInit:
 
     def test_init_creates_client(self, sample_import_config):
         """Test that initialization creates a MetabaseClient."""
-        with patch('import_metabase.MetabaseClient') as mock_client_class:
-            importer = MetabaseImporter(sample_import_config)
-            
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
             mock_client_class.assert_called_once_with(
                 base_url=sample_import_config.target_url,
                 username=sample_import_config.target_username,
@@ -53,12 +52,12 @@ class TestLoadExportPackage:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(tmp_path / "nonexistent"),
-            db_map_path=str(tmp_path / "db_map.json")
+            db_map_path=str(tmp_path / "db_map.json"),
         )
-        
-        with patch('import_metabase.MetabaseClient'):
+
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(config)
-            
+
             with pytest.raises(FileNotFoundError, match="manifest.json not found"):
                 importer._load_export_package()
 
@@ -67,12 +66,12 @@ class TestLoadExportPackage:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(manifest_file.parent),
-            db_map_path=str(tmp_path / "nonexistent_db_map.json")
+            db_map_path=str(tmp_path / "nonexistent_db_map.json"),
         )
-        
-        with patch('import_metabase.MetabaseClient'):
+
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(config)
-            
+
             with pytest.raises(FileNotFoundError, match="Database mapping file not found"):
                 importer._load_export_package()
 
@@ -81,13 +80,13 @@ class TestLoadExportPackage:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(manifest_file.parent),
-            db_map_path=str(db_map_file)
+            db_map_path=str(db_map_file),
         )
-        
-        with patch('import_metabase.MetabaseClient'):
+
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            
+
             assert importer.manifest is not None
             assert importer.db_map is not None
             assert isinstance(importer.db_map, DatabaseMap)
@@ -101,13 +100,13 @@ class TestResolveDatabaseId:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(manifest_file.parent),
-            db_map_path=str(db_map_file)
+            db_map_path=str(db_map_file),
         )
-        
-        with patch('import_metabase.MetabaseClient'):
+
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            
+
             # Source DB ID 1 should map to target DB ID 10
             target_id = importer._resolve_db_id(1)
             assert target_id == 10
@@ -117,13 +116,13 @@ class TestResolveDatabaseId:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(manifest_file.parent),
-            db_map_path=str(db_map_file)
+            db_map_path=str(db_map_file),
         )
-        
-        with patch('import_metabase.MetabaseClient'):
+
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            
+
             # Should resolve by name if not in by_id
             target_id = importer._resolve_db_id(2)
             assert target_id == 20
@@ -133,13 +132,13 @@ class TestResolveDatabaseId:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(manifest_file.parent),
-            db_map_path=str(db_map_file)
+            db_map_path=str(db_map_file),
         )
-        
-        with patch('import_metabase.MetabaseClient'):
+
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            
+
             # Database ID 999 is not mapped
             target_id = importer._resolve_db_id(999)
             assert target_id is None
@@ -153,15 +152,15 @@ class TestValidateDatabaseMappings:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(manifest_file.parent),
-            db_map_path=str(db_map_file)
+            db_map_path=str(db_map_file),
         )
-        
-        with patch('import_metabase.MetabaseClient'):
+
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            
+
             unmapped = importer._validate_database_mappings()
-            
+
             # All databases in sample data should be mapped
             assert len(unmapped) == 0
 
@@ -173,12 +172,9 @@ class TestValidateDatabaseMappings:
                 "source_url": "https://example.com",
                 "export_timestamp": "2025-10-07T12:00:00",
                 "tool_version": "1.0.0",
-                "cli_args": {}
+                "cli_args": {},
             },
-            "databases": {
-                "1": "DB1",
-                "999": "Unmapped DB"
-            },
+            "databases": {"1": "DB1", "999": "Unmapped DB"},
             "collections": [],
             "cards": [
                 {
@@ -187,38 +183,33 @@ class TestValidateDatabaseMappings:
                     "collection_id": 1,
                     "database_id": 999,
                     "archived": False,
-                    "file_path": "test.json"
+                    "file_path": "test.json",
                 }
             ],
-            "dashboards": []
+            "dashboards": [],
         }
-        
+
         manifest_path = tmp_path / "manifest.json"
         with open(manifest_path, "w") as f:
             json.dump(manifest_data, f)
-        
+
         # Create db_map with only DB1 mapped
-        db_map_data = {
-            "by_id": {"1": 10},
-            "by_name": {"DB1": 10}
-        }
-        
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+
         db_map_path = tmp_path / "db_map.json"
         with open(db_map_path, "w") as f:
             json.dump(db_map_data, f)
-        
+
         config = ImportConfig(
-            target_url="https://example.com",
-            export_dir=str(tmp_path),
-            db_map_path=str(db_map_path)
+            target_url="https://example.com", export_dir=str(tmp_path), db_map_path=str(db_map_path)
         )
-        
-        with patch('import_metabase.MetabaseClient'):
+
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            
+
             unmapped = importer._validate_database_mappings()
-            
+
             assert len(unmapped) == 1
             assert unmapped[0].source_db_id == 999
             assert unmapped[0].source_db_name == "Unmapped DB"
@@ -233,21 +224,21 @@ class TestValidateTargetDatabases:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(manifest_file.parent),
-            db_map_path=str(db_map_file)
+            db_map_path=str(db_map_file),
         )
-        
-        with patch('import_metabase.MetabaseClient') as mock_client_class:
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_databases.return_value = [
                 {"id": 10, "name": "Target DB 1"},
                 {"id": 20, "name": "Target DB 2"},
-                {"id": 30, "name": "Target DB 3"}
+                {"id": 30, "name": "Target DB 3"},
             ]
             mock_client_class.return_value = mock_client
-            
+
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            
+
             # Should not raise an error
             importer._validate_target_databases()
 
@@ -256,20 +247,18 @@ class TestValidateTargetDatabases:
         config = ImportConfig(
             target_url="https://example.com",
             export_dir=str(manifest_file.parent),
-            db_map_path=str(db_map_file)
+            db_map_path=str(db_map_file),
         )
-        
-        with patch('import_metabase.MetabaseClient') as mock_client_class:
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             # Target only has DB 10, but mapping references 10, 20, 30
-            mock_client.get_databases.return_value = [
-                {"id": 10, "name": "Target DB 1"}
-            ]
+            mock_client.get_databases.return_value = [{"id": 10, "name": "Target DB 1"}]
             mock_client_class.return_value = mock_client
-            
+
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            
+
             # Should exit with error
             with pytest.raises(SystemExit):
                 importer._validate_target_databases()
@@ -278,62 +267,60 @@ class TestValidateTargetDatabases:
 class TestConflictStrategies:
     """Test suite for different conflict resolution strategies."""
 
-    def test_skip_strategy(self, sample_import_config):
+    def test_skip_strategy(self):
         """Test skip conflict strategy."""
         config = ImportConfig(
             target_url="https://example.com",
             export_dir="./export",
             db_map_path="./db_map.json",
-            conflict_strategy="skip"
+            conflict_strategy="skip",
         )
-        
+
         assert config.conflict_strategy == "skip"
 
-    def test_overwrite_strategy(self, sample_import_config):
+    def test_overwrite_strategy(self):
         """Test overwrite conflict strategy."""
         config = ImportConfig(
             target_url="https://example.com",
             export_dir="./export",
             db_map_path="./db_map.json",
-            conflict_strategy="overwrite"
+            conflict_strategy="overwrite",
         )
-        
+
         assert config.conflict_strategy == "overwrite"
 
-    def test_rename_strategy(self, sample_import_config):
+    def test_rename_strategy(self):
         """Test rename conflict strategy."""
         config = ImportConfig(
             target_url="https://example.com",
             export_dir="./export",
             db_map_path="./db_map.json",
-            conflict_strategy="rename"
+            conflict_strategy="rename",
         )
-        
+
         assert config.conflict_strategy == "rename"
 
 
 class TestDryRun:
     """Test suite for dry-run mode."""
 
-    def test_dry_run_enabled(self, sample_import_config):
+    def test_dry_run_enabled(self):
         """Test that dry_run flag is respected."""
         config = ImportConfig(
             target_url="https://example.com",
             export_dir="./export",
             db_map_path="./db_map.json",
-            dry_run=True
+            dry_run=True,
         )
-        
+
         assert config.dry_run is True
 
-    def test_dry_run_disabled(self, sample_import_config):
+    def test_dry_run_disabled(self):
         """Test that dry_run defaults to False."""
         config = ImportConfig(
-            target_url="https://example.com",
-            export_dir="./export",
-            db_map_path="./db_map.json"
+            target_url="https://example.com", export_dir="./export", db_map_path="./db_map.json"
         )
-        
+
         assert config.dry_run is False
 
 
@@ -342,9 +329,9 @@ class TestImportReport:
 
     def test_report_initialization(self, sample_import_config):
         """Test that import report is initialized."""
-        with patch('import_metabase.MetabaseClient'):
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(sample_import_config)
-            
+
             assert isinstance(importer.report, ImportReport)
             assert importer.report.items == []
 
@@ -354,16 +341,16 @@ class TestCollectionMapping:
 
     def test_collection_map_empty_initially(self, sample_import_config):
         """Test that collection map is empty initially."""
-        with patch('import_metabase.MetabaseClient'):
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(sample_import_config)
-            
+
             assert importer._collection_map == {}
 
     def test_card_map_empty_initially(self, sample_import_config):
         """Test that card map is empty initially."""
-        with patch('import_metabase.MetabaseClient'):
+        with patch("import_metabase.MetabaseClient"):
             importer = MetabaseImporter(sample_import_config)
-            
+
             assert importer._card_map == {}
 
 
@@ -373,24 +360,14 @@ class TestImportConfiguration:
     def test_config_requires_target_url(self):
         """Test that target_url is required."""
         with pytest.raises(TypeError):
-            ImportConfig(
-                export_dir="./export",
-                db_map_path="./db_map.json"
-            )
+            ImportConfig(export_dir="./export", db_map_path="./db_map.json")
 
     def test_config_requires_export_dir(self):
         """Test that export_dir is required."""
         with pytest.raises(TypeError):
-            ImportConfig(
-                target_url="https://example.com",
-                db_map_path="./db_map.json"
-            )
+            ImportConfig(target_url="https://example.com", db_map_path="./db_map.json")
 
     def test_config_requires_db_map_path(self):
         """Test that db_map_path is required."""
         with pytest.raises(TypeError):
-            ImportConfig(
-                target_url="https://example.com",
-                export_dir="./export"
-            )
-
+            ImportConfig(target_url="https://example.com", export_dir="./export")

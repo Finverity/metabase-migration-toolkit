@@ -3,10 +3,9 @@ Unit tests for lib/config.py
 
 Tests configuration loading from CLI arguments and environment variables.
 """
+
 import os
 from unittest.mock import patch
-
-import pytest
 
 from lib.config import ExportConfig, ImportConfig
 
@@ -24,9 +23,9 @@ class TestExportConfig:
             include_dashboards=True,
             include_archived=False,
             root_collection_ids=[1, 2, 3],
-            log_level="INFO"
+            log_level="INFO",
         )
-        
+
         assert config.source_url == "https://example.com"
         assert config.export_dir == "./export"
         assert config.source_username == "user@example.com"
@@ -38,11 +37,8 @@ class TestExportConfig:
 
     def test_export_config_defaults(self):
         """Test ExportConfig with default values."""
-        config = ExportConfig(
-            source_url="https://example.com",
-            export_dir="./export"
-        )
-        
+        config = ExportConfig(source_url="https://example.com", export_dir="./export")
+
         assert config.source_username is None
         assert config.source_password is None
         assert config.source_session_token is None
@@ -57,9 +53,9 @@ class TestExportConfig:
         config = ExportConfig(
             source_url="https://example.com",
             export_dir="./export",
-            source_session_token="session-token-123"
+            source_session_token="session-token-123",
         )
-        
+
         assert config.source_session_token == "session-token-123"
         assert config.source_username is None
         assert config.source_password is None
@@ -69,9 +65,9 @@ class TestExportConfig:
         config = ExportConfig(
             source_url="https://example.com",
             export_dir="./export",
-            source_personal_token="personal-token-123"
+            source_personal_token="personal-token-123",
         )
-        
+
         assert config.source_personal_token == "personal-token-123"
 
 
@@ -88,9 +84,9 @@ class TestImportConfig:
             target_password="password123",
             conflict_strategy="skip",
             dry_run=False,
-            log_level="INFO"
+            log_level="INFO",
         )
-        
+
         assert config.target_url == "https://example.com"
         assert config.export_dir == "./export"
         assert config.db_map_path == "./db_map.json"
@@ -103,11 +99,9 @@ class TestImportConfig:
     def test_import_config_defaults(self):
         """Test ImportConfig with default values."""
         config = ImportConfig(
-            target_url="https://example.com",
-            export_dir="./export",
-            db_map_path="./db_map.json"
+            target_url="https://example.com", export_dir="./export", db_map_path="./db_map.json"
         )
-        
+
         assert config.target_username is None
         assert config.target_password is None
         assert config.target_session_token is None
@@ -123,7 +117,7 @@ class TestImportConfig:
                 target_url="https://example.com",
                 export_dir="./export",
                 db_map_path="./db_map.json",
-                conflict_strategy=strategy
+                conflict_strategy=strategy,
             )
             assert config.conflict_strategy == strategy
 
@@ -133,50 +127,62 @@ class TestImportConfig:
             target_url="https://example.com",
             export_dir="./export",
             db_map_path="./db_map.json",
-            dry_run=True
+            dry_run=True,
         )
-        
+
         assert config.dry_run is True
 
 
 class TestGetExportArgs:
     """Test suite for get_export_args function."""
 
-    @patch.dict(os.environ, {
-        "MB_SOURCE_URL": "https://env.example.com",
-        "MB_SOURCE_USERNAME": "env_user@example.com",
-        "MB_SOURCE_PASSWORD": "env_password"
-    })
-    @patch('sys.argv', ['export_metabase.py', '--export-dir', './test_export'])
+    @patch.dict(
+        os.environ,
+        {
+            "MB_SOURCE_URL": "https://env.example.com",
+            "MB_SOURCE_USERNAME": "env_user@example.com",
+            "MB_SOURCE_PASSWORD": "env_password",
+        },
+    )
+    @patch("sys.argv", ["export_metabase.py", "--export-dir", "./test_export"])
     def test_get_export_args_from_env(self):
         """Test loading export config from environment variables."""
         from lib.config import get_export_args
-        
+
         config = get_export_args()
-        
+
         assert config.source_url == "https://env.example.com"
         assert config.source_username == "env_user@example.com"
         assert config.source_password == "env_password"
         assert config.export_dir == "./test_export"
 
     @patch.dict(os.environ, {}, clear=True)
-    @patch('sys.argv', [
-        'export_metabase.py',
-        '--source-url', 'https://cli.example.com',
-        '--source-username', 'cli_user@example.com',
-        '--source-password', 'cli_password',
-        '--export-dir', './cli_export',
-        '--include-dashboards',
-        '--include-archived',
-        '--root-collections', '1,2,3',
-        '--log-level', 'DEBUG'
-    ])
+    @patch(
+        "sys.argv",
+        [
+            "export_metabase.py",
+            "--source-url",
+            "https://cli.example.com",
+            "--source-username",
+            "cli_user@example.com",
+            "--source-password",
+            "cli_password",
+            "--export-dir",
+            "./cli_export",
+            "--include-dashboards",
+            "--include-archived",
+            "--root-collections",
+            "1,2,3",
+            "--log-level",
+            "DEBUG",
+        ],
+    )
     def test_get_export_args_from_cli(self):
         """Test loading export config from CLI arguments."""
         from lib.config import get_export_args
-        
+
         config = get_export_args()
-        
+
         assert config.source_url == "https://cli.example.com"
         assert config.source_username == "cli_user@example.com"
         assert config.source_password == "cli_password"
@@ -186,21 +192,26 @@ class TestGetExportArgs:
         assert config.root_collection_ids == [1, 2, 3]
         assert config.log_level == "DEBUG"
 
-    @patch.dict(os.environ, {
-        "MB_SOURCE_URL": "https://env.example.com",
-        "MB_SOURCE_USERNAME": "env_user@example.com"
-    })
-    @patch('sys.argv', [
-        'export_metabase.py',
-        '--source-url', 'https://cli.example.com',
-        '--export-dir', './test_export'
-    ])
+    @patch.dict(
+        os.environ,
+        {"MB_SOURCE_URL": "https://env.example.com", "MB_SOURCE_USERNAME": "env_user@example.com"},
+    )
+    @patch(
+        "sys.argv",
+        [
+            "export_metabase.py",
+            "--source-url",
+            "https://cli.example.com",
+            "--export-dir",
+            "./test_export",
+        ],
+    )
     def test_get_export_args_cli_overrides_env(self):
         """Test that CLI arguments override environment variables."""
         from lib.config import get_export_args
-        
+
         config = get_export_args()
-        
+
         # CLI should override env
         assert config.source_url == "https://cli.example.com"
         # Env should be used when CLI not provided
@@ -210,22 +221,24 @@ class TestGetExportArgs:
 class TestGetImportArgs:
     """Test suite for get_import_args function."""
 
-    @patch.dict(os.environ, {
-        "MB_TARGET_URL": "https://env.example.com",
-        "MB_TARGET_USERNAME": "env_user@example.com",
-        "MB_TARGET_PASSWORD": "env_password"
-    })
-    @patch('sys.argv', [
-        'import_metabase.py',
-        '--export-dir', './test_export',
-        '--db-map', './db_map.json'
-    ])
+    @patch.dict(
+        os.environ,
+        {
+            "MB_TARGET_URL": "https://env.example.com",
+            "MB_TARGET_USERNAME": "env_user@example.com",
+            "MB_TARGET_PASSWORD": "env_password",
+        },
+    )
+    @patch(
+        "sys.argv",
+        ["import_metabase.py", "--export-dir", "./test_export", "--db-map", "./db_map.json"],
+    )
     def test_get_import_args_from_env(self):
         """Test loading import config from environment variables."""
         from lib.config import get_import_args
-        
+
         config = get_import_args()
-        
+
         assert config.target_url == "https://env.example.com"
         assert config.target_username == "env_user@example.com"
         assert config.target_password == "env_password"
@@ -233,23 +246,33 @@ class TestGetImportArgs:
         assert config.db_map_path == "./db_map.json"
 
     @patch.dict(os.environ, {}, clear=True)
-    @patch('sys.argv', [
-        'import_metabase.py',
-        '--target-url', 'https://cli.example.com',
-        '--target-username', 'cli_user@example.com',
-        '--target-password', 'cli_password',
-        '--export-dir', './cli_export',
-        '--db-map', './cli_db_map.json',
-        '--conflict', 'overwrite',
-        '--dry-run',
-        '--log-level', 'DEBUG'
-    ])
+    @patch(
+        "sys.argv",
+        [
+            "import_metabase.py",
+            "--target-url",
+            "https://cli.example.com",
+            "--target-username",
+            "cli_user@example.com",
+            "--target-password",
+            "cli_password",
+            "--export-dir",
+            "./cli_export",
+            "--db-map",
+            "./cli_db_map.json",
+            "--conflict",
+            "overwrite",
+            "--dry-run",
+            "--log-level",
+            "DEBUG",
+        ],
+    )
     def test_get_import_args_from_cli(self):
         """Test loading import config from CLI arguments."""
         from lib.config import get_import_args
-        
+
         config = get_import_args()
-        
+
         assert config.target_url == "https://cli.example.com"
         assert config.target_username == "cli_user@example.com"
         assert config.target_password == "cli_password"
@@ -259,21 +282,24 @@ class TestGetImportArgs:
         assert config.dry_run is True
         assert config.log_level == "DEBUG"
 
-    @patch.dict(os.environ, {
-        "MB_TARGET_URL": "https://env.example.com"
-    })
-    @patch('sys.argv', [
-        'import_metabase.py',
-        '--target-url', 'https://cli.example.com',
-        '--export-dir', './test_export',
-        '--db-map', './db_map.json'
-    ])
+    @patch.dict(os.environ, {"MB_TARGET_URL": "https://env.example.com"})
+    @patch(
+        "sys.argv",
+        [
+            "import_metabase.py",
+            "--target-url",
+            "https://cli.example.com",
+            "--export-dir",
+            "./test_export",
+            "--db-map",
+            "./db_map.json",
+        ],
+    )
     def test_get_import_args_cli_overrides_env(self):
         """Test that CLI arguments override environment variables."""
         from lib.config import get_import_args
-        
+
         config = get_import_args()
-        
+
         # CLI should override env
         assert config.target_url == "https://cli.example.com"
-

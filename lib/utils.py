@@ -1,6 +1,7 @@
 """
 General utility functions for logging, file operations, and string manipulation.
 """
+
 import dataclasses
 import hashlib
 import json
@@ -8,7 +9,7 @@ import logging
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # Import version from package
 try:
@@ -17,12 +18,15 @@ except ImportError:
     # Fallback for development
     TOOL_VERSION = "1.0.0"
 
+
 class CustomJsonEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle dataclasses."""
+
     def default(self, o: Any) -> Any:
         if dataclasses.is_dataclass(o):
             return dataclasses.asdict(o)
         return super().default(o)
+
 
 def setup_logging(name_or_level: str = "INFO", level: str = None) -> logging.Logger:
     """
@@ -43,7 +47,9 @@ def setup_logging(name_or_level: str = "INFO", level: str = None) -> logging.Log
     if level is not None:
         # Explicit level provided
         log_level_str = level
-        logger_name = name_or_level if name_or_level.upper() not in log_levels else "metabase_migration"
+        logger_name = (
+            name_or_level if name_or_level.upper() not in log_levels else "metabase_migration"
+        )
     elif name_or_level.upper() in log_levels:
         # First argument is a log level
         log_level_str = name_or_level
@@ -62,9 +68,7 @@ def setup_logging(name_or_level: str = "INFO", level: str = None) -> logging.Log
     # Only add handler if root logger doesn't have handlers
     if not root_logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         handler.setFormatter(formatter)
         root_logger.addHandler(handler)
 
@@ -75,6 +79,7 @@ def setup_logging(name_or_level: str = "INFO", level: str = None) -> logging.Log
     logger.setLevel(log_level)
 
     return logger
+
 
 def sanitize_filename(name: str) -> str:
     """
@@ -95,6 +100,7 @@ def sanitize_filename(name: str) -> str:
     # Truncate to a reasonable length
     return s[:100]
 
+
 def calculate_checksum(file_path: Path) -> str:
     """
     Calculates the SHA256 checksum of a file.
@@ -111,18 +117,21 @@ def calculate_checksum(file_path: Path) -> str:
             sha256.update(byte_block)
     return sha256.hexdigest()
 
+
 def write_json_file(data: Any, path: Path):
     """Writes a dictionary or dataclass to a JSON file with pretty printing."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, cls=CustomJsonEncoder, indent=2, ensure_ascii=False)
 
-def read_json_file(path: Path) -> Dict[str, Any]:
+
+def read_json_file(path: Path) -> dict[str, Any]:
     """Reads a JSON file into a dictionary."""
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
-def clean_for_create(payload: Dict[str, Any]) -> Dict[str, Any]:
+
+def clean_for_create(payload: dict[str, Any]) -> dict[str, Any]:
     """Removes immutable or server-generated fields before creating a new item."""
     # This list may need to be adjusted based on Metabase API version
     fields_to_remove = [
@@ -145,13 +154,14 @@ def clean_for_create(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     return cleaned
 
-def clean_dashboard_for_update(payload: Dict[str, Any]) -> Dict[str, Any]:
+
+def clean_dashboard_for_update(payload: dict[str, Any]) -> dict[str, Any]:
     """Removes fields that should not be sent on a dashboard update."""
     cleaned = clean_for_create(payload)
     # Dashcards are updated via their own field, not at the top level
-    if 'dashcards' in cleaned:
-        del cleaned['dashcards']
+    if "dashcards" in cleaned:
+        del cleaned["dashcards"]
     # Dash tabs are also updated via their own field
-    if 'tabs' in cleaned:
-        del cleaned['tabs']
+    if "tabs" in cleaned:
+        del cleaned["tabs"]
     return cleaned

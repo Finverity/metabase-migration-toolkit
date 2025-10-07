@@ -2,16 +2,17 @@
 A robust, production-ready client for interacting with the Metabase API.
 Handles authentication, pagination, retries, and error handling.
 """
+
 import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import requests
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from lib.utils import TOOL_VERSION
@@ -22,7 +23,7 @@ logger = logging.getLogger("metabase_migration")
 class MetabaseAPIError(Exception):
     """Custom exception for Metabase API errors."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, response_data: Any = None):
+    def __init__(self, message: str, status_code: int | None = None, response_data: Any = None):
         self.message = message
         self.status_code = status_code
         self.response_data = response_data
@@ -38,10 +39,10 @@ class MetabaseClient:
     def __init__(
         self,
         base_url: str,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        session_token: Optional[str] = None,
-        personal_token: Optional[str] = None,
+        username: str | None = None,
+        password: str | None = None,
+        session_token: str | None = None,
+        personal_token: str | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_url = f"{self.base_url}/api"
@@ -59,7 +60,9 @@ class MetabaseClient:
             return
 
         if not self._username or not self._password:
-            raise MetabaseAPIError("Authentication required: Please provide username/password or a session/personal token.")
+            raise MetabaseAPIError(
+                "Authentication required: Please provide username/password or a session/personal token."
+            )
 
         logger.info(f"Authenticating as user {self._username}...")
         try:
@@ -74,34 +77,48 @@ class MetabaseClient:
             logger.info("Authentication successful.")
         except requests.exceptions.RequestException as e:
             logger.error(f"Authentication failed: {e.response.text if e.response else e}")
-            raise MetabaseAPIError(f"Authentication failed for user {self._username}",
-                                   status_code=e.response.status_code if e.response else None) from e
+            raise MetabaseAPIError(
+                f"Authentication failed for user {self._username}",
+                status_code=e.response.status_code if e.response else None,
+            ) from e
 
-    def _prepare_headers(self) -> Dict[str, str]:
+    def _prepare_headers(self) -> dict[str, str]:
         """Prepares headers for an API request, authenticating if necessary."""
-        if not self._session.headers.get("X-Metabase-Session") and not self._session.headers.get("X-Metabase-API-Key"):
+        if not self._session.headers.get("X-Metabase-Session") and not self._session.headers.get(
+            "X-Metabase-API-Key"
+        ):
             if self._personal_token:
                 self._session.headers.update({"X-Metabase-API-Key": self._personal_token})
             elif self._session_token:
                 self._session.headers.update({"X-Metabase-Session": self._session_token})
             else:
                 self._authenticate()
-                if self._session_token: # Re-check after authentication
+                if self._session_token:  # Re-check after authentication
                     self._session.headers.update({"X-Metabase-Session": self._session_token})
         return self._session.headers
 
     def _should_retry(self, exception: BaseException) -> bool:
         """Determines if a request should be retried."""
-        if isinstance(exception, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+        if isinstance(
+            exception, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+        ):
             return True
-        if isinstance(exception, MetabaseAPIError) and exception.status_code in [429, 500, 502, 503, 504]:
+        if isinstance(exception, MetabaseAPIError) and exception.status_code in [
+            429,
+            500,
+            502,
+            503,
+            504,
+        ]:
             return True
         return False
 
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=30),
         stop=stop_after_attempt(5),
-        retry=retry_if_exception_type((requests.exceptions.ConnectionError, requests.exceptions.Timeout, MetabaseAPIError)),
+        retry=retry_if_exception_type(
+            (requests.exceptions.ConnectionError, requests.exceptions.Timeout, MetabaseAPIError)
+        ),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying API call due to {retry_state.outcome.exception()} (Attempt {retry_state.attempt_number})"
         ),
@@ -118,7 +135,7 @@ class MetabaseClient:
             return response
         except requests.exceptions.HTTPError as e:
             # Log request body for debugging
-            request_body = kwargs.get('json') or kwargs.get('data')
+            request_body = kwargs.get("json") or kwargs.get("data")
             if request_body:
                 logger.error(f"Request body: {request_body}")
 
@@ -132,14 +149,16 @@ class MetabaseClient:
                 # Fall back to raw text if not JSON
                 formatted_response = response_text
 
-            logger.error(f"{method} API request to {url} failed with status {e.response.status_code}: {formatted_response}")
+            logger.error(
+                f"{method} API request to {url} failed with status {e.response.status_code}: {formatted_response}"
+            )
             raise MetabaseAPIError(
                 message=f"Request to {endpoint} failed",
                 status_code=e.response.status_code,
                 response_data=response_text,
             ) from e
 
-    def _get_paginated(self, endpoint: str, params: Optional[Dict] = None) -> List[Dict]:
+    def _get_paginated(self, endpoint: str, params: dict | None = None) -> list[dict]:
         """
         Handles Metabase's pagination to fetch all items from an endpoint.
         NOTE: Metabase pagination is inconsistent. This handles common cases but may need adjustment.
@@ -156,7 +175,7 @@ class MetabaseClient:
             # We'll rely on the fact that for many endpoints, it just returns all items.
             # A more robust solution might inspect response headers or a metadata block if available.
             # For now, we will not add page parameter unless we know it's needed.
-            
+
             response = self._request("get", endpoint, params=current_params)
             data = response.json()
 
@@ -174,33 +193,37 @@ class MetabaseClient:
                     break
                 page += 1
             else:
-                raise MetabaseAPIError(f"Unexpected pagination response format from {endpoint}", response_data=data)
-        
+                raise MetabaseAPIError(
+                    f"Unexpected pagination response format from {endpoint}", response_data=data
+                )
+
         return all_items
-    
+
     # --- Public API Methods ---
 
-    def get_collections_tree(self, params: Optional[Dict] = None) -> List[Dict]:
+    def get_collections_tree(self, params: dict | None = None) -> list[dict]:
         """Fetches the entire collection tree."""
         return self._request("get", "/collection/tree", params=params or {}).json()
 
-    def get_collection(self, collection_id: int) -> Dict:
+    def get_collection(self, collection_id: int) -> dict:
         """Fetches the full details for a single collection."""
         return self._request("get", f"/collection/{collection_id}").json()
 
-    def get_collection_items(self, collection_id: Union[int, str], params: Optional[Dict] = None) -> Dict:
+    def get_collection_items(self, collection_id: int | str, params: dict | None = None) -> dict:
         """Fetches items within a specific collection."""
-        return self._request("get", f"/collection/{collection_id}/items", params=params or {}).json()
+        return self._request(
+            "get", f"/collection/{collection_id}/items", params=params or {}
+        ).json()
 
-    def get_card(self, card_id: int) -> Dict:
+    def get_card(self, card_id: int) -> dict:
         """Fetches the full details for a single card."""
         return self._request("get", f"/card/{card_id}").json()
 
-    def get_dashboard(self, dashboard_id: int) -> Dict:
+    def get_dashboard(self, dashboard_id: int) -> dict:
         """Fetches the full details for a single dashboard."""
         return self._request("get", f"/dashboard/{dashboard_id}").json()
 
-    def get_databases(self) -> List[Dict]:
+    def get_databases(self) -> list[dict]:
         """Fetches a list of all databases."""
         response = self._request("get", "/database").json()
 
@@ -213,29 +236,28 @@ class MetabaseClient:
             logger.warning(f"Unexpected databases response format: {type(response)}")
             logger.debug(f"Response: {response}")
             return []
-        
-    def create_collection(self, payload: Dict) -> Dict:
+
+    def create_collection(self, payload: dict) -> dict:
         """Creates a new collection."""
         return self._request("post", "/collection", json=payload).json()
-        
-    def update_collection(self, collection_id: int, payload: Dict) -> Dict:
+
+    def update_collection(self, collection_id: int, payload: dict) -> dict:
         """Updates an existing collection."""
         return self._request("put", f"/collection/{collection_id}", json=payload).json()
 
-    def create_card(self, payload: Dict) -> Dict:
+    def create_card(self, payload: dict) -> dict:
         """Creates a new card."""
         return self._request("post", "/card", json=payload).json()
 
-    def update_card(self, card_id: int, payload: Dict) -> Dict:
+    def update_card(self, card_id: int, payload: dict) -> dict:
         """Updates an existing card."""
         return self._request("put", f"/card/{card_id}", json=payload).json()
 
-    def create_dashboard(self, payload: Dict) -> Dict:
+    def create_dashboard(self, payload: dict) -> dict:
         """Creates a new dashboard."""
         return self._request("post", "/dashboard", json=payload).json()
 
-    def update_dashboard(self, dashboard_id: int, payload: Dict) -> Dict:
+    def update_dashboard(self, dashboard_id: int, payload: dict) -> dict:
         """Updates an existing dashboard and its dashcards."""
         # The main PUT endpoint handles dashcard and tab updates
         return self._request("put", f"/dashboard/{dashboard_id}", json=payload).json()
-

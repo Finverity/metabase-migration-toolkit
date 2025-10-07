@@ -4,8 +4,8 @@ Integration tests for the complete export/import workflow.
 These tests require actual Metabase instances and are skipped by default.
 Set METABASE_TEST_URL environment variable to enable these tests.
 """
+
 import os
-from pathlib import Path
 
 import pytest
 
@@ -13,10 +13,7 @@ from lib.client import MetabaseClient
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(
-    not os.getenv("METABASE_TEST_URL"),
-    reason="METABASE_TEST_URL not set"
-)
+@pytest.mark.skipif(not os.getenv("METABASE_TEST_URL"), reason="METABASE_TEST_URL not set")
 class TestExportImportFlow:
     """Integration tests for export/import workflow."""
 
@@ -26,12 +23,8 @@ class TestExportImportFlow:
         url = os.getenv("METABASE_TEST_URL")
         username = os.getenv("METABASE_TEST_USERNAME")
         password = os.getenv("METABASE_TEST_PASSWORD")
-        
-        client = MetabaseClient(
-            base_url=url,
-            username=username,
-            password=password
-        )
+
+        client = MetabaseClient(base_url=url, username=username, password=password)
         client._authenticate()
         return client
 
@@ -56,16 +49,16 @@ class TestExportImportFlow:
     def test_full_export_import_cycle(self, test_client, tmp_path):
         """
         Test a complete export and import cycle.
-        
+
         This test:
         1. Exports a small collection
         2. Imports it to the same instance (with rename)
         3. Verifies the import was successful
-        
+
         Note: This is a slow test and modifies the test instance.
         """
         pytest.skip("Requires careful setup to avoid data corruption")
-        
+
         # TODO: Implement full cycle test
         # 1. Create a test collection
         # 2. Export it
@@ -106,4 +99,3 @@ class TestDatabaseMapping:
 # 3. Careful handling to avoid data corruption
 # 4. Longer timeouts for API calls
 # 5. Network error simulation for retry testing
-

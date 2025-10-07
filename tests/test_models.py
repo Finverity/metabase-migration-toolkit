@@ -3,9 +3,8 @@ Unit tests for lib/models.py
 
 Tests data models and dataclasses used throughout the application.
 """
-import dataclasses
 
-import pytest
+import dataclasses
 
 from lib.models import (
     Card,
@@ -27,12 +26,8 @@ class TestCollection:
 
     def test_collection_creation(self):
         """Test creating a Collection instance."""
-        collection = Collection(
-            id=1,
-            name="Test Collection",
-            slug="test-collection"
-        )
-        
+        collection = Collection(id=1, name="Test Collection", slug="test-collection")
+
         assert collection.id == 1
         assert collection.name == "Test Collection"
         assert collection.slug == "test-collection"
@@ -43,19 +38,14 @@ class TestCollection:
 
     def test_collection_with_parent(self):
         """Test creating a Collection with parent_id."""
-        collection = Collection(
-            id=2,
-            name="Child Collection",
-            slug="child-collection",
-            parent_id=1
-        )
-        
+        collection = Collection(id=2, name="Child Collection", slug="child-collection", parent_id=1)
+
         assert collection.parent_id == 1
 
     def test_collection_fields(self):
         """Test that Collection has expected fields."""
         fields = {f.name for f in dataclasses.fields(Collection)}
-        
+
         assert "id" in fields
         assert "name" in fields
         assert "slug" in fields
@@ -66,13 +56,8 @@ class TestCard:
 
     def test_card_creation(self):
         """Test creating a Card instance."""
-        card = Card(
-            id=100,
-            name="Test Card",
-            collection_id=1,
-            database_id=1
-        )
-        
+        card = Card(id=100, name="Test Card", collection_id=1, database_id=1)
+
         assert card.id == 100
         assert card.name == "Test Card"
         assert card.collection_id == 1
@@ -84,26 +69,18 @@ class TestCard:
 
     def test_card_with_dataset_query(self):
         """Test creating a Card with dataset_query."""
-        dataset_query = {
-            "type": "query",
-            "database": 1,
-            "query": {"source-table": 1}
-        }
-        
+        dataset_query = {"type": "query", "database": 1, "query": {"source-table": 1}}
+
         card = Card(
-            id=100,
-            name="Test Card",
-            collection_id=1,
-            database_id=1,
-            dataset_query=dataset_query
+            id=100, name="Test Card", collection_id=1, database_id=1, dataset_query=dataset_query
         )
-        
+
         assert card.dataset_query == dataset_query
 
     def test_card_fields(self):
         """Test that Card has expected fields."""
         fields = {f.name for f in dataclasses.fields(Card)}
-        
+
         assert "id" in fields
         assert "name" in fields
         assert "collection_id" in fields
@@ -115,12 +92,8 @@ class TestDashboard:
 
     def test_dashboard_creation(self):
         """Test creating a Dashboard instance."""
-        dashboard = Dashboard(
-            id=200,
-            name="Test Dashboard",
-            collection_id=1
-        )
-        
+        dashboard = Dashboard(id=200, name="Test Dashboard", collection_id=1)
+
         assert dashboard.id == 200
         assert dashboard.name == "Test Dashboard"
         assert dashboard.collection_id == 1
@@ -132,7 +105,7 @@ class TestDashboard:
     def test_dashboard_fields(self):
         """Test that Dashboard has expected fields."""
         fields = {f.name for f in dataclasses.fields(Dashboard)}
-        
+
         assert "id" in fields
         assert "name" in fields
         assert "collection_id" in fields
@@ -147,9 +120,9 @@ class TestManifestMeta:
             source_url="https://example.com",
             export_timestamp="2025-10-07T12:00:00",
             tool_version="1.0.0",
-            cli_args={"arg1": "value1"}
+            cli_args={"arg1": "value1"},
         )
-        
+
         assert meta.source_url == "https://example.com"
         assert meta.export_timestamp == "2025-10-07T12:00:00"
         assert meta.tool_version == "1.0.0"
@@ -169,11 +142,11 @@ class TestManifest:
             source_url="https://example.com",
             export_timestamp="2025-10-07T12:00:00",
             tool_version="1.0.0",
-            cli_args={}
+            cli_args={},
         )
-        
+
         manifest = Manifest(meta=meta)
-        
+
         assert manifest.meta == meta
         assert manifest.databases == {}
         assert manifest.collections == []
@@ -186,20 +159,20 @@ class TestManifest:
             source_url="https://example.com",
             export_timestamp="2025-10-07T12:00:00",
             tool_version="1.0.0",
-            cli_args={}
+            cli_args={},
         )
-        
+
         collection = Collection(id=1, name="Test", slug="test")
         card = Card(id=100, name="Card", collection_id=1, database_id=1)
-        
+
         manifest = Manifest(
             meta=meta,
             databases={1: "Test DB"},
             collections=[collection],
             cards=[card],
-            dashboards=[]
+            dashboards=[],
         )
-        
+
         assert manifest.databases == {1: "Test DB"}
         assert len(manifest.collections) == 1
         assert len(manifest.cards) == 1
@@ -215,18 +188,15 @@ class TestDatabaseMap:
 
     def test_database_map_creation(self):
         """Test creating a DatabaseMap instance."""
-        db_map = DatabaseMap(
-            by_id={"1": 10, "2": 20},
-            by_name={"DB1": 10, "DB2": 20}
-        )
-        
+        db_map = DatabaseMap(by_id={"1": 10, "2": 20}, by_name={"DB1": 10, "DB2": 20})
+
         assert db_map.by_id == {"1": 10, "2": 20}
         assert db_map.by_name == {"DB1": 10, "DB2": 20}
 
     def test_database_map_empty(self):
         """Test creating an empty DatabaseMap."""
         db_map = DatabaseMap()
-        
+
         assert db_map.by_id == {}
         assert db_map.by_name == {}
 
@@ -240,11 +210,8 @@ class TestUnmappedDatabase:
 
     def test_unmapped_database_creation(self):
         """Test creating an UnmappedDatabase instance."""
-        unmapped = UnmappedDatabase(
-            source_db_id=1,
-            source_db_name="Test DB"
-        )
-        
+        unmapped = UnmappedDatabase(source_db_id=1, source_db_name="Test DB")
+
         assert unmapped.source_db_id == 1
         assert unmapped.source_db_name == "Test DB"
         assert unmapped.card_ids == set()
@@ -252,11 +219,9 @@ class TestUnmappedDatabase:
     def test_unmapped_database_with_cards(self):
         """Test creating an UnmappedDatabase with card IDs."""
         unmapped = UnmappedDatabase(
-            source_db_id=1,
-            source_db_name="Test DB",
-            card_ids={100, 101, 102}
+            source_db_id=1, source_db_name="Test DB", card_ids={100, 101, 102}
         )
-        
+
         assert unmapped.card_ids == {100, 101, 102}
 
     def test_unmapped_database_is_dataclass(self):
@@ -274,9 +239,9 @@ class TestImportAction:
             action="create",
             source_id=100,
             name="Test Card",
-            target_path="/Test Collection"
+            target_path="/Test Collection",
         )
-        
+
         assert action.entity_type == "card"
         assert action.action == "create"
         assert action.source_id == 100
@@ -294,30 +259,20 @@ class TestImportPlan:
     def test_import_plan_creation(self):
         """Test creating an ImportPlan instance."""
         plan = ImportPlan()
-        
+
         assert plan.actions == []
         assert plan.unmapped_databases == []
 
     def test_import_plan_with_data(self):
         """Test creating an ImportPlan with data."""
         action = ImportAction(
-            entity_type="card",
-            action="create",
-            source_id=100,
-            name="Test",
-            target_path="/"
+            entity_type="card", action="create", source_id=100, name="Test", target_path="/"
         )
-        
-        unmapped = UnmappedDatabase(
-            source_db_id=1,
-            source_db_name="Test DB"
-        )
-        
-        plan = ImportPlan(
-            actions=[action],
-            unmapped_databases=[unmapped]
-        )
-        
+
+        unmapped = UnmappedDatabase(source_db_id=1, source_db_name="Test DB")
+
+        plan = ImportPlan(actions=[action], unmapped_databases=[unmapped])
+
         assert len(plan.actions) == 1
         assert len(plan.unmapped_databases) == 1
 
@@ -332,13 +287,9 @@ class TestImportReportItem:
     def test_import_report_item_creation(self):
         """Test creating an ImportReportItem instance."""
         item = ImportReportItem(
-            entity_type="card",
-            source_id=100,
-            target_id=200,
-            name="Test Card",
-            status="success"
+            entity_type="card", source_id=100, target_id=200, name="Test Card", status="success"
         )
-        
+
         assert item.entity_type == "card"
         assert item.source_id == 100
         assert item.target_id == 200
@@ -353,9 +304,9 @@ class TestImportReportItem:
             target_id=None,
             name="Test Card",
             status="error",
-            error_message="Failed to create"
+            error_message="Failed to create",
         )
-        
+
         assert item.status == "error"
         assert item.error_message == "Failed to create"
         assert item.target_id is None
@@ -371,32 +322,27 @@ class TestImportReport:
     def test_import_report_creation(self):
         """Test creating an ImportReport instance."""
         report = ImportReport()
-        
+
         assert report.items == []
 
     def test_import_report_with_items(self):
         """Test creating an ImportReport with items."""
         item1 = ImportReportItem(
-            entity_type="card",
-            source_id=100,
-            target_id=200,
-            name="Card 1",
-            status="success"
+            entity_type="card", source_id=100, target_id=200, name="Card 1", status="success"
         )
-        
+
         item2 = ImportReportItem(
             entity_type="dashboard",
             source_id=300,
             target_id=400,
             name="Dashboard 1",
-            status="success"
+            status="success",
         )
-        
+
         report = ImportReport(items=[item1, item2])
-        
+
         assert len(report.items) == 2
 
     def test_import_report_is_dataclass(self):
         """Test that ImportReport is a dataclass."""
         assert dataclasses.is_dataclass(ImportReport)
-

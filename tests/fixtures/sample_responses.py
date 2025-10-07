@@ -16,7 +16,7 @@ SAMPLE_COLLECTION = {
     "personal_owner_id": None,
     "can_write": True,
     "created_at": "2025-01-01T00:00:00.000Z",
-    "updated_at": "2025-01-15T10:30:00.000Z"
+    "updated_at": "2025-01-15T10:30:00.000Z",
 }
 
 SAMPLE_CARD = {
@@ -31,14 +31,11 @@ SAMPLE_CARD = {
         "query": {
             "source-table": 10,
             "aggregation": [["sum", ["field", 5, None]]],
-            "breakout": [["field", 3, {"temporal-unit": "month"}]]
-        }
+            "breakout": [["field", 3, {"temporal-unit": "month"}]],
+        },
     },
     "display": "line",
-    "visualization_settings": {
-        "graph.dimensions": ["created_at"],
-        "graph.metrics": ["sum"]
-    },
+    "visualization_settings": {"graph.dimensions": ["created_at"], "graph.metrics": ["sum"]},
     "archived": False,
     "enable_embedding": False,
     "embedding_params": None,
@@ -47,12 +44,7 @@ SAMPLE_CARD = {
     "created_at": "2025-01-05T14:20:00.000Z",
     "updated_at": "2025-01-20T09:15:00.000Z",
     "creator_id": 1,
-    "creator": {
-        "id": 1,
-        "email": "admin@example.com",
-        "first_name": "Admin",
-        "last_name": "User"
-    }
+    "creator": {"id": 1, "email": "admin@example.com", "first_name": "Admin", "last_name": "User"},
 }
 
 SAMPLE_CARD_WITH_DEPENDENCY = {
@@ -67,14 +59,14 @@ SAMPLE_CARD_WITH_DEPENDENCY = {
         "query": {
             "source-table": "card__100",  # Depends on card 100
             "aggregation": [["avg", ["field", "sum", {"base-type": "type/Float"}]]],
-            "breakout": [["field", "created_at", {"temporal-unit": "year"}]]
-        }
+            "breakout": [["field", "created_at", {"temporal-unit": "year"}]],
+        },
     },
     "display": "bar",
     "visualization_settings": {},
     "archived": False,
     "created_at": "2025-01-10T11:00:00.000Z",
-    "updated_at": "2025-01-22T16:45:00.000Z"
+    "updated_at": "2025-01-22T16:45:00.000Z",
 }
 
 SAMPLE_DASHBOARD = {
@@ -88,7 +80,7 @@ SAMPLE_DASHBOARD = {
             "name": "Date Range",
             "slug": "date_range",
             "type": "date/range",
-            "default": None
+            "default": None,
         }
     ],
     "dashcards": [
@@ -101,7 +93,7 @@ SAMPLE_DASHBOARD = {
             "row": 0,
             "col": 0,
             "parameter_mappings": [],
-            "visualization_settings": {}
+            "visualization_settings": {},
         },
         {
             "id": 2,
@@ -112,8 +104,8 @@ SAMPLE_DASHBOARD = {
             "row": 0,
             "col": 6,
             "parameter_mappings": [],
-            "visualization_settings": {}
-        }
+            "visualization_settings": {},
+        },
     ],
     "archived": False,
     "enable_embedding": False,
@@ -121,7 +113,7 @@ SAMPLE_DASHBOARD = {
     "cache_ttl": None,
     "created_at": "2025-01-08T13:30:00.000Z",
     "updated_at": "2025-01-25T08:20:00.000Z",
-    "creator_id": 1
+    "creator_id": 1,
 }
 
 SAMPLE_COLLECTIONS_TREE = [
@@ -132,20 +124,10 @@ SAMPLE_COLLECTIONS_TREE = [
             {
                 "id": 1,
                 "name": "Marketing Analytics",
-                "children": [
-                    {
-                        "id": 3,
-                        "name": "Campaign Reports",
-                        "children": []
-                    }
-                ]
+                "children": [{"id": 3, "name": "Campaign Reports", "children": []}],
             },
-            {
-                "id": 2,
-                "name": "Sales Analytics",
-                "children": []
-            }
-        ]
+            {"id": 2, "name": "Sales Analytics", "children": []},
+        ],
     }
 ]
 
@@ -153,38 +135,18 @@ SAMPLE_DATABASE = {
     "id": 2,
     "name": "Production Database",
     "engine": "postgres",
-    "details": {
-        "host": "db.example.com",
-        "port": 5432,
-        "dbname": "production",
-        "user": "metabase"
-    },
+    "details": {"host": "db.example.com", "port": 5432, "dbname": "production", "user": "metabase"},
     "is_sample": False,
     "is_full_sync": True,
     "is_on_demand": False,
     "created_at": "2024-12-01T00:00:00.000Z",
-    "updated_at": "2025-01-01T00:00:00.000Z"
+    "updated_at": "2025-01-01T00:00:00.000Z",
 }
 
 SAMPLE_DATABASES_LIST = [
-    {
-        "id": 1,
-        "name": "Sample Database",
-        "engine": "h2",
-        "is_sample": True
-    },
-    {
-        "id": 2,
-        "name": "Production Database",
-        "engine": "postgres",
-        "is_sample": False
-    },
-    {
-        "id": 3,
-        "name": "Analytics Warehouse",
-        "engine": "bigquery",
-        "is_sample": False
-    }
+    {"id": 1, "name": "Sample Database", "engine": "h2", "is_sample": True},
+    {"id": 2, "name": "Production Database", "engine": "postgres", "is_sample": False},
+    {"id": 3, "name": "Analytics Warehouse", "engine": "bigquery", "is_sample": False},
 ]
 
 SAMPLE_MANIFEST = {
@@ -198,67 +160,23 @@ SAMPLE_MANIFEST = {
             "include_dashboards": True,
             "include_archived": False,
             "root_collection_ids": [1, 2],
-            "log_level": "INFO"
-        }
+            "log_level": "INFO",
+        },
     },
-    "databases": {
-        "1": "Sample Database",
-        "2": "Production Database",
-        "3": "Analytics Warehouse"
-    },
+    "databases": {"1": "Sample Database", "2": "Production Database", "3": "Analytics Warehouse"},
     "collections": [
-        {
-            "id": 1,
-            "name": "Marketing Analytics",
-            "slug": "marketing-analytics",
-            "parent_id": None
-        },
-        {
-            "id": 2,
-            "name": "Sales Analytics",
-            "slug": "sales-analytics",
-            "parent_id": None
-        },
-        {
-            "id": 3,
-            "name": "Campaign Reports",
-            "slug": "campaign-reports",
-            "parent_id": 1
-        }
+        {"id": 1, "name": "Marketing Analytics", "slug": "marketing-analytics", "parent_id": None},
+        {"id": 2, "name": "Sales Analytics", "slug": "sales-analytics", "parent_id": None},
+        {"id": 3, "name": "Campaign Reports", "slug": "campaign-reports", "parent_id": 1},
     ],
     "cards": [
-        {
-            "id": 100,
-            "name": "Monthly Revenue",
-            "collection_id": 1,
-            "database_id": 2
-        },
-        {
-            "id": 101,
-            "name": "Revenue Analysis",
-            "collection_id": 1,
-            "database_id": 2
-        }
+        {"id": 100, "name": "Monthly Revenue", "collection_id": 1, "database_id": 2},
+        {"id": 101, "name": "Revenue Analysis", "collection_id": 1, "database_id": 2},
     ],
-    "dashboards": [
-        {
-            "id": 200,
-            "name": "Marketing Overview",
-            "collection_id": 1
-        }
-    ]
+    "dashboards": [{"id": 200, "name": "Marketing Overview", "collection_id": 1}],
 }
 
 SAMPLE_DB_MAP = {
-    "by_id": {
-        "1": 10,
-        "2": 20,
-        "3": 30
-    },
-    "by_name": {
-        "Sample Database": 10,
-        "Production Database": 20,
-        "Analytics Warehouse": 30
-    }
+    "by_id": {"1": 10, "2": 20, "3": 30},
+    "by_name": {"Sample Database": 10, "Production Database": 20, "Analytics Warehouse": 30},
 }
-
