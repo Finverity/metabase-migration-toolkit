@@ -9,9 +9,11 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 10
     reviewers:
-      - "mpx"  # Replace with your GitHub username
+      - "peshkov3"
+      - "omid-mamandi"
+      - "orkhan999"
     assignees:
-      - "mpx"  # Replace with your GitHub username
+      - "peshkov3"
     labels:
       - "dependencies"
       - "python"
@@ -35,9 +37,13 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 5
     reviewers:
-      - "mpx"  # Replace with your GitHub username
+      - "peshkov3"
+      - "omid-mamandi"
+      - "orkhan999"
     assignees:
-      - "mpx"  # Replace with your GitHub username
+      - "peshkov3"
+      - "omid-mamandi"
+      - "orkhan999"
     labels:
       - "dependencies"
       - "github-actions"
