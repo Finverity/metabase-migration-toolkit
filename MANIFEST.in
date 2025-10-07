@@ -1,0 +1,37 @@
+# Include documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+include CODE_OF_CONDUCT.md
+include SECURITY.md
+
+# Include configuration files
+include pyproject.toml
+include setup.py
+include requirements.txt
+include .env.example
+include db_map.example.json
+
+# Include source code
+recursive-include lib *.py
+recursive-include tests *.py
+
+# Include documentation
+recursive-include docs *.md *.rst *.txt
+
+# Exclude unnecessary files
+exclude .gitignore
+exclude .pre-commit-config.yaml
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .DS_Store
+
+# Exclude export data and temporary files
+exclude metabase_export
+exclude tmp
+exclude db_map.json
+exclude .env
+recursive-exclude metabase_export *
+recursive-exclude tmp *
+

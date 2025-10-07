@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/Finverity/metabase-migration-toolkit/discussions
+    about: Ask questions or discuss ideas with the community
+  - name: Security Vulnerability
+    url: https://github.com/Finverity/metabase-migration-toolkit/security/advisories/new
+    about: Report a security vulnerability privately
+
