@@ -1,9 +1,7 @@
 # Metabase Migration Toolkit
 
 [![Tests](https://github.com/Finverity/metabase-migration-toolkit/actions/workflows/tests.yml/badge.svg)](https://github.com/Finverity/metabase-migration-toolkit/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/Finverity/metabase-migration-toolkit/branch/main/graph/badge.svg)](https://codecov.io/gh/Finverity/metabase-migration-toolkit)
-[![PyPI version](https://badge.fury.io/py/metabase-migration-toolkit.svg)](https://badge.fury.io/py/metabase-migration-toolkit)
-[![Python Versions](https://img.shields.io/pypi/pyversions/metabase-migration-toolkit.svg)](https://pypi.org/project/metabase-migration-toolkit/)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -27,7 +25,7 @@ A comprehensive Python toolkit for migrating Metabase content (collections, ques
 
 ## Overview
 
-This toolkit consists of two Python CLI scripts, `export_metabase.py` and `import_metabase.py`, designed for exporting and importing Metabase content between instances. It's built to be robust, handling API rate limits, pagination, and providing clear logging and error handling for production use.
+This toolkit provides two command-line tools, `metabase-export` and `metabase-import`, designed for exporting and importing Metabase content between instances. It's built to be robust, handling API rate limits, pagination, and providing clear logging and error handling for production use.
 
 ## Features
 
@@ -47,20 +45,40 @@ This toolkit consists of two Python CLI scripts, `export_metabase.py` and `impor
 
 ## Installation
 
-### 1. Clone the repository
+### Option 1: Install from PyPI (Recommended)
+
+```bash
+pip install metabase-migration-toolkit
+```
+
+After installation, the `metabase-export` and `metabase-import` commands will be available globally in your environment.
+
+### Option 2: Install from TestPyPI (for testing)
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ \
+            --extra-index-url https://pypi.org/simple/ \
+            metabase-migration-toolkit
+```
+
+### Option 3: Install from Source
+
+1. **Clone the repository:**
 
 ```bash
 git clone https://github.com/Finverity/metabase-migration-toolkit.git
 cd metabase-migration-toolkit
 ```
 
-### 2. Install dependencies
+2. **Install the package:**
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
-### 3. Configure Environment Variables (Recommended)
+## Configuration
+
+### 1. Configure Environment Variables (Recommended)
 
 Copy the example `.env` file and fill in your credentials. This is the most secure way to provide credentials.
 
@@ -69,7 +87,7 @@ cp .env.example .env
 # Edit .env with your details
 ```
 
-### 4. Create a Database Mapping File
+### 2. Create a Database Mapping File
 
 Copy the example `db_map.example.json` and configure it to map your source database IDs/names to the target database IDs.
 
@@ -84,26 +102,24 @@ cp db_map.example.json db_map.json
 
 ### Exporting from Source
 
-The `export_metabase.py` script connects to a source instance and exports its content into a local directory.
+The `metabase-export` command connects to a source instance and exports its content into a local directory.
 
 #### Example using .env file (Recommended)
 
 ```bash
 # All credentials are read from .env file
-python export_metabase.py \
-    --include-archived \
+metabase-export \
     --export-dir "./metabase_export" \
     --include-dashboards \
+    --include-archived \
     --log-level INFO \
-    --root-collections "24" \
-    --source-session "8ac852de-4d46-4ad9-a574-402994e92ef1" \
-    --include-archived
+    --root-collections "24"
 ```
 
 #### Example using CLI flags
 
 ```bash
-python export_metabase.py \
+metabase-export \
     --source-url "https://your-source-metabase.com/" \
     --source-username "user@example.com" \
     --source-password "your_password" \
@@ -127,13 +143,13 @@ python export_metabase.py \
 
 ### Importing to Target
 
-The `import_metabase.py` script reads the export package and recreates the content on a target instance.
+The `metabase-import` command reads the export package and recreates the content on a target instance.
 
 #### Example using .env file (Recommended)
 
 ```bash
 # All credentials are read from .env file
-python import_metabase.py \
+metabase-import \
     --export-dir "./metabase_export" \
     --db-map "./db_map.json" \
     --conflict skip \
@@ -143,7 +159,7 @@ python import_metabase.py \
 #### Example using CLI flags
 
 ```bash
-python import_metabase.py \
+metabase-import \
     --target-url "https://your-target-metabase.com/" \
     --target-username "user@example.com" \
     --target-password "your_password" \
