@@ -974,8 +974,13 @@ class MetabaseImporter:
                 )
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Main entry point for the import tool."""
     config = get_import_args()
-    logger = setup_logging(config.log_level)
+    setup_logging(config.log_level)
     importer = MetabaseImporter(config)
     importer.run_import()
+
+
+if __name__ == "__main__":
+    main()

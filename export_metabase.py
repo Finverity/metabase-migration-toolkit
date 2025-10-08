@@ -454,8 +454,13 @@ class MetabaseExporter:
             )
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Main entry point for the export tool."""
     config = get_export_args()
-    logger = setup_logging(config.log_level)
+    setup_logging(config.log_level)
     exporter = MetabaseExporter(config)
     exporter.run_export()
+
+
+if __name__ == "__main__":
+    main()
