@@ -10,10 +10,21 @@
 
 ## Setup (5 minutes)
 
-### 1. Install Dependencies
+### 1. Install the Package
+
+**Option A: Install from PyPI (Recommended)**
 ```bash
-pip install -r requirements.txt
+pip install metabase-migration-toolkit
 ```
+
+**Option B: Install from Source**
+```bash
+git clone <your-repo-url>
+cd metabase-migration-toolkit
+pip install -e .
+```
+
+After installation, the `metabase-export` and `metabase-import` commands will be available globally.
 
 ### 2. Configure Environment
 ```bash
@@ -42,7 +53,7 @@ cp db_map.example.json db_map.json
 
 ### Basic Export
 ```bash
-python export_metabase.py \
+metabase-export \
     --export-dir "./metabase_export" \
     --include-dashboards
 ```
@@ -54,7 +65,7 @@ This will:
 
 ### Export Specific Collections
 ```bash
-python export_metabase.py \
+metabase-export \
     --export-dir "./metabase_export" \
     --root-collections "24,13,26" \
     --include-dashboards \
@@ -84,7 +95,7 @@ Exporting Collection A:
 
 ### Basic Import
 ```bash
-python import_metabase.py \
+metabase-import \
     --export-dir "./metabase_export" \
     --db-map "./db_map.json" \
     --conflict skip
@@ -92,7 +103,7 @@ python import_metabase.py \
 
 ### Dry Run (Preview Changes)
 ```bash
-python import_metabase.py \
+metabase-import \
     --export-dir "./metabase_export" \
     --db-map "./db_map.json" \
     --dry-run
@@ -100,7 +111,7 @@ python import_metabase.py \
 
 ### Import with Overwrite
 ```bash
-python import_metabase.py \
+metabase-import \
     --export-dir "./metabase_export" \
     --db-map "./db_map.json" \
     --conflict overwrite
@@ -116,14 +127,14 @@ python import_metabase.py \
 
 ```bash
 # 1. Export
-python export_metabase.py \
+metabase-export \
     --export-dir "./migration_2025" \
     --root-collections "24,13,26" \
     --include-dashboards \
     --include-archived
 
 # 2. Import
-python import_metabase.py \
+metabase-import \
     --export-dir "./migration_2025" \
     --db-map "./db_map.json" \
     --conflict skip
@@ -135,7 +146,7 @@ python import_metabase.py \
 
 ```bash
 # Export everything
-python export_metabase.py \
+metabase-export \
     --export-dir "./backup_$(date +%Y%m%d)" \
     --include-dashboards \
     --include-archived
@@ -147,12 +158,12 @@ python export_metabase.py \
 
 ```bash
 # 1. Export from production (using MB_SOURCE_* vars in .env)
-python export_metabase.py \
+metabase-export \
     --export-dir "./prod_export" \
     --include-dashboards
 
 # 2. Import to dev (using MB_TARGET_* vars in .env)
-python import_metabase.py \
+metabase-import \
     --export-dir "./prod_export" \
     --db-map "./db_map_prod_to_dev.json" \
     --conflict overwrite
@@ -179,7 +190,7 @@ MB_TARGET_PASSWORD=mypassword
 
 If you still see this with an old export, re-export with the updated script:
 ```bash
-python export_metabase.py \
+metabase-export \
     --export-dir "./new_export" \
     --root-collections "24" \
     --include-dashboards
@@ -187,7 +198,7 @@ python export_metabase.py \
 
 ### Issue: "Dashcard still has 'id' field"
 
-**Solution**: This is a false error that has been fixed. Update to the latest version of `import_metabase.py`.
+**Solution**: This is a false error that has been fixed. Update to the latest version of the package.
 
 ### Issue: Circular Dependency Warning
 
