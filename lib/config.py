@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 from typing import Literal
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 
 @dataclass
@@ -44,7 +44,7 @@ class ImportConfig:
 
 def get_export_args() -> ExportConfig:
     """Parses CLI arguments for the export script."""
-    load_dotenv()
+    load_dotenv(find_dotenv(usecwd=True))
     parser = argparse.ArgumentParser(description="Metabase Export Tool")
 
     # Required arguments (can also be set via .env)
@@ -113,7 +113,7 @@ def get_export_args() -> ExportConfig:
 
 def get_import_args() -> ImportConfig:
     """Parses CLI arguments for the import script."""
-    load_dotenv()
+    load_dotenv(find_dotenv(usecwd=True))
     parser = argparse.ArgumentParser(description="Metabase Import Tool")
 
     # Required arguments (can also be set via .env)
