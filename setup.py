@@ -5,4 +5,6 @@ All configuration is in pyproject.toml.
 
 from setuptools import setup
 
-setup()
+setup(
+    py_modules=["export_metabase", "import_metabase"],
+)

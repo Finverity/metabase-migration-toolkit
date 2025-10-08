@@ -1,0 +1,20 @@
+# Development dependencies
+-r requirements.txt  # Include runtime dependencies
+
+# Build tools
+setuptools>=61.0
+wheel
+build
+
+# Publishing
+twine
+
+# Testing (if you add tests later)
+pytest>=7.0.0
+pytest-cov
+
+# Code quality (optional)
+black
+flake8
+mypy
+
