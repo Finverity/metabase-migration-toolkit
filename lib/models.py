@@ -51,6 +51,15 @@ class Dashboard:
     archived: bool = False
 
 
+@dataclasses.dataclass
+class PermissionGroup:
+    """Represents a Metabase permission group."""
+
+    id: int
+    name: str
+    member_count: int = 0
+
+
 # --- Manifest Models ---
 
 
@@ -73,6 +82,9 @@ class Manifest:
     collections: list[Collection] = dataclasses.field(default_factory=list)
     cards: list[Card] = dataclasses.field(default_factory=list)
     dashboards: list[Dashboard] = dataclasses.field(default_factory=list)
+    permission_groups: list[PermissionGroup] = dataclasses.field(default_factory=list)
+    permissions_graph: dict[str, Any] = dataclasses.field(default_factory=dict)
+    collection_permissions_graph: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 # --- Import-specific Models ---

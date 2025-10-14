@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ExportConfig, get_export_args
-from lib.models import Card, Collection, Dashboard, Manifest, ManifestMeta
+from lib.models import Card, Collection, Dashboard, Manifest, ManifestMeta, PermissionGroup
 from lib.utils import (
     TOOL_VERSION,
     calculate_checksum,
@@ -99,6 +99,11 @@ class MetabaseExporter:
             # Process collections recursively
             self._traverse_collections(collection_tree)
 
+            # Export permissions if requested
+            if self.config.include_permissions:
+                logger.info("Exporting permissions...")
+                self._export_permissions()
+
             # Write the final manifest file
             manifest_path = self.export_dir / "manifest.json"
             logger.info(f"Writing manifest to {manifest_path}")
@@ -111,6 +116,8 @@ class MetabaseExporter:
             logger.info(f"  Cards: {len(self.manifest.cards)}")
             logger.info(f"  Dashboards: {len(self.manifest.dashboards)}")
             logger.info(f"  Databases: {len(self.manifest.databases)}")
+            if self.config.include_permissions:
+                logger.info(f"  Permission Groups: {len(self.manifest.permission_groups)}")
             logger.info("=" * 80)
             logger.info("Export completed successfully.")
             sys.exit(0)
@@ -451,6 +458,47 @@ class MetabaseExporter:
         except Exception as e:
             logger.error(
                 f"An unexpected error occurred while exporting dashboard ID {dashboard_id}: {e}"
+            )
+
+    def _export_permissions(self):
+        """Exports permission groups and permissions graphs."""
+        try:
+            # Fetch permission groups
+            logger.info("Fetching permission groups...")
+            groups_data = self.client.get_permission_groups()
+
+            # Filter out built-in groups that shouldn't be exported
+            # We'll keep all groups but mark built-in ones
+            for group in groups_data:
+                group_obj = PermissionGroup(
+                    id=group["id"], name=group["name"], member_count=group.get("member_count", 0)
+                )
+                self.manifest.permission_groups.append(group_obj)
+                logger.debug(f"  -> Exported permission group: '{group['name']}' (ID: {group['id']})")
+
+            logger.info(f"Exported {len(self.manifest.permission_groups)} permission groups")
+
+            # Fetch data permissions graph
+            logger.info("Fetching data permissions graph...")
+            self.manifest.permissions_graph = self.client.get_permissions_graph()
+            logger.info("Data permissions graph exported")
+
+            # Fetch collection permissions graph
+            logger.info("Fetching collection permissions graph...")
+            self.manifest.collection_permissions_graph = (
+                self.client.get_collection_permissions_graph()
+            )
+            logger.info("Collection permissions graph exported")
+
+        except MetabaseAPIError as e:
+            logger.error(f"Failed to export permissions: {e}")
+            logger.warning(
+                "Permissions export failed. The export will continue without permissions data."
+            )
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while exporting permissions: {e}")
+            logger.warning(
+                "Permissions export failed. The export will continue without permissions data."
             )
 
 

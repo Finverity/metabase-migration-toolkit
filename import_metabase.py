@@ -56,6 +56,7 @@ class MetabaseImporter:
         # Mappings from source ID to target ID, populated during import
         self._collection_map: dict[int, int] = {}
         self._card_map: dict[int, int] = {}
+        self._group_map: dict[int, int] = {}  # Maps source group IDs to target group IDs
 
         # Caches of existing items on the target instance
         self._target_collections: list[dict[str, Any]] = []
@@ -92,7 +93,7 @@ class MetabaseImporter:
         manifest_data = read_json_file(manifest_path)
         # Reconstruct the manifest from dicts to dataclasses
         # Import the actual dataclasses from lib.models
-        from lib.models import Card, Collection, Dashboard, ManifestMeta
+        from lib.models import Card, Collection, Dashboard, ManifestMeta, PermissionGroup
 
         self.manifest = Manifest(
             meta=ManifestMeta(**manifest_data["meta"]),
@@ -100,6 +101,11 @@ class MetabaseImporter:
             collections=[Collection(**c) for c in manifest_data.get("collections", [])],
             cards=[Card(**c) for c in manifest_data.get("cards", [])],
             dashboards=[Dashboard(**d) for d in manifest_data.get("dashboards", [])],
+            permission_groups=[
+                PermissionGroup(**g) for g in manifest_data.get("permission_groups", [])
+            ],
+            permissions_graph=manifest_data.get("permissions_graph", {}),
+            collection_permissions_graph=manifest_data.get("collection_permissions_graph", {}),
         )
 
         db_map_path = Path(self.config.db_map_path)
@@ -275,6 +281,11 @@ class MetabaseImporter:
         self._import_cards()
         if self.manifest.dashboards:
             self._import_dashboards()
+
+        # Apply permissions after all content is imported
+        if self.config.apply_permissions and self.manifest.permission_groups:
+            logger.info("\nApplying permissions...")
+            self._import_permissions()
 
         logger.info("\n--- Import Summary ---")
         summary = self.report.summary
@@ -513,8 +524,9 @@ class MetabaseImporter:
                 f"FATAL: Unmapped database ID {source_db_id} found during card import. This should have been caught by validation."
             )
 
-        if "database" in query:
-            query["database"] = target_db_id
+        # Always set the database field in dataset_query, even if it wasn't present originally
+        # This is required for Metabase to properly normalize queries to pMBQL format
+        query["database"] = target_db_id
         if "database_id" in data:
             data["database_id"] = target_db_id
 
@@ -972,6 +984,234 @@ class MetabaseImporter:
                 self.report.add(
                     ImportReportItem("dashboard", "failed", dash.id, None, dash.name, str(e))
                 )
+
+    def _import_permissions(self):
+        """Imports permission groups and applies permissions graphs."""
+        try:
+            # Step 1: Map permission groups from source to target
+            logger.info("Mapping permission groups...")
+            target_groups = self.client.get_permission_groups()
+            target_groups_by_name = {g["name"]: g for g in target_groups}
+
+            # Built-in groups that should always exist
+            BUILTIN_GROUPS = {"All Users", "Administrators"}
+
+            for source_group in self.manifest.permission_groups:
+                if source_group.name in target_groups_by_name:
+                    # Group exists on target, map it
+                    target_group = target_groups_by_name[source_group.name]
+                    self._group_map[source_group.id] = target_group["id"]
+                    logger.info(
+                        f"  -> Mapped group '{source_group.name}': source ID {source_group.id} -> target ID {target_group['id']}"
+                    )
+                elif source_group.name not in BUILTIN_GROUPS:
+                    # Custom group doesn't exist, we should create it
+                    # Note: Metabase API doesn't provide a direct endpoint to create groups
+                    # Groups are typically created through the UI or admin API
+                    logger.warning(
+                        f"  -> Group '{source_group.name}' (ID: {source_group.id}) not found on target. "
+                        f"Permissions for this group will be skipped."
+                    )
+                else:
+                    logger.warning(
+                        f"  -> Built-in group '{source_group.name}' not found on target. This is unexpected."
+                    )
+
+            if not self._group_map:
+                logger.warning("No permission groups could be mapped. Skipping permissions import.")
+                return
+
+            # Step 2: Remap and apply data permissions graph
+            data_perms_applied = False
+            if self.manifest.permissions_graph:
+                logger.info("Applying data permissions...")
+                remapped_permissions = self._remap_permissions_graph(
+                    self.manifest.permissions_graph
+                )
+                if remapped_permissions:
+                    try:
+                        self.client.update_permissions_graph(remapped_permissions)
+                        logger.info("✓ Data permissions applied successfully")
+                        data_perms_applied = True
+                    except MetabaseAPIError as e:
+                        logger.error(f"Failed to apply data permissions: {e}")
+                        logger.warning("Continuing without data permissions...")
+                else:
+                    logger.info("No data permissions to apply (all databases unmapped)")
+
+            # Step 3: Remap and apply collection permissions graph
+            collection_perms_applied = False
+            if self.manifest.collection_permissions_graph:
+                logger.info("Applying collection permissions...")
+                remapped_collection_permissions = self._remap_collection_permissions_graph(
+                    self.manifest.collection_permissions_graph
+                )
+                if remapped_collection_permissions:
+                    try:
+                        self.client.update_collection_permissions_graph(
+                            remapped_collection_permissions
+                        )
+                        logger.info("✓ Collection permissions applied successfully")
+                        collection_perms_applied = True
+                    except MetabaseAPIError as e:
+                        logger.error(f"Failed to apply collection permissions: {e}")
+                        logger.warning("Continuing without collection permissions...")
+                else:
+                    logger.info("No collection permissions to apply (all collections unmapped)")
+
+            # Summary
+            logger.info("=" * 60)
+            logger.info("Permissions Import Summary:")
+            logger.info(f"  Groups mapped: {len(self._group_map)}")
+            logger.info(f"  Data permissions: {'✓ Applied' if data_perms_applied else '✗ Not applied'}")
+            logger.info(f"  Collection permissions: {'✓ Applied' if collection_perms_applied else '✗ Not applied'}")
+            logger.info("=" * 60)
+
+        except Exception as e:
+            logger.error(f"Failed to import permissions: {e}", exc_info=True)
+            logger.warning("Permissions import failed. Continuing without permissions...")
+
+    def _remap_permissions_graph(self, source_graph: dict[str, Any]) -> dict[str, Any]:
+        """Remaps database and group IDs in the permissions graph."""
+        if not source_graph or "groups" not in source_graph:
+            return {}
+
+        # Get current revision from target instance to avoid 409 conflicts
+        try:
+            current_graph = self.client.get_permissions_graph()
+            current_revision = current_graph.get("revision", 0)
+            logger.debug(f"Using current permissions revision: {current_revision}")
+        except Exception as e:
+            logger.warning(f"Could not fetch current permissions revision: {e}. Using 0.")
+            current_revision = 0
+
+        remapped_graph = {"revision": current_revision, "groups": {}}
+
+        # Track unmapped databases to report once at the end
+        unmapped_databases: set[int] = set()
+
+        for source_group_id_str, group_perms in source_graph.get("groups", {}).items():
+            source_group_id = int(source_group_id_str)
+
+            # Skip if group not mapped
+            if source_group_id not in self._group_map:
+                logger.debug(f"Skipping permissions for unmapped group ID {source_group_id}")
+                continue
+
+            target_group_id = self._group_map[source_group_id]
+            remapped_group_perms = {}
+
+            # Remap database IDs in permissions
+            for source_db_id_str, db_perms in group_perms.items():
+                source_db_id = int(source_db_id_str)
+
+                # Map source database ID to target database ID
+                target_db_id = None
+                if str(source_db_id) in self.db_map.by_id:
+                    target_db_id = self.db_map.by_id[str(source_db_id)]
+                else:
+                    # Try to find by database name
+                    source_db_name = self.manifest.databases.get(source_db_id)
+                    if source_db_name and source_db_name in self.db_map.by_name:
+                        target_db_id = self.db_map.by_name[source_db_name]
+
+                if target_db_id:
+                    remapped_group_perms[str(target_db_id)] = db_perms
+                    logger.debug(
+                        f"Remapped database permissions: group {target_group_id}, DB {source_db_id} -> {target_db_id}"
+                    )
+                else:
+                    # Track unmapped databases
+                    unmapped_databases.add(source_db_id)
+                    logger.debug(
+                        f"Skipping database ID {source_db_id} (not in db_map.json)"
+                    )
+
+            if remapped_group_perms:
+                remapped_graph["groups"][str(target_group_id)] = remapped_group_perms
+
+        # Report unmapped databases once at WARNING level (these should be in db_map.json)
+        if unmapped_databases:
+            db_names = [
+                f"{db_id} ({self.manifest.databases.get(db_id, 'unknown')})"
+                for db_id in sorted(unmapped_databases)
+            ]
+            logger.warning(
+                f"Skipped permissions for {len(unmapped_databases)} database(s) "
+                f"not found in db_map.json: {', '.join(db_names)}"
+            )
+
+        return remapped_graph if remapped_graph["groups"] else {}
+
+    def _remap_collection_permissions_graph(
+        self, source_graph: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Remaps collection and group IDs in the collection permissions graph."""
+        if not source_graph or "groups" not in source_graph:
+            return {}
+
+        # Get current revision from target instance to avoid 409 conflicts
+        try:
+            current_graph = self.client.get_collection_permissions_graph()
+            current_revision = current_graph.get("revision", 0)
+            logger.debug(f"Using current collection permissions revision: {current_revision}")
+        except Exception as e:
+            logger.warning(f"Could not fetch current collection permissions revision: {e}. Using 0.")
+            current_revision = 0
+
+        remapped_graph = {"revision": current_revision, "groups": {}}
+
+        # Track unmapped collections to report once at the end
+        unmapped_collections: set[int] = set()
+
+        for source_group_id_str, group_perms in source_graph.get("groups", {}).items():
+            source_group_id = int(source_group_id_str)
+
+            # Skip if group not mapped
+            if source_group_id not in self._group_map:
+                logger.debug(
+                    f"Skipping collection permissions for unmapped group ID {source_group_id}"
+                )
+                continue
+
+            target_group_id = self._group_map[source_group_id]
+            remapped_group_perms = {}
+
+            # Remap collection IDs in permissions
+            for source_collection_id_str, collection_perms in group_perms.items():
+                # Handle special "root" collection
+                if source_collection_id_str == "root":
+                    remapped_group_perms["root"] = collection_perms
+                    continue
+
+                source_collection_id = int(source_collection_id_str)
+
+                # Map source collection ID to target collection ID
+                if source_collection_id in self._collection_map:
+                    target_collection_id = self._collection_map[source_collection_id]
+                    remapped_group_perms[str(target_collection_id)] = collection_perms
+                    logger.debug(
+                        f"Remapped collection permissions: group {target_group_id}, "
+                        f"collection {source_collection_id} -> {target_collection_id}"
+                    )
+                else:
+                    # Track unmapped collections (likely not exported)
+                    unmapped_collections.add(source_collection_id)
+                    logger.debug(
+                        f"Skipping collection ID {source_collection_id} (not in export)"
+                    )
+
+            if remapped_group_perms:
+                remapped_graph["groups"][str(target_group_id)] = remapped_group_perms
+
+        # Report unmapped collections once at INFO level
+        if unmapped_collections:
+            logger.info(
+                f"Skipped permissions for {len(unmapped_collections)} collection(s) "
+                f"that were not included in the export: {sorted(unmapped_collections)}"
+            )
+
+        return remapped_graph if remapped_graph["groups"] else {}
 
 
 def main() -> None:

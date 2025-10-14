@@ -1,7 +1,8 @@
 # Quick Start Guide - Metabase Migration Toolkit
 
-## Recent Updates (2025-10-07)
+## Recent Updates (2025-10-10)
 
+✅ **Permissions Migration**: Export and import permissions to avoid 403 errors
 ✅ **Authentication Fixed**: Corrected `.env` file format
 ✅ **Dashboard Import Fixed**: Removed false error messages
 ✅ **Recursive Dependencies**: Automatic inclusion of all card dependencies
@@ -55,12 +56,14 @@ cp db_map.example.json db_map.json
 ```bash
 metabase-export \
     --export-dir "./metabase_export" \
-    --include-dashboards
+    --include-dashboards \
+    --include-permissions
 ```
 
 This will:
 - ✅ Export all collections, cards, and dashboards
-- ✅ **Automatically include all card dependencies** (NEW!)
+- ✅ **Automatically include all card dependencies**
+- ✅ **Export permissions to avoid 403 errors** (NEW!)
 - ✅ Create a self-contained export package
 
 ### Export Specific Collections
@@ -98,8 +101,11 @@ Exporting Collection A:
 metabase-import \
     --export-dir "./metabase_export" \
     --db-map "./db_map.json" \
-    --conflict skip
+    --conflict skip \
+    --apply-permissions
 ```
+
+**Note**: Use `--apply-permissions` to avoid "403 Forbidden" errors after migration.
 
 ### Dry Run (Preview Changes)
 ```bash

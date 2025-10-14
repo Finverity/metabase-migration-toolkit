@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metabase-migration-toolkit"
-version = "1.0.3"
+version = "1.0.4"
 description = "Export and import Metabase content (collections, questions, dashboards) between instances"
 readme = "README.md"
 authors = [

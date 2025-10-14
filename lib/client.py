@@ -261,3 +261,25 @@ class MetabaseClient:
         """Updates an existing dashboard and its dashcards."""
         # The main PUT endpoint handles dashcard and tab updates
         return self._request("put", f"/dashboard/{dashboard_id}", json=payload).json()
+
+    # --- Permissions API Methods ---
+
+    def get_permission_groups(self) -> list[dict]:
+        """Fetches all permission groups."""
+        return self._request("get", "/permissions/group").json()
+
+    def get_permissions_graph(self) -> dict:
+        """Fetches the complete permissions graph for data access."""
+        return self._request("get", "/permissions/graph").json()
+
+    def update_permissions_graph(self, graph: dict) -> dict:
+        """Updates the permissions graph for data access."""
+        return self._request("put", "/permissions/graph", json=graph).json()
+
+    def get_collection_permissions_graph(self) -> dict:
+        """Fetches the permissions graph for collection access."""
+        return self._request("get", "/collection/graph").json()
+
+    def update_collection_permissions_graph(self, graph: dict) -> dict:
+        """Updates the permissions graph for collection access."""
+        return self._request("put", "/collection/graph", json=graph).json()

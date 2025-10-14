@@ -31,6 +31,7 @@ This toolkit provides two command-line tools, `metabase-export` and `metabase-im
 
 - **Recursive Export:** Traverses the entire collection tree, preserving hierarchy.
 - **Selective Content:** Choose to include dashboards and archived items.
+- **Permissions Migration:** Export and import permission groups and access control settings to avoid 403 errors (NEW!).
 - **Database Remapping:** Intelligently remaps questions and cards to new database IDs on the target instance.
 - **Conflict Resolution:** Strategies for handling items that already exist on the target (`skip`, `overwrite`, `rename`).
 - **Idempotent Import:** Re-running an import with `skip` or `overwrite` produces a consistent state.
@@ -112,6 +113,7 @@ metabase-export \
     --export-dir "./metabase_export" \
     --include-dashboards \
     --include-archived \
+    --include-permissions \
     --log-level INFO \
     --root-collections "24"
 ```
@@ -138,6 +140,7 @@ metabase-export \
 - `--export-dir` - Directory to save exported files (required)
 - `--include-dashboards` - Include dashboards in export
 - `--include-archived` - Include archived items
+- `--include-permissions` - Include permissions (groups and access control) in export
 - `--root-collections` - Comma-separated collection IDs to export (optional)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
 
@@ -153,6 +156,7 @@ metabase-import \
     --export-dir "./metabase_export" \
     --db-map "./db_map.json" \
     --conflict skip \
+    --apply-permissions \
     --log-level INFO
 ```
 
@@ -180,7 +184,28 @@ metabase-import \
 - `--db-map` - Path to database mapping JSON file (required)
 - `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
 - `--dry-run` - Preview changes without applying them
+- `--include-archived` - Include archived items in the import
+- `--apply-permissions` - Apply permissions from the export (requires admin privileges)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+## Permissions Migration
+
+The toolkit now supports exporting and importing permissions to solve the common "403 Forbidden" errors after migration.
+
+**Quick example:**
+
+```bash
+# Export with permissions
+metabase-export --export-dir "./export" --include-permissions
+
+# Import with permissions
+metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permissions
+```
+
+**Documentation:**
+- [Permissions Migration Guide](../doc/PERMISSIONS_MIGRATION.md) - Comprehensive guide
+- [Quick Reference](../PERMISSIONS_QUICKREF.md) - Quick reference card
+- [Implementation Details](../doc/PERMISSIONS_IMPLEMENTATION.md) - Technical details
 
 ## Development
 
@@ -414,6 +439,14 @@ We welcome contributions! Here's how to get started:
 - Check if they were filtered during export (archived items, specific collections)
 - Review import logs for skipped items
 - Verify conflict resolution strategy (`skip` may skip existing items)
+
+#### Getting 403 Forbidden errors after import
+- Use `--include-permissions` during export
+- Use `--apply-permissions` during import
+- Ensure all custom permission groups exist on target instance
+- Verify database mapping is complete in `db_map.json`
+- Check that import user has admin privileges
+- See [Permissions Migration Guide](../doc/PERMISSIONS_MIGRATION.md) for details
 
 ### CI/CD Issues
 
