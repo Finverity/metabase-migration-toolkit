@@ -8,8 +8,15 @@ import json
 import logging
 from pathlib import Path
 
-from lib.utils import (TOOL_VERSION, CustomJsonEncoder, calculate_checksum, clean_for_create,
-                       sanitize_filename, setup_logging, write_json_file)
+from lib.utils import (
+    TOOL_VERSION,
+    CustomJsonEncoder,
+    calculate_checksum,
+    clean_for_create,
+    sanitize_filename,
+    setup_logging,
+    write_json_file,
+)
 
 
 class TestSanitizeFilename:

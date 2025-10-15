@@ -6,8 +6,19 @@ Tests data models and dataclasses used throughout the application.
 
 import dataclasses
 
-from lib.models import (Card, Collection, Dashboard, DatabaseMap, ImportAction, ImportPlan,
-                        ImportReport, ImportReportItem, Manifest, ManifestMeta, UnmappedDatabase)
+from lib.models import (
+    Card,
+    Collection,
+    Dashboard,
+    DatabaseMap,
+    ImportAction,
+    ImportPlan,
+    ImportReport,
+    ImportReportItem,
+    Manifest,
+    ManifestMeta,
+    UnmappedDatabase,
+)
 
 
 class TestCollection:

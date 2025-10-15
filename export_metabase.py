@@ -18,8 +18,13 @@ from tqdm import tqdm
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ExportConfig, get_export_args
 from lib.models import Card, Collection, Dashboard, Manifest, ManifestMeta, PermissionGroup
-from lib.utils import (TOOL_VERSION, calculate_checksum, sanitize_filename, setup_logging,
-                       write_json_file)
+from lib.utils import (
+    TOOL_VERSION,
+    calculate_checksum,
+    sanitize_filename,
+    setup_logging,
+    write_json_file,
+)
 
 # Initialize logger
 logger = setup_logging(__name__)

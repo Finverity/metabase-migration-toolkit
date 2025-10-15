@@ -91,14 +91,12 @@ lint: ## Run all linters
 	@echo ""
 	@echo "All linting checks passed!"
 
-format: ## Format code with black and isort
-	@echo "Formatting with black..."
-	$(BLACK) lib/ tests/ *.py
-	@echo ""
-	@echo "Sorting imports with isort..."
-	$(PYTHON) -m isort lib/ tests/ *.py
-	@echo ""
-	@echo "Code formatted successfully!"
+format: ## Format code with black and ruff
+    @echo "Formatting with black..."
+    $(BLACK) lib/ tests/ *.py
+    @echo ""
+    @echo "Sorting imports with ruff..."
+    $(RUFF) check --select I --fix lib/ tests/ *.py
 
 format-check: ## Check code formatting without making changes
 	$(BLACK) --check lib/ tests/ *.py

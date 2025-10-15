@@ -18,8 +18,13 @@ from tqdm import tqdm
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ImportConfig, get_import_args
 from lib.models import DatabaseMap, ImportReport, ImportReportItem, Manifest, UnmappedDatabase
-from lib.utils import (clean_for_create, read_json_file, sanitize_filename, setup_logging,
-                       write_json_file)
+from lib.utils import (
+    clean_for_create,
+    read_json_file,
+    sanitize_filename,
+    setup_logging,
+    write_json_file,
+)
 
 # Initialize logger
 logger = setup_logging(__name__)
