@@ -399,10 +399,8 @@ class TestRemapCardQuery:
                 "dataset_query": {
                     "type": "query",
                     # Note: NO "database" field here
-                    "query": {
-                        "source-table": "card__50"
-                    }
-                }
+                    "query": {"source-table": "card__50"},
+                },
             }
 
             remapped_data, success = importer._remap_card_query(card_data)
@@ -428,10 +426,8 @@ class TestRemapCardQuery:
                 "dataset_query": {
                     "type": "query",
                     "database": 1,  # Already present
-                    "query": {
-                        "source-table": "card__50"
-                    }
-                }
+                    "query": {"source-table": "card__50"},
+                },
             }
 
             remapped_data, success = importer._remap_card_query(card_data)
@@ -448,10 +444,7 @@ class TestRemapCardQuery:
             card_data = {
                 "id": 100,
                 "name": "Test Card",
-                "dataset_query": {
-                    "type": "query",
-                    "query": {}
-                }
+                "dataset_query": {"type": "query", "query": {}},
             }
 
             remapped_data, success = importer._remap_card_query(card_data)

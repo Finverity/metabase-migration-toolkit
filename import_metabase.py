@@ -17,20 +17,9 @@ from tqdm import tqdm
 
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ImportConfig, get_import_args
-from lib.models import (
-    DatabaseMap,
-    ImportReport,
-    ImportReportItem,
-    Manifest,
-    UnmappedDatabase,
-)
-from lib.utils import (
-    clean_for_create,
-    read_json_file,
-    sanitize_filename,
-    setup_logging,
-    write_json_file,
-)
+from lib.models import DatabaseMap, ImportReport, ImportReportItem, Manifest, UnmappedDatabase
+from lib.utils import (clean_for_create, read_json_file, sanitize_filename, setup_logging,
+                       write_json_file)
 
 # Initialize logger
 logger = setup_logging(__name__)
@@ -95,9 +84,14 @@ class MetabaseImporter:
         # Import the actual dataclasses from lib.models
         from lib.models import Card, Collection, Dashboard, ManifestMeta, PermissionGroup
 
+        # Convert database keys from strings (JSON) back to integers
+        # JSON serialization converts integer keys to strings, so we need to convert them back
+        databases_dict = manifest_data.get("databases", {})
+        databases_with_int_keys = {int(k): v for k, v in databases_dict.items()}
+
         self.manifest = Manifest(
             meta=ManifestMeta(**manifest_data["meta"]),
-            databases=manifest_data.get("databases", {}),
+            databases=databases_with_int_keys,
             collections=[Collection(**c) for c in manifest_data.get("collections", [])],
             cards=[Card(**c) for c in manifest_data.get("cards", [])],
             dashboards=[Dashboard(**d) for d in manifest_data.get("dashboards", [])],
@@ -120,11 +114,12 @@ class MetabaseImporter:
 
     def _resolve_db_id(self, source_db_id: int) -> int | None:
         """Resolves a source database ID to a target database ID using the map."""
-        # by_id takes precedence
+        # by_id takes precedence (db_map.json uses string keys for JSON compatibility)
         if str(source_db_id) in self.db_map.by_id:
             return self.db_map.by_id[str(source_db_id)]
 
-        source_db_name = self.manifest.databases.get(str(source_db_id))
+        # Look up database name using integer key (manifest.databases now has int keys)
+        source_db_name = self.manifest.databases.get(source_db_id)
         if source_db_name and source_db_name in self.db_map.by_name:
             return self.db_map.by_name[source_db_name]
 
@@ -141,7 +136,7 @@ class MetabaseImporter:
                         unmapped[card.database_id] = UnmappedDatabase(
                             source_db_id=card.database_id,
                             source_db_name=self.manifest.databases.get(
-                                str(card.database_id), "Unknown Name"
+                                card.database_id, "Unknown Name"
                             ),
                         )
                     unmapped[card.database_id].card_ids.add(card.id)
@@ -154,9 +149,10 @@ class MetabaseImporter:
             target_db_ids = {db["id"] for db in target_databases}
 
             # Collect all unique target database IDs from the mapping
+            # manifest.databases now has integer keys after our fix
             mapped_target_ids = set()
             for source_db_id in self.manifest.databases.keys():
-                target_id = self._resolve_db_id(int(source_db_id))
+                target_id = self._resolve_db_id(source_db_id)
                 if target_id:
                     mapped_target_ids.add(target_id)
 
@@ -743,7 +739,7 @@ class MetabaseImporter:
                     logger.error("")
                     logger.error(f"Source database ID: {card.database_id}")
                     logger.error(
-                        f"Source database name: {self.manifest.databases.get(str(card.database_id), 'Unknown')}"
+                        f"Source database name: {self.manifest.databases.get(card.database_id, 'Unknown')}"
                     )
                     logger.error(f"Mapped to target ID: {self._resolve_db_id(card.database_id)}")
                     logger.error("")
@@ -1063,8 +1059,12 @@ class MetabaseImporter:
             logger.info("=" * 60)
             logger.info("Permissions Import Summary:")
             logger.info(f"  Groups mapped: {len(self._group_map)}")
-            logger.info(f"  Data permissions: {'✓ Applied' if data_perms_applied else '✗ Not applied'}")
-            logger.info(f"  Collection permissions: {'✓ Applied' if collection_perms_applied else '✗ Not applied'}")
+            logger.info(
+                f"  Data permissions: {'✓ Applied' if data_perms_applied else '✗ Not applied'}"
+            )
+            logger.info(
+                f"  Collection permissions: {'✓ Applied' if collection_perms_applied else '✗ Not applied'}"
+            )
             logger.info("=" * 60)
 
         except Exception as e:
@@ -1123,9 +1123,7 @@ class MetabaseImporter:
                 else:
                     # Track unmapped databases
                     unmapped_databases.add(source_db_id)
-                    logger.debug(
-                        f"Skipping database ID {source_db_id} (not in db_map.json)"
-                    )
+                    logger.debug(f"Skipping database ID {source_db_id} (not in db_map.json)")
 
             if remapped_group_perms:
                 remapped_graph["groups"][str(target_group_id)] = remapped_group_perms
@@ -1143,9 +1141,7 @@ class MetabaseImporter:
 
         return remapped_graph if remapped_graph["groups"] else {}
 
-    def _remap_collection_permissions_graph(
-        self, source_graph: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _remap_collection_permissions_graph(self, source_graph: dict[str, Any]) -> dict[str, Any]:
         """Remaps collection and group IDs in the collection permissions graph."""
         if not source_graph or "groups" not in source_graph:
             return {}
@@ -1156,7 +1152,9 @@ class MetabaseImporter:
             current_revision = current_graph.get("revision", 0)
             logger.debug(f"Using current collection permissions revision: {current_revision}")
         except Exception as e:
-            logger.warning(f"Could not fetch current collection permissions revision: {e}. Using 0.")
+            logger.warning(
+                f"Could not fetch current collection permissions revision: {e}. Using 0."
+            )
             current_revision = 0
 
         remapped_graph = {"revision": current_revision, "groups": {}}
@@ -1197,9 +1195,7 @@ class MetabaseImporter:
                 else:
                     # Track unmapped collections (likely not exported)
                     unmapped_collections.add(source_collection_id)
-                    logger.debug(
-                        f"Skipping collection ID {source_collection_id} (not in export)"
-                    )
+                    logger.debug(f"Skipping collection ID {source_collection_id} (not in export)")
 
             if remapped_group_perms:
                 remapped_graph["groups"][str(target_group_id)] = remapped_group_perms

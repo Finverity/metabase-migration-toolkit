@@ -18,13 +18,8 @@ from tqdm import tqdm
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ExportConfig, get_export_args
 from lib.models import Card, Collection, Dashboard, Manifest, ManifestMeta, PermissionGroup
-from lib.utils import (
-    TOOL_VERSION,
-    calculate_checksum,
-    sanitize_filename,
-    setup_logging,
-    write_json_file,
-)
+from lib.utils import (TOOL_VERSION, calculate_checksum, sanitize_filename, setup_logging,
+                       write_json_file)
 
 # Initialize logger
 logger = setup_logging(__name__)
@@ -474,7 +469,9 @@ class MetabaseExporter:
                     id=group["id"], name=group["name"], member_count=group.get("member_count", 0)
                 )
                 self.manifest.permission_groups.append(group_obj)
-                logger.debug(f"  -> Exported permission group: '{group['name']}' (ID: {group['id']})")
+                logger.debug(
+                    f"  -> Exported permission group: '{group['name']}' (ID: {group['id']})"
+                )
 
             logger.info(f"Exported {len(self.manifest.permission_groups)} permission groups")
 
