@@ -3,7 +3,9 @@
 Quick test script to verify database fetching works correctly.
 """
 import os
+
 from dotenv import load_dotenv
+
 from lib.client import MetabaseClient
 from lib.utils import setup_logging
 
@@ -35,6 +37,6 @@ try:
 except Exception as e:
     print(f"\n❌ Test FAILED: {e}")
     import traceback
+
     traceback.print_exc()
     print("=" * 80)
-

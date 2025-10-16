@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: metabase_source
       POSTGRES_USER: metabase
-      POSTGRES_PASSWORD: metabase_password
+      POSTGRES_PASSWORD: metabase_password # pragma: allowlist-secret
     ports:
       - "5432:5432"
     volumes:
@@ -28,7 +28,7 @@ services:
     environment:
       POSTGRES_DB: metabase_target
       POSTGRES_USER: metabase
-      POSTGRES_PASSWORD: metabase_password
+      POSTGRES_PASSWORD: metabase_password # pragma: allowlist-secret
     ports:
       - "5433:5432"
     volumes:
@@ -48,7 +48,7 @@ services:
     environment:
       POSTGRES_DB: sample_data
       POSTGRES_USER: sample_user
-      POSTGRES_PASSWORD: sample_password
+      POSTGRES_PASSWORD: sample_password # pragma: allowlist-secret
     ports:
       - "5434:5432"
     volumes:
@@ -71,7 +71,7 @@ services:
       MB_DB_DBNAME: metabase_source
       MB_DB_PORT: 5432
       MB_DB_USER: metabase
-      MB_DB_PASS: metabase_password
+      MB_DB_PASS: metabase_password # pragma: allowlist-secret
       MB_DB_HOST: source-postgres
       MB_JETTY_PORT: 3000
       JAVA_TIMEZONE: UTC
@@ -102,7 +102,7 @@ services:
       MB_DB_DBNAME: metabase_target
       MB_DB_PORT: 5432
       MB_DB_USER: metabase
-      MB_DB_PASS: metabase_password
+      MB_DB_PASS: metabase_password # pragma: allowlist-secret
       MB_DB_HOST: target-postgres
       MB_JETTY_PORT: 3000
       JAVA_TIMEZONE: UTC
@@ -134,4 +134,3 @@ volumes:
   sample-data:
   source-metabase-data:
   target-metabase-data:
-

@@ -1,6 +1,4 @@
-"""
-Handles loading configuration from CLI arguments and environment variables.
-"""
+"""Handles loading configuration from CLI arguments and environment variables."""
 
 import argparse
 import os
@@ -22,6 +20,7 @@ class ExportConfig:
     source_personal_token: str | None = None
     include_dashboards: bool = False
     include_archived: bool = False
+    include_permissions: bool = False
     root_collection_ids: list[int] | None = None
     log_level: str = "INFO"
 
@@ -39,6 +38,8 @@ class ImportConfig:
     target_personal_token: str | None = None
     conflict_strategy: Literal["skip", "overwrite", "rename"] = "skip"
     dry_run: bool = False
+    include_archived: bool = False
+    apply_permissions: bool = False
     log_level: str = "INFO"
 
 
@@ -75,6 +76,11 @@ def get_export_args() -> ExportConfig:
         "--include-archived", action="store_true", help="Include archived items in the export"
     )
     parser.add_argument(
+        "--include-permissions",
+        action="store_true",
+        help="Include permissions (groups and access control) in the export",
+    )
+    parser.add_argument(
         "--root-collections",
         help="Comma-separated list of root collection IDs to export (empty=all)",
     )
@@ -102,6 +108,7 @@ def get_export_args() -> ExportConfig:
         source_personal_token=args.source_token or os.getenv("MB_SOURCE_PERSONAL_TOKEN"),
         include_dashboards=args.include_dashboards,
         include_archived=args.include_archived,
+        include_permissions=args.include_permissions,
         root_collection_ids=(
             [int(c_id) for c_id in args.root_collections.split(",")]
             if args.root_collections
@@ -154,6 +161,14 @@ def get_import_args() -> ImportConfig:
         "--dry-run", action="store_true", help="Perform a dry run without making any changes"
     )
     parser.add_argument(
+        "--include-archived", action="store_true", help="Include archived items in the import"
+    )
+    parser.add_argument(
+        "--apply-permissions",
+        action="store_true",
+        help="Apply permissions from the export (requires admin privileges)",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -177,5 +192,7 @@ def get_import_args() -> ImportConfig:
         target_personal_token=args.target_token or os.getenv("MB_TARGET_PERSONAL_TOKEN"),
         conflict_strategy=args.conflict,
         dry_run=args.dry_run,
+        include_archived=args.include_archived,
+        apply_permissions=args.apply_permissions,
         log_level=args.log_level,
     )

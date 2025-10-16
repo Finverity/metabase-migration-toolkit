@@ -1,5 +1,5 @@
-"""
-A robust, production-ready client for interacting with the Metabase API.
+"""A robust, production-ready client for interacting with the Metabase API.
+
 Handles authentication, pagination, retries, and error handling.
 """
 
@@ -8,12 +8,7 @@ import logging
 from typing import Any
 
 import requests
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from lib.utils import TOOL_VERSION
 
@@ -24,12 +19,14 @@ class MetabaseAPIError(Exception):
     """Custom exception for Metabase API errors."""
 
     def __init__(self, message: str, status_code: int | None = None, response_data: Any = None):
+        """Initialize the MetabaseAPIError with message, status code, and response data."""
         self.message = message
         self.status_code = status_code
         self.response_data = response_data
         super().__init__(f"Metabase API Error: {message} (Status: {status_code})")
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Return a formatted string representation of the error."""
         return f"Metabase API request failed [{self.status_code}]: {self.message}"
 
 
@@ -43,7 +40,8 @@ class MetabaseClient:
         password: str | None = None,
         session_token: str | None = None,
         personal_token: str | None = None,
-    ):
+    ) -> None:
+        """Initialize the MetabaseClient with authentication credentials."""
         self.base_url = base_url.rstrip("/")
         self.api_url = f"{self.base_url}/api"
         self._username = username
@@ -53,7 +51,7 @@ class MetabaseClient:
         self._session = requests.Session()
         self._session.headers.update({"User-Agent": f"MetabaseMigrationToolkit/{TOOL_VERSION}"})
 
-    def _authenticate(self):
+    def _authenticate(self) -> None:
         """Authenticates with the Metabase API and stores the session token."""
         if self._session_token or self._personal_token:
             logger.info("Using provided session or personal token for authentication.")
@@ -95,13 +93,18 @@ class MetabaseClient:
                 self._authenticate()
                 if self._session_token:  # Re-check after authentication
                     self._session.headers.update({"X-Metabase-Session": self._session_token})
-        return self._session.headers
+
+        # Return the authentication headers that were set
+        headers = {}
+        if "X-Metabase-Session" in self._session.headers:
+            headers["X-Metabase-Session"] = self._session.headers["X-Metabase-Session"]
+        if "X-Metabase-API-Key" in self._session.headers:
+            headers["X-Metabase-API-Key"] = self._session.headers["X-Metabase-API-Key"]
+        return headers
 
     def _should_retry(self, exception: BaseException) -> bool:
         """Determines if a request should be retried."""
-        if isinstance(
-            exception, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
-        ):
+        if isinstance(exception, requests.exceptions.ConnectionError | requests.exceptions.Timeout):
             return True
         if isinstance(exception, MetabaseAPIError) and exception.status_code in [
             429,
@@ -123,7 +126,7 @@ class MetabaseClient:
             f"Retrying API call due to {retry_state.outcome.exception()} (Attempt {retry_state.attempt_number})"
         ),
     )
-    def _request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
+    def _request(self, method: str, endpoint: str, **kwargs: Any) -> requests.Response:
         """Makes a request to the Metabase API with authentication and retries."""
         self._prepare_headers()
         url = f"{self.api_url}/{endpoint.lstrip('/')}"
@@ -159,8 +162,8 @@ class MetabaseClient:
             ) from e
 
     def _get_paginated(self, endpoint: str, params: dict | None = None) -> list[dict]:
-        """
-        Handles Metabase's pagination to fetch all items from an endpoint.
+        """Handles Metabase's pagination to fetch all items from an endpoint.
+
         NOTE: Metabase pagination is inconsistent. This handles common cases but may need adjustment.
         Many core endpoints like /api/collection/items surprisingly do not paginate and return all results.
         This function assumes that if pagination exists, it will be in the response metadata.
@@ -201,29 +204,29 @@ class MetabaseClient:
 
     # --- Public API Methods ---
 
-    def get_collections_tree(self, params: dict | None = None) -> list[dict]:
+    def get_collections_tree(self, params: dict | None = None) -> Any:
         """Fetches the entire collection tree."""
         return self._request("get", "/collection/tree", params=params or {}).json()
 
-    def get_collection(self, collection_id: int) -> dict:
+    def get_collection(self, collection_id: int) -> Any:
         """Fetches the full details for a single collection."""
         return self._request("get", f"/collection/{collection_id}").json()
 
-    def get_collection_items(self, collection_id: int | str, params: dict | None = None) -> dict:
+    def get_collection_items(self, collection_id: int | str, params: dict | None = None) -> Any:
         """Fetches items within a specific collection."""
         return self._request(
             "get", f"/collection/{collection_id}/items", params=params or {}
         ).json()
 
-    def get_card(self, card_id: int) -> dict:
+    def get_card(self, card_id: int) -> Any:
         """Fetches the full details for a single card."""
         return self._request("get", f"/card/{card_id}").json()
 
-    def get_dashboard(self, dashboard_id: int) -> dict:
+    def get_dashboard(self, dashboard_id: int) -> Any:
         """Fetches the full details for a single dashboard."""
         return self._request("get", f"/dashboard/{dashboard_id}").json()
 
-    def get_databases(self) -> list[dict]:
+    def get_databases(self) -> Any:
         """Fetches a list of all databases."""
         response = self._request("get", "/database").json()
 
@@ -237,27 +240,49 @@ class MetabaseClient:
             logger.debug(f"Response: {response}")
             return []
 
-    def create_collection(self, payload: dict) -> dict:
+    def create_collection(self, payload: dict) -> Any:
         """Creates a new collection."""
         return self._request("post", "/collection", json=payload).json()
 
-    def update_collection(self, collection_id: int, payload: dict) -> dict:
+    def update_collection(self, collection_id: int, payload: dict) -> Any:
         """Updates an existing collection."""
         return self._request("put", f"/collection/{collection_id}", json=payload).json()
 
-    def create_card(self, payload: dict) -> dict:
+    def create_card(self, payload: dict) -> Any:
         """Creates a new card."""
         return self._request("post", "/card", json=payload).json()
 
-    def update_card(self, card_id: int, payload: dict) -> dict:
+    def update_card(self, card_id: int, payload: dict) -> Any:
         """Updates an existing card."""
         return self._request("put", f"/card/{card_id}", json=payload).json()
 
-    def create_dashboard(self, payload: dict) -> dict:
+    def create_dashboard(self, payload: dict) -> Any:
         """Creates a new dashboard."""
         return self._request("post", "/dashboard", json=payload).json()
 
-    def update_dashboard(self, dashboard_id: int, payload: dict) -> dict:
+    def update_dashboard(self, dashboard_id: int, payload: dict) -> Any:
         """Updates an existing dashboard and its dashcards."""
         # The main PUT endpoint handles dashcard and tab updates
         return self._request("put", f"/dashboard/{dashboard_id}", json=payload).json()
+
+    # --- Permissions API Methods ---
+
+    def get_permission_groups(self) -> Any:
+        """Fetches all permission groups."""
+        return self._request("get", "/permissions/group").json()
+
+    def get_permissions_graph(self) -> Any:
+        """Fetches the complete permissions graph for data access."""
+        return self._request("get", "/permissions/graph").json()
+
+    def update_permissions_graph(self, graph: dict) -> Any:
+        """Updates the permissions graph for data access."""
+        return self._request("put", "/permissions/graph", json=graph).json()
+
+    def get_collection_permissions_graph(self) -> Any:
+        """Fetches the permissions graph for collection access."""
+        return self._request("get", "/collection/graph").json()
+
+    def update_collection_permissions_graph(self, graph: dict) -> Any:
+        """Updates the permissions graph for collection access."""
+        return self._request("put", "/collection/graph", json=graph).json()

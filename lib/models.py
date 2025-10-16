@@ -1,5 +1,5 @@
-"""
-Defines the data classes for Metabase objects and the migration manifest.
+"""Defines the data classes for Metabase objects and the migration manifest.
+
 Using typed dataclasses provides clarity and reduces errors.
 """
 
@@ -51,6 +51,15 @@ class Dashboard:
     archived: bool = False
 
 
+@dataclasses.dataclass
+class PermissionGroup:
+    """Represents a Metabase permission group."""
+
+    id: int
+    name: str
+    member_count: int = 0
+
+
 # --- Manifest Models ---
 
 
@@ -73,6 +82,9 @@ class Manifest:
     collections: list[Collection] = dataclasses.field(default_factory=list)
     cards: list[Card] = dataclasses.field(default_factory=list)
     dashboards: list[Dashboard] = dataclasses.field(default_factory=list)
+    permission_groups: list[PermissionGroup] = dataclasses.field(default_factory=list)
+    permissions_graph: dict[str, Any] = dataclasses.field(default_factory=dict)
+    collection_permissions_graph: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 # --- Import-specific Models ---
@@ -126,7 +138,7 @@ class ImportReportItem:
     reason: str | None = None
     error_message: str | None = None  # Alias for reason, kept for backward compatibility
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Sync error_message and reason fields."""
         # If error_message is provided but not reason, use error_message
         if self.error_message is not None and self.reason is None:
@@ -150,7 +162,7 @@ class ImportReport:
     results: list[ImportReportItem] = dataclasses.field(default_factory=list)
     items: list[ImportReportItem] = dataclasses.field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Sync items and results fields for backward compatibility."""
         # If items is provided but results is empty, use items for results
         if self.items and not self.results:
@@ -164,7 +176,7 @@ class ImportReport:
             object.__setattr__(self, "items", shared_list)
             object.__setattr__(self, "results", shared_list)
 
-    def add(self, item: ImportReportItem):
+    def add(self, item: ImportReportItem) -> None:
         """Adds an item to the report and updates the summary."""
         self.results.append(item)
         # Keep items in sync

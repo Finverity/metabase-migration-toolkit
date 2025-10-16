@@ -373,3 +373,80 @@ class TestImportConfiguration:
         """Test that db_map_path is required."""
         with pytest.raises(TypeError):
             ImportConfig(target_url="https://example.com", export_dir="./export")
+
+
+class TestRemapCardQuery:
+    """Test suite for _remap_card_query method."""
+
+    def test_remap_card_query_always_sets_database_field(self, sample_import_config):
+        """Test that database field is always set in dataset_query, even if not present originally.
+
+        This is a regression test for the pMBQL normalization error where cards that reference
+        other cards (source-table: card__XXX) were missing the database field in dataset_query.
+        """
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up database mapping
+            importer.db_map = DatabaseMap(by_id={"1": 10})
+
+            # Card data with database_id but NO database field in dataset_query
+            # This simulates a card that queries from another card
+            card_data = {
+                "id": 100,
+                "name": "Test Card",
+                "database_id": 1,
+                "dataset_query": {
+                    "type": "query",
+                    # Note: NO "database" field here
+                    "query": {"source-table": "card__50"},
+                },
+            }
+
+            remapped_data, success = importer._remap_card_query(card_data)
+
+            assert success is True
+            assert remapped_data["database_id"] == 10
+            # The key assertion: database field should be set in dataset_query
+            assert remapped_data["dataset_query"]["database"] == 10
+
+    def test_remap_card_query_with_existing_database_field(self, sample_import_config):
+        """Test that existing database field in dataset_query is properly remapped."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up database mapping
+            importer.db_map = DatabaseMap(by_id={"1": 10})
+
+            # Card data with database field already present
+            card_data = {
+                "id": 100,
+                "name": "Test Card",
+                "database_id": 1,
+                "dataset_query": {
+                    "type": "query",
+                    "database": 1,  # Already present
+                    "query": {"source-table": "card__50"},
+                },
+            }
+
+            remapped_data, success = importer._remap_card_query(card_data)
+
+            assert success is True
+            assert remapped_data["database_id"] == 10
+            assert remapped_data["dataset_query"]["database"] == 10
+
+    def test_remap_card_query_without_database_id(self, sample_import_config):
+        """Test that cards without database_id return False."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            card_data = {
+                "id": 100,
+                "name": "Test Card",
+                "dataset_query": {"type": "query", "query": {}},
+            }
+
+            remapped_data, success = importer._remap_card_query(card_data)
+
+            assert success is False

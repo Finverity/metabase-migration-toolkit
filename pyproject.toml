@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metabase-migration-toolkit"
-version = "1.0.3"
+version = "1.0.4"
 description = "Export and import Metabase content (collections, questions, dashboards) between instances"
 readme = "README.md"
 authors = [
@@ -54,6 +54,8 @@ dev = [
     "mypy>=1.0.0",
     "types-requests>=2.28.0",
     "pre-commit>=3.0.0",
+    "isort>=5.0.0",
+
 ]
 docs = [
     "sphinx>=5.0.0",
@@ -218,4 +220,3 @@ exclude_lines = [
 ]
 precision = 2
 show_missing = true
-

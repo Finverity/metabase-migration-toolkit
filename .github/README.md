@@ -31,6 +31,7 @@ This toolkit provides two command-line tools, `metabase-export` and `metabase-im
 
 - **Recursive Export:** Traverses the entire collection tree, preserving hierarchy.
 - **Selective Content:** Choose to include dashboards and archived items.
+- **Permissions Migration:** Export and import permission groups and access control settings to avoid 403 errors (NEW!).
 - **Database Remapping:** Intelligently remaps questions and cards to new database IDs on the target instance.
 - **Conflict Resolution:** Strategies for handling items that already exist on the target (`skip`, `overwrite`, `rename`).
 - **Idempotent Import:** Re-running an import with `skip` or `overwrite` produces a consistent state.
@@ -112,6 +113,7 @@ metabase-export \
     --export-dir "./metabase_export" \
     --include-dashboards \
     --include-archived \
+    --include-permissions \
     --log-level INFO \
     --root-collections "24"
 ```
@@ -138,6 +140,7 @@ metabase-export \
 - `--export-dir` - Directory to save exported files (required)
 - `--include-dashboards` - Include dashboards in export
 - `--include-archived` - Include archived items
+- `--include-permissions` - Include permissions (groups and access control) in export
 - `--root-collections` - Comma-separated collection IDs to export (optional)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
 
@@ -153,6 +156,7 @@ metabase-import \
     --export-dir "./metabase_export" \
     --db-map "./db_map.json" \
     --conflict skip \
+    --apply-permissions \
     --log-level INFO
 ```
 
@@ -180,7 +184,29 @@ metabase-import \
 - `--db-map` - Path to database mapping JSON file (required)
 - `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
 - `--dry-run` - Preview changes without applying them
+- `--include-archived` - Include archived items in the import
+- `--apply-permissions` - Apply permissions from the export (requires admin privileges)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+## Permissions Migration
+
+The toolkit now supports exporting and importing permissions to solve the common "403 Forbidden" errors after migration.
+
+**Quick example:**
+
+```bash
+# Export with permissions
+metabase-export --export-dir "./export" --include-permissions
+
+# Import with permissions
+metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permissions
+```
+
+**Documentation:**
+
+- [Permissions Migration Guide](../doc/PERMISSIONS_MIGRATION.md) - Comprehensive guide
+- [Quick Reference](../PERMISSIONS_QUICKREF.md) - Quick reference card
+- [Implementation Details](../doc/PERMISSIONS_IMPLEMENTATION.md) - Technical details
 
 ## Development
 
@@ -203,7 +229,6 @@ make test-integration
 
 For more details on integration tests, see [tests/integration/README.md](../tests/integration/README.md).
 
-
 ### CI/CD Pipeline
 
 This repository uses GitHub Actions for automated testing, security scanning, and publishing.
@@ -213,11 +238,13 @@ This repository uses GitHub Actions for automated testing, security scanning, an
 ##### 1. Tests (`tests.yml`)
 
 **Triggers:**
+
 - Push to `main` or `develop` branches
 - Pull requests to `main` or `develop` branches
 - Manual trigger via workflow_dispatch
 
 **Jobs:**
+
 - **test**: Runs tests on Python 3.8, 3.9, 3.10, 3.11, 3.12
   - Installs dependencies
   - Runs pytest with coverage
@@ -246,24 +273,27 @@ This repository uses GitHub Actions for automated testing, security scanning, an
 ##### 2. Publish (`publish.yml`)
 
 **Triggers:**
+
 - GitHub release published
 - Manual trigger with environment selection
 
 **Jobs:**
+
 - **build**: Builds distribution packages
 - **publish-to-testpypi**: Publishes to TestPyPI (manual trigger only)
 - **publish-to-pypi**: Publishes to PyPI (on release or manual trigger)
 - **github-release**: Uploads artifacts to GitHub Release
 
 **Setup Required:**
+
 1. Configure PyPI trusted publishing:
-   - Go to https://pypi.org/manage/account/publishing/
+   - Go to <https://pypi.org/manage/account/publishing/>
    - Add GitHub repository
    - Set workflow name: `publish.yml`
    - Set environment name: `pypi`
 
 2. Configure TestPyPI trusted publishing:
-   - Go to https://test.pypi.org/manage/account/publishing/
+   - Go to <https://test.pypi.org/manage/account/publishing/>
    - Add GitHub repository
    - Set workflow name: `publish.yml`
    - Set environment name: `testpypi`
@@ -277,9 +307,11 @@ This repository uses GitHub Actions for automated testing, security scanning, an
 ##### 3. Dependency Review (`dependency-review.yml`)
 
 **Triggers:**
+
 - Pull requests to `main` or `develop` branches
 
 **Jobs:**
+
 - Reviews dependency changes in PRs
 - Fails on moderate or higher severity vulnerabilities
 - Posts summary comment in PR
@@ -287,11 +319,13 @@ This repository uses GitHub Actions for automated testing, security scanning, an
 ##### 4. CodeQL Security Analysis (`codeql.yml`)
 
 **Triggers:**
+
 - Push to `main` or `develop` branches
 - Pull requests to `main` or `develop` branches
 - Weekly schedule (Mondays at midnight)
 
 **Jobs:**
+
 - Runs CodeQL security analysis
 - Checks for security vulnerabilities
 - Uploads results to GitHub Security tab
@@ -307,6 +341,7 @@ The `dependabot.yml` file configures automatic dependency updates:
 - Labels PRs appropriately
 
 **Setup:**
+
 1. Update the `reviewers` and `assignees` fields in `dependabot.yml` with your GitHub username
 2. Dependabot will automatically create PRs for dependency updates
 
@@ -314,6 +349,7 @@ The `dependabot.yml` file configures automatic dependency updates:
 
 **Bug Report (`bug_report.yml`)**
 Structured form for reporting bugs with:
+
 - Bug description
 - Reproduction steps
 - Expected vs actual behavior
@@ -323,6 +359,7 @@ Structured form for reporting bugs with:
 
 **Feature Request (`feature_request.yml`)**
 Structured form for suggesting features with:
+
 - Problem statement
 - Proposed solution
 - Alternatives considered
@@ -330,12 +367,14 @@ Structured form for suggesting features with:
 - Priority level
 
 **Configuration (`config.yml`)**
+
 - Disables blank issues
 - Provides links to discussions and security reporting
 
 #### Pull Request Template
 
 The `PULL_REQUEST_TEMPLATE.md` provides a structured format for PRs including:
+
 - Description and type of change
 - Related issues
 - Testing information
@@ -401,39 +440,55 @@ We welcome contributions! Here's how to get started:
 ### Export/Import Issues
 
 #### Export fails with authentication error
+
 - Verify credentials in `.env` file or CLI flags
 - Check that the user has appropriate permissions
 - Try using a session token or personal API token instead of username/password
 
 #### Import fails with database mapping error
+
 - Ensure `db_map.json` includes all source database IDs
 - Verify target database IDs exist on the target instance
 - Check database names match if using name-based mapping
 
 #### Questions or dashboards missing after import
+
 - Check if they were filtered during export (archived items, specific collections)
 - Review import logs for skipped items
 - Verify conflict resolution strategy (`skip` may skip existing items)
 
+#### Getting 403 Forbidden errors after import
+
+- Use `--include-permissions` during export
+- Use `--apply-permissions` during import
+- Ensure all custom permission groups exist on target instance
+- Verify database mapping is complete in `db_map.json`
+- Check that import user has admin privileges
+- See [Permissions Migration Guide](../doc/PERMISSIONS_MIGRATION.md) for details
+
 ### CI/CD Issues
 
 #### Tests failing on specific Python version
+
 - Check if dependencies are compatible with that Python version
 - Review test output for version-specific issues
 - Update `pyproject.toml` if needed
 
 #### Publishing fails
+
 - Verify PyPI trusted publishing is configured correctly
 - Check that version number in `lib/__init__.py` is updated
 - Ensure GitHub environments are created
 - Verify workflow permissions are correct
 
 #### Dependabot PRs not appearing
+
 - Check Dependabot is enabled in repository settings
 - Verify `dependabot.yml` syntax is correct
 - Check Dependabot logs in Insights → Dependency graph → Dependabot
 
 #### CodeQL analysis fails
+
 - Ensure Python code is valid
 - Check CodeQL logs for specific errors
 - Verify CodeQL is enabled in repository settings
@@ -441,11 +496,13 @@ We welcome contributions! Here's how to get started:
 ### Performance Issues
 
 #### Export is very slow
+
 - Use `--root-collections` to export specific collections only
 - Check network connectivity to source instance
 - Review API rate limits on source instance
 
 #### Import is very slow
+
 - Use `--dry-run` first to preview changes
 - Consider importing collections separately
 - Check network connectivity to target instance
@@ -453,17 +510,20 @@ We welcome contributions! Here's how to get started:
 ## Resources
 
 ### Documentation
+
 - [Metabase API Documentation](https://www.metabase.com/docs/latest/api-documentation)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Pytest Documentation](https://docs.pytest.org/)
 
 ### Tools & Services
+
 - [PyPI Trusted Publishing Guide](https://docs.pypi.org/trusted-publishers/)
 - [Dependabot Documentation](https://docs.github.com/en/code-security/dependabot)
 - [CodeQL Documentation](https://codeql.github.com/docs/)
 - [Codecov](https://codecov.io/)
 
 ### Related Projects
+
 - [Metabase](https://github.com/metabase/metabase)
 - [Metabase Python Client](https://github.com/vvaezian/metabase_api_python)
 

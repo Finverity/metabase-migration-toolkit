@@ -131,6 +131,7 @@ mypy lib/ --ignore-missing-imports
 ```
 
 **Guidelines:**
+
 - Add type hints to all function signatures
 - Use `Optional[T]` for nullable types
 - Use `List[T]`, `Dict[K, V]`, etc. for collections
@@ -164,6 +165,7 @@ make pre-commit-update
 ```
 
 **Hooks include:**
+
 - Trailing whitespace removal
 - End-of-file fixer
 - YAML/JSON/TOML validation
@@ -192,10 +194,10 @@ def test_sanitize_filename_removes_special_characters():
     """Test that sanitize_filename removes special characters."""
     # Arrange
     filename = "test/file:name*.txt"
-    
+
     # Act
     result = sanitize_filename(filename)
-    
+
     # Assert
     assert result == "test_file_name_.txt"
 ```
@@ -394,4 +396,3 @@ By contributing, you agree that your contributions will be licensed under the MI
 ---
 
 Thank you for contributing! 🎉
-

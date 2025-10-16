@@ -28,9 +28,9 @@ Relates to #
 
 <!-- List the main changes made in this PR -->
 
-- 
-- 
-- 
+-
+-
+-
 
 ## Testing
 
@@ -106,4 +106,3 @@ pytest --cov=lib
 ---
 
 **By submitting this pull request, I confirm that my contribution is made under the terms of the MIT License.**
-

@@ -180,4 +180,3 @@ jobs:
       shell: bash
       run: |
         python -c "from lib import MetabaseClient, ExportConfig, ImportConfig; print('Import successful')"
-

@@ -15,6 +15,7 @@ It's built to be robust, handling API rate limits, pagination, and providing cle
 
 - **Recursive Export:** Traverses the entire collection tree, preserving hierarchy.
 - **Selective Content:** Choose to include dashboards and archived items.
+- **Permissions Migration:** Export and import permission groups and access control settings (NEW!).
 - **Database Remapping:** Intelligently remaps questions and cards to new database IDs on the target instance.
 - **Conflict Resolution:** Strategies for handling items that already exist on the target (`skip`, `overwrite`, `rename`).
 - **Idempotent Import:** Re-running an import with `skip` or `overwrite` produces a consistent state.
@@ -47,32 +48,37 @@ pip install --index-url https://test.pypi.org/simple/ \
 
 ### Option 3: Install from Source
 
-1.  **Clone the repository:**
+1. **Clone the repository:**
+
     ```bash
     git clone <your-repo-url>
     cd metabase-migration-toolkit
     ```
 
-2.  **Install the package:**
+2. **Install the package:**
+
     ```bash
     pip install -e .
     ```
 
 ## Configuration
 
-1.  **Configure Environment Variables (Recommended):**
+1. **Configure Environment Variables (Recommended):**
     Copy the example `.env` file and fill in your credentials. This is the most secure way to provide credentials.
+
     ```bash
     cp .env.example .env
     # Edit .env with your details
     ```
 
-2.  **Create a Database Mapping File:**
+2. **Create a Database Mapping File:**
     Copy the example `db_map.example.json` and configure it to map your source database IDs/names to the target database IDs.
+
     ```bash
     cp db_map.example.json db_map.json
     # Edit db_map.json with your mappings
     ```
+
     **This is the most critical step for a successful import.** You must map every source database ID used by an exported card to a valid target database ID.
 
 ## Usage
@@ -89,6 +95,7 @@ metabase-export \
     --export-dir "./metabase_export" \
     --include-dashboards \
     --include-archived \
+    --include-permissions \
     --log-level INFO \
     --root-collections "24"
 ```
@@ -106,6 +113,7 @@ metabase-export \
 ```
 
 **Available options:**
+
 - `--source-url` - Source Metabase URL (or use `MB_SOURCE_URL` in .env)
 - `--source-username` - Username (or use `MB_SOURCE_USERNAME` in .env)
 - `--source-password` - Password (or use `MB_SOURCE_PASSWORD` in .env)
@@ -114,6 +122,7 @@ metabase-export \
 - `--export-dir` - Directory to save exported files (required)
 - `--include-dashboards` - Include dashboards in export
 - `--include-archived` - Include archived items
+- `--include-permissions` - Include permissions (groups and access control) in export
 - `--root-collections` - Comma-separated collection IDs to export (optional)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
 
@@ -129,6 +138,7 @@ metabase-import \
     --export-dir "./metabase_export" \
     --db-map "./db_map.json" \
     --conflict skip \
+    --apply-permissions \
     --log-level INFO
 ```
 
@@ -146,6 +156,7 @@ metabase-import \
 ```
 
 **Available options:**
+
 - `--target-url` - Target Metabase URL (or use `MB_TARGET_URL` in .env)
 - `--target-username` - Username (or use `MB_TARGET_USERNAME` in .env)
 - `--target-password` - Password (or use `MB_TARGET_PASSWORD` in .env)
@@ -155,4 +166,20 @@ metabase-import \
 - `--db-map` - Path to database mapping JSON file (required)
 - `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
 - `--dry-run` - Preview changes without applying them
+- `--include-archived` - Include archived items in the import
+- `--apply-permissions` - Apply permissions from the export (requires admin privileges)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+## Permissions Migration
+
+The toolkit now supports exporting and importing permissions to solve the common "403 Forbidden" errors after migration. See the [Permissions Migration Guide](doc/PERMISSIONS_MIGRATION.md) for detailed instructions.
+
+**Quick example:**
+
+```bash
+# Export with permissions
+metabase-export --export-dir "./export" --include-permissions
+
+# Import with permissions
+metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permissions
+```

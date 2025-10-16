@@ -26,11 +26,11 @@ run_check() {
     local name=$1
     local command=$2
     local allow_warnings=${3:-false}
-    
+
     echo -e "${BLUE}Running: ${name}${NC}"
     echo "Command: $command"
     echo ""
-    
+
     if eval "$command"; then
         echo -e "${GREEN}✓ ${name} passed${NC}"
         ((PASSED++))
@@ -49,25 +49,22 @@ run_check() {
 # 1. Black formatting check
 run_check "Black formatting" "python -m black --check --diff lib/ tests/ *.py"
 
-# 2. isort import sorting check
-run_check "isort import sorting" "python -m isort --check-only lib/ tests/ *.py"
-
-# 3. Ruff linting
+# 2. Ruff linting
 run_check "Ruff linting" "python -m ruff check lib/ tests/ *.py"
 
-# 4. Mypy type checking (allow warnings)
+# 3. Mypy type checking (allow warnings)
 run_check "Mypy type checking" "python -m mypy lib/ --ignore-missing-imports" true
 
-# 5. Bandit security scan (allow warnings)
+# 4. Bandit security scan (allow warnings)
 run_check "Bandit security scan" "python -m bandit -r lib/ -f screen" true
 
-# 6. Safety dependency check (allow warnings)
+# 5. Safety dependency check (allow warnings)
 run_check "Safety dependency check" "python -m safety check" true
 
-# 7. Pytest tests
+# 6. Pytest tests
 run_check "Pytest tests" "python -m pytest -v"
 
-# 8. Test coverage
+# 7. Test coverage
 run_check "Test coverage" "python -m pytest --cov=lib --cov-report=term-missing --cov-fail-under=70" true
 
 # Summary
@@ -90,4 +87,3 @@ else
     echo -e "${RED}✗ Some checks failed${NC}"
     exit 1
 fi
-

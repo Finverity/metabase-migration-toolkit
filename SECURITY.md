@@ -22,6 +22,7 @@ If you discover a security vulnerability in Metabase Migration Toolkit, please r
    - Suggested fix (if any)
 
 We will respond within **48 hours** and provide:
+
 - Confirmation of receipt
 - Initial assessment of the vulnerability
 - Timeline for a fix
@@ -32,6 +33,7 @@ We will respond within **48 hours** and provide:
 ### Credential Management
 
 **DO:**
+
 - ✅ Use environment variables or `.env` files for credentials
 - ✅ Use session tokens or personal API tokens when possible
 - ✅ Rotate credentials regularly
@@ -39,6 +41,7 @@ We will respond within **48 hours** and provide:
 - ✅ Limit API token permissions to minimum required
 
 **DON'T:**
+
 - ❌ Commit `.env` files to version control
 - ❌ Share credentials in issue reports or pull requests
 - ❌ Use production credentials in development/testing
@@ -48,12 +51,14 @@ We will respond within **48 hours** and provide:
 ### Network Security
 
 **DO:**
+
 - ✅ Always use HTTPS URLs for Metabase instances
 - ✅ Verify SSL certificates (do not disable SSL verification)
 - ✅ Use VPN or secure networks when accessing production instances
 - ✅ Restrict network access to Metabase instances
 
 **DON'T:**
+
 - ❌ Use HTTP (unencrypted) connections
 - ❌ Disable SSL certificate verification
 - ❌ Run exports/imports over public WiFi without VPN
@@ -61,6 +66,7 @@ We will respond within **48 hours** and provide:
 ### Data Protection
 
 **DO:**
+
 - ✅ Secure export directories with appropriate file permissions (chmod 700)
 - ✅ Delete exports after successful import
 - ✅ Review exported data before sharing
@@ -68,6 +74,7 @@ We will respond within **48 hours** and provide:
 - ✅ Use database mapping files carefully (they contain database IDs)
 
 **DON'T:**
+
 - ❌ Share export directories publicly
 - ❌ Commit export data to version control
 - ❌ Leave export data on shared systems
@@ -76,22 +83,26 @@ We will respond within **48 hours** and provide:
 ### Database Mapping
 
 **DO:**
+
 - ✅ Keep `db_map.json` secure (it's in .gitignore by default)
 - ✅ Verify database mappings before import
 - ✅ Use dry-run mode to preview changes
 
 **DON'T:**
+
 - ❌ Commit `db_map.json` to version control
 - ❌ Share database mapping files publicly
 
 ## Known Security Considerations
 
 ### 1. Credentials in Memory
+
 - Credentials are stored in memory during script execution
 - Use session tokens with limited lifetime when possible
 - Clear terminal history after entering credentials via CLI
 
 ### 2. Export Data Sensitivity
+
 - Exported JSON files contain:
   - Full query definitions (may include sensitive SQL)
   - Collection and dashboard metadata
@@ -99,11 +110,13 @@ We will respond within **48 hours** and provide:
 - Treat export directories as sensitive data
 
 ### 3. API Token Lifetime
+
 - Session tokens expire after inactivity (typically 14 days)
 - Personal API tokens do not expire but can be revoked
 - Prefer personal tokens for automation
 
 ### 4. Logging
+
 - Passwords and tokens are masked in logs as `********`
 - Log files may contain:
   - API endpoints accessed
@@ -112,6 +125,7 @@ We will respond within **48 hours** and provide:
 - Review logs before sharing
 
 ### 5. Dry-Run Mode
+
 - Dry-run mode reads from target instance but doesn't write
 - Still requires valid credentials
 - Use for safe preview of import actions
@@ -156,6 +170,7 @@ safety check
 ## Reporting Other Issues
 
 For non-security issues:
+
 - Open a GitHub issue
 - Use the bug report template
 - Include relevant (non-sensitive) information
@@ -163,6 +178,7 @@ For non-security issues:
 ## Security Updates
 
 Security updates will be:
+
 - Released as patch versions (e.g., 1.0.1)
 - Documented in CHANGELOG.md
 - Announced in GitHub releases
@@ -171,6 +187,7 @@ Security updates will be:
 ## Questions?
 
 If you have questions about security:
+
 - Open a GitHub discussion
 - Email the maintainers
 - Check existing security advisories
@@ -178,4 +195,3 @@ If you have questions about security:
 ---
 
 **Last Updated**: 2025-10-07
-

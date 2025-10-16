@@ -1,5 +1,4 @@
-"""
-Metabase Import Tool
+"""Metabase Import Tool.
 
 This script reads an export package created by `export_metabase.py`, connects
 to a target Metabase instance, and recreates the collections, cards, and
@@ -17,13 +16,7 @@ from tqdm import tqdm
 
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ImportConfig, get_import_args
-from lib.models import (
-    DatabaseMap,
-    ImportReport,
-    ImportReportItem,
-    Manifest,
-    UnmappedDatabase,
-)
+from lib.models import DatabaseMap, ImportReport, ImportReportItem, Manifest, UnmappedDatabase
 from lib.utils import (
     clean_for_create,
     read_json_file,
@@ -39,7 +32,8 @@ logger = setup_logging(__name__)
 class MetabaseImporter:
     """Handles the logic for importing content into a Metabase instance."""
 
-    def __init__(self, config: ImportConfig):
+    def __init__(self, config: ImportConfig) -> None:
+        """Initialize the MetabaseImporter with the given configuration."""
         self.config = config
         self.client = MetabaseClient(
             base_url=config.target_url,
@@ -56,11 +50,12 @@ class MetabaseImporter:
         # Mappings from source ID to target ID, populated during import
         self._collection_map: dict[int, int] = {}
         self._card_map: dict[int, int] = {}
+        self._group_map: dict[int, int] = {}  # Maps source group IDs to target group IDs
 
         # Caches of existing items on the target instance
         self._target_collections: list[dict[str, Any]] = []
 
-    def run_import(self):
+    def run_import(self) -> None:
         """Main entry point to start the import process."""
         logger.info(f"Starting Metabase import to {self.config.target_url}")
         logger.info(f"Loading export package from: {self.export_dir.resolve()}")
@@ -83,7 +78,7 @@ class MetabaseImporter:
             logger.error(f"An unexpected error occurred: {e}", exc_info=True)
             sys.exit(3)
 
-    def _load_export_package(self):
+    def _load_export_package(self) -> None:
         """Loads and validates the manifest and database mapping files."""
         manifest_path = self.export_dir / "manifest.json"
         if not manifest_path.exists():
@@ -92,14 +87,24 @@ class MetabaseImporter:
         manifest_data = read_json_file(manifest_path)
         # Reconstruct the manifest from dicts to dataclasses
         # Import the actual dataclasses from lib.models
-        from lib.models import Card, Collection, Dashboard, ManifestMeta
+        from lib.models import Card, Collection, Dashboard, ManifestMeta, PermissionGroup
+
+        # Convert database keys from strings (JSON) back to integers
+        # JSON serialization converts integer keys to strings, so we need to convert them back
+        databases_dict = manifest_data.get("databases", {})
+        databases_with_int_keys = {int(k): v for k, v in databases_dict.items()}
 
         self.manifest = Manifest(
             meta=ManifestMeta(**manifest_data["meta"]),
-            databases=manifest_data.get("databases", {}),
+            databases=databases_with_int_keys,
             collections=[Collection(**c) for c in manifest_data.get("collections", [])],
             cards=[Card(**c) for c in manifest_data.get("cards", [])],
             dashboards=[Dashboard(**d) for d in manifest_data.get("dashboards", [])],
+            permission_groups=[
+                PermissionGroup(**g) for g in manifest_data.get("permission_groups", [])
+            ],
+            permissions_graph=manifest_data.get("permissions_graph", {}),
+            collection_permissions_graph=manifest_data.get("collection_permissions_graph", {}),
         )
 
         db_map_path = Path(self.config.db_map_path)
@@ -114,11 +119,12 @@ class MetabaseImporter:
 
     def _resolve_db_id(self, source_db_id: int) -> int | None:
         """Resolves a source database ID to a target database ID using the map."""
-        # by_id takes precedence
+        # by_id takes precedence (db_map.json uses string keys for JSON compatibility)
         if str(source_db_id) in self.db_map.by_id:
             return self.db_map.by_id[str(source_db_id)]
 
-        source_db_name = self.manifest.databases.get(str(source_db_id))
+        # Look up database name using integer key (manifest.databases now has int keys)
+        source_db_name = self.manifest.databases.get(source_db_id)
         if source_db_name and source_db_name in self.db_map.by_name:
             return self.db_map.by_name[source_db_name]
 
@@ -135,22 +141,23 @@ class MetabaseImporter:
                         unmapped[card.database_id] = UnmappedDatabase(
                             source_db_id=card.database_id,
                             source_db_name=self.manifest.databases.get(
-                                str(card.database_id), "Unknown Name"
+                                card.database_id, "Unknown Name"
                             ),
                         )
                     unmapped[card.database_id].card_ids.add(card.id)
         return list(unmapped.values())
 
-    def _validate_target_databases(self):
+    def _validate_target_databases(self) -> None:
         """Validates that all mapped database IDs actually exist in the target instance."""
         try:
             target_databases = self.client.get_databases()
             target_db_ids = {db["id"] for db in target_databases}
 
             # Collect all unique target database IDs from the mapping
+            # manifest.databases now has integer keys after our fix
             mapped_target_ids = set()
             for source_db_id in self.manifest.databases.keys():
-                target_id = self._resolve_db_id(int(source_db_id))
+                target_id = self._resolve_db_id(source_db_id)
                 if target_id:
                     mapped_target_ids.add(target_id)
 
@@ -185,7 +192,7 @@ class MetabaseImporter:
             logger.error(f"Failed to fetch databases from target instance: {e}")
             sys.exit(1)
 
-    def _perform_dry_run(self):
+    def _perform_dry_run(self) -> None:
         """Simulates the import process and reports on planned actions."""
         logger.info("--- Starting Dry Run ---")
 
@@ -229,7 +236,7 @@ class MetabaseImporter:
         logger.info("\n--- Dry Run Complete ---")
         sys.exit(0)
 
-    def _perform_import(self):
+    def _perform_import(self) -> None:
         """Executes the full import process."""
         logger.info("--- Starting Import ---")
 
@@ -275,6 +282,11 @@ class MetabaseImporter:
         self._import_cards()
         if self.manifest.dashboards:
             self._import_dashboards()
+
+        # Apply permissions after all content is imported
+        if self.config.apply_permissions and self.manifest.permission_groups:
+            logger.info("\nApplying permissions...")
+            self._import_permissions()
 
         logger.info("\n--- Import Summary ---")
         summary = self.report.summary
@@ -325,7 +337,7 @@ class MetabaseImporter:
                     found_match_at_level = True
 
                     # We need to find the full object in the nested tree
-                    def find_in_tree(nodes, node_id):
+                    def find_in_tree(nodes: list, node_id: int) -> Any:
                         for node in nodes:
                             if node["id"] == node_id:
                                 return node
@@ -341,7 +353,7 @@ class MetabaseImporter:
                 return None
         return found_collection
 
-    def _import_collections(self):
+    def _import_collections(self) -> None:
         """Imports all collections from the manifest."""
         sorted_collections = sorted(self.manifest.collections, key=lambda c: c.path)
 
@@ -396,8 +408,8 @@ class MetabaseImporter:
                 )
 
     def _extract_card_dependencies(self, card_data: dict) -> set[int]:
-        """
-        Extracts card IDs that this card depends on (references in source-table).
+        """Extracts card IDs that this card depends on (references in source-table).
+
         Returns a set of card IDs that must be imported before this card.
         """
         dependencies = set()
@@ -429,8 +441,8 @@ class MetabaseImporter:
         return dependencies
 
     def _topological_sort_cards(self, cards: list) -> list:
-        """
-        Sorts cards in topological order so that dependencies are imported first.
+        """Sorts cards in topological order so that dependencies are imported first.
+
         Cards with missing dependencies are placed at the end with a warning.
         """
         # Build a map of card ID to card object
@@ -513,8 +525,9 @@ class MetabaseImporter:
                 f"FATAL: Unmapped database ID {source_db_id} found during card import. This should have been caught by validation."
             )
 
-        if "database" in query:
-            query["database"] = target_db_id
+        # Always set the database field in dataset_query, even if it wasn't present originally
+        # This is required for Metabase to properly normalize queries to pMBQL format
+        query["database"] = target_db_id
         if "database_id" in data:
             data["database_id"] = target_db_id
 
@@ -550,7 +563,7 @@ class MetabaseImporter:
 
         return data, True
 
-    def _import_cards(self):
+    def _import_cards(self) -> None:
         """Imports all cards from the manifest in dependency order."""
         # Filter cards based on archived status
         cards_to_import = [
@@ -731,7 +744,7 @@ class MetabaseImporter:
                     logger.error("")
                     logger.error(f"Source database ID: {card.database_id}")
                     logger.error(
-                        f"Source database name: {self.manifest.databases.get(str(card.database_id), 'Unknown')}"
+                        f"Source database name: {self.manifest.databases.get(card.database_id, 'Unknown')}"
                     )
                     logger.error(f"Mapped to target ID: {self._resolve_db_id(card.database_id)}")
                     logger.error("")
@@ -783,7 +796,7 @@ class MetabaseImporter:
                     ImportReportItem("card", "failed", card.id, None, card.name, str(e))
                 )
 
-    def _import_dashboards(self):
+    def _import_dashboards(self) -> None:
         """Imports all dashboards from the manifest."""
         for dash in tqdm(
             sorted(self.manifest.dashboards, key=lambda d: d.file_path), desc="Importing Dashboards"
@@ -972,6 +985,234 @@ class MetabaseImporter:
                 self.report.add(
                     ImportReportItem("dashboard", "failed", dash.id, None, dash.name, str(e))
                 )
+
+    def _import_permissions(self) -> None:
+        """Imports permission groups and applies permissions graphs."""
+        try:
+            # Step 1: Map permission groups from source to target
+            logger.info("Mapping permission groups...")
+            target_groups = self.client.get_permission_groups()
+            target_groups_by_name = {g["name"]: g for g in target_groups}
+
+            # Built-in groups that should always exist
+            builtin_groups = {"All Users", "Administrators"}
+
+            for source_group in self.manifest.permission_groups:
+                if source_group.name in target_groups_by_name:
+                    # Group exists on target, map it
+                    target_group = target_groups_by_name[source_group.name]
+                    self._group_map[source_group.id] = target_group["id"]
+                    logger.info(
+                        f"  -> Mapped group '{source_group.name}': source ID {source_group.id} -> target ID {target_group['id']}"
+                    )
+                elif source_group.name not in builtin_groups:
+                    # Custom group doesn't exist, we should create it
+                    # Note: Metabase API doesn't provide a direct endpoint to create groups
+                    # Groups are typically created through the UI or admin API
+                    logger.warning(
+                        f"  -> Group '{source_group.name}' (ID: {source_group.id}) not found on target. "
+                        f"Permissions for this group will be skipped."
+                    )
+                else:
+                    logger.warning(
+                        f"  -> Built-in group '{source_group.name}' not found on target. This is unexpected."
+                    )
+
+            if not self._group_map:
+                logger.warning("No permission groups could be mapped. Skipping permissions import.")
+                return
+
+            # Step 2: Remap and apply data permissions graph
+            data_perms_applied = False
+            if self.manifest.permissions_graph:
+                logger.info("Applying data permissions...")
+                remapped_permissions = self._remap_permissions_graph(
+                    self.manifest.permissions_graph
+                )
+                if remapped_permissions:
+                    try:
+                        self.client.update_permissions_graph(remapped_permissions)
+                        logger.info("✓ Data permissions applied successfully")
+                        data_perms_applied = True
+                    except MetabaseAPIError as e:
+                        logger.error(f"Failed to apply data permissions: {e}")
+                        logger.warning("Continuing without data permissions...")
+                else:
+                    logger.info("No data permissions to apply (all databases unmapped)")
+
+            # Step 3: Remap and apply collection permissions graph
+            collection_perms_applied = False
+            if self.manifest.collection_permissions_graph:
+                logger.info("Applying collection permissions...")
+                remapped_collection_permissions = self._remap_collection_permissions_graph(
+                    self.manifest.collection_permissions_graph
+                )
+                if remapped_collection_permissions:
+                    try:
+                        self.client.update_collection_permissions_graph(
+                            remapped_collection_permissions
+                        )
+                        logger.info("✓ Collection permissions applied successfully")
+                        collection_perms_applied = True
+                    except MetabaseAPIError as e:
+                        logger.error(f"Failed to apply collection permissions: {e}")
+                        logger.warning("Continuing without collection permissions...")
+                else:
+                    logger.info("No collection permissions to apply (all collections unmapped)")
+
+            # Summary
+            logger.info("=" * 60)
+            logger.info("Permissions Import Summary:")
+            logger.info(f"  Groups mapped: {len(self._group_map)}")
+            logger.info(
+                f"  Data permissions: {'✓ Applied' if data_perms_applied else '✗ Not applied'}"
+            )
+            logger.info(
+                f"  Collection permissions: {'✓ Applied' if collection_perms_applied else '✗ Not applied'}"
+            )
+            logger.info("=" * 60)
+
+        except Exception as e:
+            logger.error(f"Failed to import permissions: {e}", exc_info=True)
+            logger.warning("Permissions import failed. Continuing without permissions...")
+
+    def _remap_permissions_graph(self, source_graph: dict[str, Any]) -> dict[str, Any]:
+        """Remaps database and group IDs in the permissions graph."""
+        if not source_graph or "groups" not in source_graph:
+            return {}
+
+        # Get current revision from target instance to avoid 409 conflicts
+        try:
+            current_graph = self.client.get_permissions_graph()
+            current_revision = current_graph.get("revision", 0)
+            logger.debug(f"Using current permissions revision: {current_revision}")
+        except Exception as e:
+            logger.warning(f"Could not fetch current permissions revision: {e}. Using 0.")
+            current_revision = 0
+
+        remapped_graph = {"revision": current_revision, "groups": {}}
+
+        # Track unmapped databases to report once at the end
+        unmapped_databases: set[int] = set()
+
+        for source_group_id_str, group_perms in source_graph.get("groups", {}).items():
+            source_group_id = int(source_group_id_str)
+
+            # Skip if group not mapped
+            if source_group_id not in self._group_map:
+                logger.debug(f"Skipping permissions for unmapped group ID {source_group_id}")
+                continue
+
+            target_group_id = self._group_map[source_group_id]
+            remapped_group_perms = {}
+
+            # Remap database IDs in permissions
+            for source_db_id_str, db_perms in group_perms.items():
+                source_db_id = int(source_db_id_str)
+
+                # Map source database ID to target database ID
+                target_db_id = None
+                if str(source_db_id) in self.db_map.by_id:
+                    target_db_id = self.db_map.by_id[str(source_db_id)]
+                else:
+                    # Try to find by database name
+                    source_db_name = self.manifest.databases.get(source_db_id)
+                    if source_db_name and source_db_name in self.db_map.by_name:
+                        target_db_id = self.db_map.by_name[source_db_name]
+
+                if target_db_id:
+                    remapped_group_perms[str(target_db_id)] = db_perms
+                    logger.debug(
+                        f"Remapped database permissions: group {target_group_id}, DB {source_db_id} -> {target_db_id}"
+                    )
+                else:
+                    # Track unmapped databases
+                    unmapped_databases.add(source_db_id)
+                    logger.debug(f"Skipping database ID {source_db_id} (not in db_map.json)")
+
+            if remapped_group_perms:
+                remapped_graph["groups"][str(target_group_id)] = remapped_group_perms
+
+        # Report unmapped databases once at WARNING level (these should be in db_map.json)
+        if unmapped_databases:
+            db_names = [
+                f"{db_id} ({self.manifest.databases.get(db_id, 'unknown')})"
+                for db_id in sorted(unmapped_databases)
+            ]
+            logger.warning(
+                f"Skipped permissions for {len(unmapped_databases)} database(s) "
+                f"not found in db_map.json: {', '.join(db_names)}"
+            )
+
+        return remapped_graph if remapped_graph["groups"] else {}
+
+    def _remap_collection_permissions_graph(self, source_graph: dict[str, Any]) -> dict[str, Any]:
+        """Remaps collection and group IDs in the collection permissions graph."""
+        if not source_graph or "groups" not in source_graph:
+            return {}
+
+        # Get current revision from target instance to avoid 409 conflicts
+        try:
+            current_graph = self.client.get_collection_permissions_graph()
+            current_revision = current_graph.get("revision", 0)
+            logger.debug(f"Using current collection permissions revision: {current_revision}")
+        except Exception as e:
+            logger.warning(
+                f"Could not fetch current collection permissions revision: {e}. Using 0."
+            )
+            current_revision = 0
+
+        remapped_graph = {"revision": current_revision, "groups": {}}
+
+        # Track unmapped collections to report once at the end
+        unmapped_collections: set[int] = set()
+
+        for source_group_id_str, group_perms in source_graph.get("groups", {}).items():
+            source_group_id = int(source_group_id_str)
+
+            # Skip if group not mapped
+            if source_group_id not in self._group_map:
+                logger.debug(
+                    f"Skipping collection permissions for unmapped group ID {source_group_id}"
+                )
+                continue
+
+            target_group_id = self._group_map[source_group_id]
+            remapped_group_perms = {}
+
+            # Remap collection IDs in permissions
+            for source_collection_id_str, collection_perms in group_perms.items():
+                # Handle special "root" collection
+                if source_collection_id_str == "root":
+                    remapped_group_perms["root"] = collection_perms
+                    continue
+
+                source_collection_id = int(source_collection_id_str)
+
+                # Map source collection ID to target collection ID
+                if source_collection_id in self._collection_map:
+                    target_collection_id = self._collection_map[source_collection_id]
+                    remapped_group_perms[str(target_collection_id)] = collection_perms
+                    logger.debug(
+                        f"Remapped collection permissions: group {target_group_id}, "
+                        f"collection {source_collection_id} -> {target_collection_id}"
+                    )
+                else:
+                    # Track unmapped collections (likely not exported)
+                    unmapped_collections.add(source_collection_id)
+                    logger.debug(f"Skipping collection ID {source_collection_id} (not in export)")
+
+            if remapped_group_perms:
+                remapped_graph["groups"][str(target_group_id)] = remapped_group_perms
+
+        # Report unmapped collections once at INFO level
+        if unmapped_collections:
+            logger.info(
+                f"Skipped permissions for {len(unmapped_collections)} collection(s) "
+                f"that were not included in the export: {sorted(unmapped_collections)}"
+            )
+
+        return remapped_graph if remapped_graph["groups"] else {}
 
 
 def main() -> None:
