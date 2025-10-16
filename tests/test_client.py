@@ -53,11 +53,13 @@ class TestMetabaseClientInit:
     def test_init_with_username_password(self):
         """Test client initialization with username and password."""
         client = MetabaseClient(
-            base_url="https://example.com", username="user@example.com", password="password123"
+            base_url="https://example.com",
+            username="user@example.com",
+            password="password123",  # pragma: allowlist secret
         )
 
         assert client._username == "user@example.com"
-        assert client._password == "password123"
+        assert client._password == "password123"  # pragma: allowlist secret
 
     def test_init_with_personal_token(self):
         """Test client initialization with personal token."""
@@ -115,7 +117,9 @@ class TestMetabaseClientAuthentication:
         mock_post.return_value = mock_response
 
         client = MetabaseClient(
-            base_url="https://example.com", username="user@example.com", password="password123"
+            base_url="https://example.com",
+            username="user@example.com",
+            password="password123",  # pragma: allowlist secret
         )
         client._authenticate()
 
@@ -131,7 +135,9 @@ class TestMetabaseClientAuthentication:
         mock_post.return_value = mock_response
 
         client = MetabaseClient(
-            base_url="https://example.com", username="user@example.com", password="password123"
+            base_url="https://example.com",
+            username="user@example.com",
+            password="password123",  # pragma: allowlist secret
         )
 
         with pytest.raises(MetabaseAPIError, match="no session ID returned"):
@@ -147,7 +153,9 @@ class TestMetabaseClientAuthentication:
         mock_post.side_effect = requests.exceptions.RequestException(response=mock_response)
 
         client = MetabaseClient(
-            base_url="https://example.com", username="user@example.com", password="wrong-password"
+            base_url="https://example.com",
+            username="user@example.com",
+            password="wrong-password",  # pragma: allowlist secret
         )
 
         with pytest.raises(MetabaseAPIError, match="Authentication failed"):
@@ -183,7 +191,9 @@ class TestMetabaseClientPrepareHeaders:
         mock_post.return_value = mock_response
 
         client = MetabaseClient(
-            base_url="https://example.com", username="user@example.com", password="password123"
+            base_url="https://example.com",
+            username="user@example.com",
+            password="password123",  # pragma: allowlist secret
         )
 
         headers = client._prepare_headers()
@@ -305,3 +315,57 @@ class TestMetabaseClientPublicMethods:
 
         assert result == {"id": 200, "name": "Test Dashboard"}
         mock_request.assert_called_once_with("get", "/dashboard/200")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_is_embedding_enabled_true(self, mock_request):
+        """Test is_embedding_enabled when embedding is enabled."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"enable-embedding": True, "site-name": "Test"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.is_embedding_enabled()
+
+        assert result is True
+        mock_request.assert_called_once_with("get", "/session/properties")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_is_embedding_enabled_false(self, mock_request):
+        """Test is_embedding_enabled when embedding is disabled."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"enable-embedding": False, "site-name": "Test"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.is_embedding_enabled()
+
+        assert result is False
+        mock_request.assert_called_once_with("get", "/session/properties")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_is_embedding_enabled_missing_key(self, mock_request):
+        """Test is_embedding_enabled when key is missing from response."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"site-name": "Test"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.is_embedding_enabled()
+
+        assert result is False
+        mock_request.assert_called_once_with("get", "/session/properties")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_is_embedding_enabled_api_error(self, mock_request):
+        """Test is_embedding_enabled when API call fails."""
+        mock_request.side_effect = Exception("API Error")
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.is_embedding_enabled()
+
+        # Should return False on error
+        assert result is False

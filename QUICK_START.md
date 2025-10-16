@@ -13,13 +13,13 @@
 
 ### 1. Install the Package
 
-**Option A: Install from PyPI (Recommended)**
+#### Option A: Install from PyPI (Recommended)
 
 ```bash
 pip install metabase-migration-toolkit
 ```
 
-**Option B: Install from Source**
+#### Option B: Install from Source
 
 ```bash
 git clone <your-repo-url>
@@ -87,7 +87,7 @@ metabase-export \
 
 The export now **automatically includes all card dependencies**:
 
-```
+```text
 Exporting Collection A:
   - Card 1 (no dependencies)
   - Card 2 (depends on Card 100)
@@ -186,6 +186,37 @@ metabase-import \
     --conflict overwrite
 ```
 
+### Scenario 4: Migrate with Embedding Settings
+
+**Goal**: Migrate dashboards and cards with their embedding configurations
+
+**Prerequisites:**
+
+- Embedding must be enabled in Admin settings on both source and target instances
+- May require Pro or Enterprise license
+- Embedding secret key must be configured separately on target instance
+
+```bash
+# 1. Export with embedding settings
+metabase-export \
+    --export-dir "./migration_with_embedding" \
+    --include-dashboards \
+    --include-embedding-settings
+
+# 2. Import with embedding settings
+metabase-import \
+    --export-dir "./migration_with_embedding" \
+    --db-map "./db_map.json" \
+    --include-embedding-settings \
+    --conflict skip
+```
+
+**Important Notes:**
+
+- The toolkit will warn you if embedding is not enabled on the target instance
+- Embedding settings will be imported but won't function until embedding is enabled globally
+- The embedding secret key is NOT migrated (it's instance-specific and must be set manually)
+
 ---
 
 ## Troubleshooting
@@ -223,7 +254,8 @@ metabase-export \
 
 **Example**: `Circular dependency detected: 100 -> 200 -> 300 -> 100`
 
-**Solution**: This is expected behavior. The script breaks the cycle and continues. Review your card structure if this is unintended.
+**Solution**: This is expected behavior. The script breaks the cycle and continues. Review your card structure if
+this is unintended.
 
 ---
 
@@ -275,7 +307,7 @@ MB_TARGET_PASSWORD=password123
 
 ### Export Options
 
-```
+```text
 --source-url          Source Metabase URL
 --source-username     Username for authentication
 --source-password     Password for authentication
@@ -290,7 +322,7 @@ MB_TARGET_PASSWORD=password123
 
 ### Import Options
 
-```
+```text
 --target-url          Target Metabase URL
 --target-username     Username for authentication
 --target-password     Password for authentication

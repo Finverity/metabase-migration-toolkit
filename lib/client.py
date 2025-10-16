@@ -97,9 +97,9 @@ class MetabaseClient:
         # Return the authentication headers that were set
         headers = {}
         if "X-Metabase-Session" in self._session.headers:
-            headers["X-Metabase-Session"] = self._session.headers["X-Metabase-Session"]
+            headers["X-Metabase-Session"] = str(self._session.headers["X-Metabase-Session"])
         if "X-Metabase-API-Key" in self._session.headers:
-            headers["X-Metabase-API-Key"] = self._session.headers["X-Metabase-API-Key"]
+            headers["X-Metabase-API-Key"] = str(self._session.headers["X-Metabase-API-Key"])
         return headers
 
     def _should_retry(self, exception: BaseException) -> bool:
@@ -286,3 +286,20 @@ class MetabaseClient:
     def update_collection_permissions_graph(self, graph: dict) -> Any:
         """Updates the permissions graph for collection access."""
         return self._request("put", "/collection/graph", json=graph).json()
+
+    def is_embedding_enabled(self) -> bool:
+        """Check if embedding is enabled on the Metabase instance.
+
+        Returns:
+            True if embedding is enabled, False otherwise
+        """
+        try:
+            # Try to get session properties (available to all users)
+            response = self._request("get", "/session/properties").json()
+            # Check for enable-embedding setting
+            # The setting name uses kebab-case in the API
+            return bool(response.get("enable-embedding", False))
+        except Exception as e:
+            logger.warning(f"Could not determine if embedding is enabled: {e}")
+            # If we can't determine, assume it's not enabled
+            return False
