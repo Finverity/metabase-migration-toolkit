@@ -5,7 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-A comprehensive Python toolkit for migrating Metabase content (collections, questions, and dashboards) between instances. Built for production use with robust error handling, API rate limiting, and intelligent database remapping.
+A comprehensive Python toolkit for migrating Metabase content (collections, questions, and dashboards) between
+instances. Built for production use with robust error handling, API rate limiting, and intelligent database remapping.
 
 ## Table of Contents
 
@@ -25,13 +26,16 @@ A comprehensive Python toolkit for migrating Metabase content (collections, ques
 
 ## Overview
 
-This toolkit provides two command-line tools, `metabase-export` and `metabase-import`, designed for exporting and importing Metabase content between instances. It's built to be robust, handling API rate limits, pagination, and providing clear logging and error handling for production use.
+This toolkit provides two command-line tools, `metabase-export` and `metabase-import`, designed for exporting and
+importing Metabase content between instances. It's built to be robust, handling API rate limits, pagination, and
+providing clear logging and error handling for production use.
 
 ## Features
 
 - **Recursive Export:** Traverses the entire collection tree, preserving hierarchy.
 - **Selective Content:** Choose to include dashboards and archived items.
 - **Permissions Migration:** Export and import permission groups and access control settings to avoid 403 errors (NEW!).
+- **Embedding Settings Migration:** Export and import embedding configurations for dashboards and cards (NEW!).
 - **Database Remapping:** Intelligently remaps questions and cards to new database IDs on the target instance.
 - **Conflict Resolution:** Strategies for handling items that already exist on the target (`skip`, `overwrite`, `rename`).
 - **Idempotent Import:** Re-running an import with `skip` or `overwrite` produces a consistent state.
@@ -71,7 +75,7 @@ git clone https://github.com/Finverity/metabase-migration-toolkit.git
 cd metabase-migration-toolkit
 ```
 
-2. **Install the package:**
+1. **Install the package:**
 
 ```bash
 pip install -e .
@@ -97,7 +101,8 @@ cp db_map.example.json db_map.json
 # Edit db_map.json with your mappings
 ```
 
-**This is the most critical step for a successful import.** You must map every source database ID used by an exported card to a valid target database ID.
+**This is the most critical step for a successful import.** You must map every source database ID used by an
+exported card to a valid target database ID.
 
 ## Usage
 
@@ -141,6 +146,7 @@ metabase-export \
 - `--include-dashboards` - Include dashboards in export
 - `--include-archived` - Include archived items
 - `--include-permissions` - Include permissions (groups and access control) in export
+- `--include-embedding-settings` - Include embedding settings for dashboards and cards
 - `--root-collections` - Comma-separated collection IDs to export (optional)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
 
@@ -186,6 +192,7 @@ metabase-import \
 - `--dry-run` - Preview changes without applying them
 - `--include-archived` - Include archived items in the import
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
+- `--include-embedding-settings` - Include embedding settings for dashboards and cards
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
 
 ## Permissions Migration
@@ -208,11 +215,49 @@ metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permiss
 - [Quick Reference](../PERMISSIONS_QUICKREF.md) - Quick reference card
 - [Implementation Details](../doc/PERMISSIONS_IMPLEMENTATION.md) - Technical details
 
+## Embedding Settings Migration
+
+The toolkit now supports exporting and importing embedding settings for dashboards and cards, allowing you to migrate
+embedded analytics configurations between instances.
+
+**Quick example:**
+
+```bash
+# Export with embedding settings
+metabase-export --export-dir "./export" --include-embedding-settings
+
+# Import with embedding settings
+metabase-import --export-dir "./export" --db-map "./db_map.json" --include-embedding-settings
+```
+
+**Prerequisites:**
+
+- Embedding must be enabled on both source and target Metabase instances
+- Requires appropriate Metabase license (Pro or Enterprise) for embedding features
+- The embedding secret key must be configured separately on the target instance
+
+**What gets migrated:**
+
+- `enable_embedding` - Whether embedding is enabled for each dashboard/card
+- `embedding_params` - Parameter configurations for embedded contexts (disabled/enabled/locked)
+
+**Important notes:**
+
+- The embedding secret key is **NOT** migrated (it's instance-specific and must be configured separately)
+- The toolkit validates that embedding is enabled on the target instance before importing
+- By default, embedding settings are **excluded** from export/import for security and compatibility
+- Use the `--include-embedding-settings` flag to opt-in to this feature
+
+**Documentation:**
+
+For more details, see the main [README.md](../README.md#embedding-settings-migration) and [QUICK_START.md](../QUICK_START.md).
+
 ## Development
 
 ### Running Tests
 
-The project includes comprehensive unit and integration tests. See the [tests/README.md](../tests/README.md) for detailed testing documentation.
+The project includes comprehensive unit and integration tests. See the [tests/README.md](../tests/README.md) for
+detailed testing documentation.
 
 #### Quick Start
 
