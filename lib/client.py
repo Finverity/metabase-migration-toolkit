@@ -80,7 +80,7 @@ class MetabaseClient:
                 status_code=e.response.status_code if e.response else None,
             ) from e
 
-    def _prepare_headers(self) -> None:
+    def _prepare_headers(self) -> dict[str, str]:
         """Prepares headers for an API request, authenticating if necessary."""
         if not self._session.headers.get("X-Metabase-Session") and not self._session.headers.get(
             "X-Metabase-API-Key"
@@ -93,6 +93,14 @@ class MetabaseClient:
                 self._authenticate()
                 if self._session_token:  # Re-check after authentication
                     self._session.headers.update({"X-Metabase-Session": self._session_token})
+
+        # Return the authentication headers that were set
+        headers = {}
+        if "X-Metabase-Session" in self._session.headers:
+            headers["X-Metabase-Session"] = self._session.headers["X-Metabase-Session"]
+        if "X-Metabase-API-Key" in self._session.headers:
+            headers["X-Metabase-API-Key"] = self._session.headers["X-Metabase-API-Key"]
+        return headers
 
     def _should_retry(self, exception: BaseException) -> bool:
         """Determines if a request should be retried."""
