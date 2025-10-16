@@ -1,6 +1,4 @@
-"""
-Handles loading configuration from CLI arguments and environment variables.
-"""
+"""Handles loading configuration from CLI arguments and environment variables."""
 
 import argparse
 import os

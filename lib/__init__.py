@@ -1,5 +1,4 @@
-"""
-Metabase Migration Toolkit
+"""Metabase Migration Toolkit.
 
 A robust toolkit for exporting and importing Metabase content (collections,
 questions, and dashboards) between instances.

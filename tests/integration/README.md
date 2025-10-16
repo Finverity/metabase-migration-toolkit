@@ -5,6 +5,7 @@ This directory contains end-to-end integration tests for the Metabase Migration 
 ## Overview
 
 The integration tests use Docker Compose to spin up:
+
 - **Source Metabase instance** (port 3000)
 - **Target Metabase instance** (port 3001)
 - **Sample PostgreSQL database** (port 5434) - shared between both instances
@@ -28,24 +29,28 @@ make test-integration
 ### Manual Setup
 
 1. **Start Docker services:**
+
    ```bash
    docker-compose -f docker-compose.test.yml up -d
    ```
 
 2. **Wait for services to be ready** (this can take 2-3 minutes):
+
    ```bash
    # Check logs
    docker-compose -f docker-compose.test.yml logs -f
-   
+
    # Wait for "Metabase Initialization COMPLETE" messages
    ```
 
 3. **Run the tests:**
+
    ```bash
    pytest tests/integration/test_e2e_export_import.py -v -s
    ```
 
 4. **Stop services when done:**
+
    ```bash
    docker-compose -f docker-compose.test.yml down -v
    ```
@@ -84,16 +89,18 @@ make test-integration
 
 While tests are running, you can access the Metabase instances:
 
-- **Source Metabase**: http://localhost:3000
-- **Target Metabase**: http://localhost:3001
+- **Source Metabase**: <http://localhost:3000>
+- **Target Metabase**: <http://localhost:3001>
 
 Login credentials:
+
 - Email: `admin@example.com`
 - Password: `Admin123!`
 
 ## Sample Data
 
 The sample database contains:
+
 - `users` table - Sample user data
 - `products` table - Sample product catalog
 - `orders` table - Sample orders
@@ -220,4 +227,3 @@ docker-compose -f docker-compose.test.yml down -v
 - [ ] Add performance benchmarks
 - [ ] Add tests for different Metabase versions
 - [ ] Parallelize test execution with separate Docker Compose stacks
-

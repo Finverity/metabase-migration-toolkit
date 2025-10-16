@@ -1,6 +1,4 @@
-"""
-General utility functions for logging, file operations, and string manipulation.
-"""
+"""General utility functions for logging, file operations, and string manipulation."""
 
 import dataclasses
 import hashlib
@@ -23,14 +21,14 @@ class CustomJsonEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle dataclasses."""
 
     def default(self, o: Any) -> Any:
+        """Encode dataclasses as dictionaries."""
         if dataclasses.is_dataclass(o):
             return dataclasses.asdict(o)
         return super().default(o)
 
 
 def setup_logging(name_or_level: str = "INFO", level: str = None) -> logging.Logger:
-    """
-    Configures and returns a structured logger.
+    """Configures and returns a structured logger.
 
     Args:
         name_or_level: Either a logger name (e.g., __name__) or a log level (e.g., "INFO").
@@ -82,8 +80,7 @@ def setup_logging(name_or_level: str = "INFO", level: str = None) -> logging.Log
 
 
 def sanitize_filename(name: str) -> str:
-    """
-    Sanitizes a string to be a valid filename.
+    """Sanitizes a string to be a valid filename.
 
     Args:
         name: The string to sanitize.
@@ -102,8 +99,7 @@ def sanitize_filename(name: str) -> str:
 
 
 def calculate_checksum(file_path: Path) -> str:
-    """
-    Calculates the SHA256 checksum of a file.
+    """Calculates the SHA256 checksum of a file.
 
     Args:
         file_path: Path to the file.
@@ -118,14 +114,14 @@ def calculate_checksum(file_path: Path) -> str:
     return sha256.hexdigest()
 
 
-def write_json_file(data: Any, path: Path):
+def write_json_file(data: Any, path: Path) -> None:
     """Writes a dictionary or dataclass to a JSON file with pretty printing."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, cls=CustomJsonEncoder, indent=2, ensure_ascii=False)
 
 
-def read_json_file(path: Path) -> dict[str, Any]:
+def read_json_file(path: Path) -> Any:
     """Reads a JSON file into a dictionary."""
     with open(path, encoding="utf-8") as f:
         return json.load(f)

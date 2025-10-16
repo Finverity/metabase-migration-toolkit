@@ -34,4 +34,3 @@ exclude db_map.json
 exclude .env
 recursive-exclude metabase_export *
 recursive-exclude tmp *
-

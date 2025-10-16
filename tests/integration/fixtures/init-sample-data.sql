@@ -102,7 +102,7 @@ ON CONFLICT DO NOTHING;
 
 -- Create some views for testing
 CREATE OR REPLACE VIEW user_order_summary AS
-SELECT 
+SELECT
     u.id,
     u.username,
     u.email,
@@ -113,7 +113,7 @@ LEFT JOIN orders o ON u.id = o.user_id
 GROUP BY u.id, u.username, u.email;
 
 CREATE OR REPLACE VIEW product_sales_summary AS
-SELECT 
+SELECT
     p.id,
     p.name,
     p.category,
@@ -128,4 +128,3 @@ GROUP BY p.id, p.name, p.category, p.price;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO sample_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO sample_user;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO sample_user;
-

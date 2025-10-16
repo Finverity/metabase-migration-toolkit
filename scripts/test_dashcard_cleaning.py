@@ -12,7 +12,7 @@ def clean_dashcard_for_import(dashcard, card_map):
     Simulates the dashcard cleaning logic from import_metabase.py
     """
     clean_dashcard = {}
-    
+
     # Fields to explicitly exclude
     excluded_fields = {
         "id",
@@ -23,18 +23,18 @@ def clean_dashcard_for_import(dashcard, card_map):
         "card",
         "action_id",
         "collection_authority_level",
-        "dashboard_tab_id"
+        "dashboard_tab_id",
     }
-    
+
     # Copy positioning and size fields
     for field in ["col", "row", "size_x", "size_y"]:
         if field in dashcard and dashcard[field] is not None:
             clean_dashcard[field] = dashcard[field]
-    
+
     # Copy visualization_settings
     if "visualization_settings" in dashcard:
         clean_dashcard["visualization_settings"] = dashcard["visualization_settings"]
-    
+
     # Copy parameter_mappings (with card_id remapping)
     if "parameter_mappings" in dashcard and dashcard["parameter_mappings"]:
         clean_dashcard["parameter_mappings"] = []
@@ -45,7 +45,7 @@ def clean_dashcard_for_import(dashcard, card_map):
                 if source_param_card_id in card_map:
                     clean_param["card_id"] = card_map[source_param_card_id]
             clean_dashcard["parameter_mappings"].append(clean_param)
-    
+
     # Copy series (with card_id remapping)
     if "series" in dashcard and dashcard["series"]:
         clean_dashcard["series"] = []
@@ -54,7 +54,7 @@ def clean_dashcard_for_import(dashcard, card_map):
                 series_card_id = series_card["id"]
                 if series_card_id in card_map:
                     clean_dashcard["series"].append({"id": card_map[series_card_id]})
-    
+
     # Remap card_id
     source_card_id = dashcard.get("card_id")
     if source_card_id:
@@ -62,29 +62,30 @@ def clean_dashcard_for_import(dashcard, card_map):
             clean_dashcard["card_id"] = card_map[source_card_id]
         else:
             return None  # Skip if card not mapped
-    
+
     # Final safety check
     for excluded_field in excluded_fields:
         if excluded_field in clean_dashcard:
             del clean_dashcard[excluded_field]
-    
+
     return clean_dashcard
 
 
 def test_dashboard_cleaning():
     """Test the dashcard cleaning with the actual exported dashboard"""
-    
+
     # Load the dashboard file
     dashboard_file = Path(
-        "../metabase_export/Standard-Reports/Customer-Reports/dashboards/dash_17_Customer-Dashboard.json")
-    
+        "../metabase_export/Standard-Reports/Customer-Reports/dashboards/dash_17_Customer-Dashboard.json"
+    )
+
     if not dashboard_file.exists():
         print(f"❌ Dashboard file not found: {dashboard_file}")
         return False
-    
-    with open(dashboard_file, 'r') as f:
+
+    with open(dashboard_file) as f:
         dashboard_data = json.load(f)
-    
+
     # Create a mock card mapping (source_id -> target_id)
     card_map = {
         300: 1001,
@@ -107,26 +108,26 @@ def test_dashboard_cleaning():
         334: 1018,
         335: 1019,
     }
-    
+
     dashcards = dashboard_data.get("dashcards", [])
     print(f"📊 Testing {len(dashcards)} dashcards from dashboard '{dashboard_data.get('name')}'")
     print()
-    
+
     problematic_fields = ["id", "dashboard_id", "created_at", "updated_at", "entity_id", "card"]
     issues_found = 0
     cleaned_count = 0
-    
+
     for idx, dashcard in enumerate(dashcards):
         original_keys = set(dashcard.keys())
         cleaned = clean_dashcard_for_import(dashcard, card_map)
-        
+
         if cleaned is None:
             print(f"⚠️  Dashcard {idx}: Skipped (unmapped card_id)")
             continue
-        
+
         cleaned_count += 1
         cleaned_keys = set(cleaned.keys())
-        
+
         # Check for problematic fields
         has_issues = False
         for field in problematic_fields:
@@ -134,19 +135,21 @@ def test_dashboard_cleaning():
                 print(f"❌ Dashcard {idx}: Still contains '{field}' field!")
                 has_issues = True
                 issues_found += 1
-        
+
         if not has_issues:
             removed_fields = original_keys - cleaned_keys
-            print(f"✅ Dashcard {idx}: Clean (removed {len(removed_fields)} fields: {', '.join(sorted(removed_fields))})")
+            print(
+                f"✅ Dashcard {idx}: Clean (removed {len(removed_fields)} fields: {', '.join(sorted(removed_fields))})"
+            )
             print(f"   Kept fields: {', '.join(sorted(cleaned_keys))}")
-    
+
     print()
     print("=" * 80)
-    print(f"📈 Summary:")
+    print("📈 Summary:")
     print(f"   Total dashcards: {len(dashcards)}")
     print(f"   Cleaned successfully: {cleaned_count}")
     print(f"   Issues found: {issues_found}")
-    
+
     if issues_found == 0:
         print()
         print("✅ SUCCESS: All dashcards are properly cleaned!")
@@ -160,4 +163,3 @@ def test_dashboard_cleaning():
 if __name__ == "__main__":
     success = test_dashboard_cleaning()
     exit(0 if success else 1)
-

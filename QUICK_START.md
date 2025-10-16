@@ -14,11 +14,13 @@
 ### 1. Install the Package
 
 **Option A: Install from PyPI (Recommended)**
+
 ```bash
 pip install metabase-migration-toolkit
 ```
 
 **Option B: Install from Source**
+
 ```bash
 git clone <your-repo-url>
 cd metabase-migration-toolkit
@@ -28,21 +30,24 @@ pip install -e .
 After installation, the `metabase-export` and `metabase-import` commands will be available globally.
 
 ### 2. Configure Environment
+
 ```bash
 cp .env.example .env
 # Edit .env with your credentials (NO QUOTES around passwords!)
 ```
 
 **Important**: Do NOT use quotes around passwords in `.env`:
+
 ```bash
 # ❌ WRONG
-MB_SOURCE_PASSWORD="mypassword"
+MB_SOURCE_PASSWORD=""
 
 # ✅ CORRECT
-MB_SOURCE_PASSWORD=mypassword
+MB_SOURCE_PASSWORD=
 ```
 
 ### 3. Configure Database Mapping
+
 ```bash
 cp db_map.example.json db_map.json
 # Edit db_map.json to map source DB IDs to target DB IDs
@@ -53,6 +58,7 @@ cp db_map.example.json db_map.json
 ## Export (Simple)
 
 ### Basic Export
+
 ```bash
 metabase-export \
     --export-dir "./metabase_export" \
@@ -61,12 +67,14 @@ metabase-export \
 ```
 
 This will:
+
 - ✅ Export all collections, cards, and dashboards
 - ✅ **Automatically include all card dependencies**
 - ✅ **Export permissions to avoid 403 errors** (NEW!)
 - ✅ Create a self-contained export package
 
 ### Export Specific Collections
+
 ```bash
 metabase-export \
     --export-dir "./metabase_export" \
@@ -97,6 +105,7 @@ Exporting Collection A:
 ## Import (Simple)
 
 ### Basic Import
+
 ```bash
 metabase-import \
     --export-dir "./metabase_export" \
@@ -108,6 +117,7 @@ metabase-import \
 **Note**: Use `--apply-permissions` to avoid "403 Forbidden" errors after migration.
 
 ### Dry Run (Preview Changes)
+
 ```bash
 metabase-import \
     --export-dir "./metabase_export" \
@@ -116,6 +126,7 @@ metabase-import \
 ```
 
 ### Import with Overwrite
+
 ```bash
 metabase-import \
     --export-dir "./metabase_export" \
@@ -182,12 +193,13 @@ metabase-import \
 ### Issue: Authentication Failed
 
 **Solution**: Check `.env` file - remove quotes around passwords
+
 ```bash
 # ❌ WRONG
-MB_TARGET_PASSWORD="mypassword"
+MB_TARGET_PASSWORD="-"
 
 # ✅ CORRECT
-MB_TARGET_PASSWORD=mypassword
+MB_TARGET_PASSWORD=-
 ```
 
 ### Issue: "Card depends on missing cards"
@@ -195,6 +207,7 @@ MB_TARGET_PASSWORD=mypassword
 **Solution**: This should no longer happen! The export now automatically includes dependencies.
 
 If you still see this with an old export, re-export with the updated script:
+
 ```bash
 metabase-export \
     --export-dir "./new_export" \
@@ -217,11 +230,13 @@ metabase-export \
 ## Testing
 
 ### Test Dependency Resolution
+
 ```bash
 python scripts/test_recursive_dependencies.py
 ```
 
 ### Analyze Dependencies in Export
+
 ```bash
 python scripts/test_card_dependencies.py
 ```
@@ -231,6 +246,7 @@ python scripts/test_card_dependencies.py
 ## Environment Variables Reference
 
 ### Source Metabase (for export)
+
 ```bash
 MB_SOURCE_URL=https://your-source-metabase.com
 MB_SOURCE_USERNAME=user@example.com
@@ -242,6 +258,7 @@ MB_SOURCE_PASSWORD=password123
 ```
 
 ### Target Metabase (for import)
+
 ```bash
 MB_TARGET_URL=https://your-target-metabase.com
 MB_TARGET_USERNAME=user@example.com
@@ -257,6 +274,7 @@ MB_TARGET_PASSWORD=password123
 ## CLI Options Reference
 
 ### Export Options
+
 ```
 --source-url          Source Metabase URL
 --source-username     Username for authentication
@@ -271,6 +289,7 @@ MB_TARGET_PASSWORD=password123
 ```
 
 ### Import Options
+
 ```
 --target-url          Target Metabase URL
 --target-username     Username for authentication
@@ -304,6 +323,7 @@ MB_TARGET_PASSWORD=password123
 ```
 
 **How it works**:
+
 1. First checks `by_id` for exact ID match
 2. Falls back to `by_name` for name-based mapping
 3. Fails if no mapping found
@@ -335,12 +355,14 @@ MB_TARGET_PASSWORD=password123
 ## Support
 
 ### Documentation
+
 - `README.md` - Full documentation
 - `doc/RECURSIVE_DEPENDENCY_RESOLUTION.md` - Dependency resolution details
 - `doc/CHANGES_SUMMARY.md` - Recent changes and fixes
 - `doc/DASHBOARD_FIXES_APPLIED.md` - Dashboard import fixes
 
 ### Test Scripts
+
 - `scripts/test_recursive_dependencies.py` - Test dependency resolution
 - `scripts/test_card_dependencies.py` - Analyze dependencies
 - `scripts/test_dashcard_cleaning.py` - Test dashcard cleaning
@@ -361,4 +383,3 @@ The Metabase Migration Toolkit now provides:
 ✅ **Clear Logging**: Detailed information about what's being exported/imported
 
 **Ready to migrate? Start with the export command above!**
-

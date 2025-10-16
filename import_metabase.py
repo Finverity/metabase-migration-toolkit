@@ -1,5 +1,4 @@
-"""
-Metabase Import Tool
+"""Metabase Import Tool.
 
 This script reads an export package created by `export_metabase.py`, connects
 to a target Metabase instance, and recreates the collections, cards, and
@@ -33,7 +32,8 @@ logger = setup_logging(__name__)
 class MetabaseImporter:
     """Handles the logic for importing content into a Metabase instance."""
 
-    def __init__(self, config: ImportConfig):
+    def __init__(self, config: ImportConfig) -> None:
+        """Initialize the MetabaseImporter with the given configuration."""
         self.config = config
         self.client = MetabaseClient(
             base_url=config.target_url,
@@ -55,7 +55,7 @@ class MetabaseImporter:
         # Caches of existing items on the target instance
         self._target_collections: list[dict[str, Any]] = []
 
-    def run_import(self):
+    def run_import(self) -> None:
         """Main entry point to start the import process."""
         logger.info(f"Starting Metabase import to {self.config.target_url}")
         logger.info(f"Loading export package from: {self.export_dir.resolve()}")
@@ -78,7 +78,7 @@ class MetabaseImporter:
             logger.error(f"An unexpected error occurred: {e}", exc_info=True)
             sys.exit(3)
 
-    def _load_export_package(self):
+    def _load_export_package(self) -> None:
         """Loads and validates the manifest and database mapping files."""
         manifest_path = self.export_dir / "manifest.json"
         if not manifest_path.exists():
@@ -147,7 +147,7 @@ class MetabaseImporter:
                     unmapped[card.database_id].card_ids.add(card.id)
         return list(unmapped.values())
 
-    def _validate_target_databases(self):
+    def _validate_target_databases(self) -> None:
         """Validates that all mapped database IDs actually exist in the target instance."""
         try:
             target_databases = self.client.get_databases()
@@ -192,7 +192,7 @@ class MetabaseImporter:
             logger.error(f"Failed to fetch databases from target instance: {e}")
             sys.exit(1)
 
-    def _perform_dry_run(self):
+    def _perform_dry_run(self) -> None:
         """Simulates the import process and reports on planned actions."""
         logger.info("--- Starting Dry Run ---")
 
@@ -236,7 +236,7 @@ class MetabaseImporter:
         logger.info("\n--- Dry Run Complete ---")
         sys.exit(0)
 
-    def _perform_import(self):
+    def _perform_import(self) -> None:
         """Executes the full import process."""
         logger.info("--- Starting Import ---")
 
@@ -337,7 +337,7 @@ class MetabaseImporter:
                     found_match_at_level = True
 
                     # We need to find the full object in the nested tree
-                    def find_in_tree(nodes, node_id):
+                    def find_in_tree(nodes: list, node_id: int) -> Any:
                         for node in nodes:
                             if node["id"] == node_id:
                                 return node
@@ -353,7 +353,7 @@ class MetabaseImporter:
                 return None
         return found_collection
 
-    def _import_collections(self):
+    def _import_collections(self) -> None:
         """Imports all collections from the manifest."""
         sorted_collections = sorted(self.manifest.collections, key=lambda c: c.path)
 
@@ -408,8 +408,8 @@ class MetabaseImporter:
                 )
 
     def _extract_card_dependencies(self, card_data: dict) -> set[int]:
-        """
-        Extracts card IDs that this card depends on (references in source-table).
+        """Extracts card IDs that this card depends on (references in source-table).
+
         Returns a set of card IDs that must be imported before this card.
         """
         dependencies = set()
@@ -441,8 +441,8 @@ class MetabaseImporter:
         return dependencies
 
     def _topological_sort_cards(self, cards: list) -> list:
-        """
-        Sorts cards in topological order so that dependencies are imported first.
+        """Sorts cards in topological order so that dependencies are imported first.
+
         Cards with missing dependencies are placed at the end with a warning.
         """
         # Build a map of card ID to card object
@@ -563,7 +563,7 @@ class MetabaseImporter:
 
         return data, True
 
-    def _import_cards(self):
+    def _import_cards(self) -> None:
         """Imports all cards from the manifest in dependency order."""
         # Filter cards based on archived status
         cards_to_import = [
@@ -796,7 +796,7 @@ class MetabaseImporter:
                     ImportReportItem("card", "failed", card.id, None, card.name, str(e))
                 )
 
-    def _import_dashboards(self):
+    def _import_dashboards(self) -> None:
         """Imports all dashboards from the manifest."""
         for dash in tqdm(
             sorted(self.manifest.dashboards, key=lambda d: d.file_path), desc="Importing Dashboards"
@@ -986,7 +986,7 @@ class MetabaseImporter:
                     ImportReportItem("dashboard", "failed", dash.id, None, dash.name, str(e))
                 )
 
-    def _import_permissions(self):
+    def _import_permissions(self) -> None:
         """Imports permission groups and applies permissions graphs."""
         try:
             # Step 1: Map permission groups from source to target
@@ -995,7 +995,7 @@ class MetabaseImporter:
             target_groups_by_name = {g["name"]: g for g in target_groups}
 
             # Built-in groups that should always exist
-            BUILTIN_GROUPS = {"All Users", "Administrators"}
+            builtin_groups = {"All Users", "Administrators"}
 
             for source_group in self.manifest.permission_groups:
                 if source_group.name in target_groups_by_name:
@@ -1005,7 +1005,7 @@ class MetabaseImporter:
                     logger.info(
                         f"  -> Mapped group '{source_group.name}': source ID {source_group.id} -> target ID {target_group['id']}"
                     )
-                elif source_group.name not in BUILTIN_GROUPS:
+                elif source_group.name not in builtin_groups:
                     # Custom group doesn't exist, we should create it
                     # Note: Metabase API doesn't provide a direct endpoint to create groups
                     # Groups are typically created through the UI or admin API

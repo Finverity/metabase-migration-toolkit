@@ -48,32 +48,37 @@ pip install --index-url https://test.pypi.org/simple/ \
 
 ### Option 3: Install from Source
 
-1.  **Clone the repository:**
+1. **Clone the repository:**
+
     ```bash
     git clone <your-repo-url>
     cd metabase-migration-toolkit
     ```
 
-2.  **Install the package:**
+2. **Install the package:**
+
     ```bash
     pip install -e .
     ```
 
 ## Configuration
 
-1.  **Configure Environment Variables (Recommended):**
+1. **Configure Environment Variables (Recommended):**
     Copy the example `.env` file and fill in your credentials. This is the most secure way to provide credentials.
+
     ```bash
     cp .env.example .env
     # Edit .env with your details
     ```
 
-2.  **Create a Database Mapping File:**
+2. **Create a Database Mapping File:**
     Copy the example `db_map.example.json` and configure it to map your source database IDs/names to the target database IDs.
+
     ```bash
     cp db_map.example.json db_map.json
     # Edit db_map.json with your mappings
     ```
+
     **This is the most critical step for a successful import.** You must map every source database ID used by an exported card to a valid target database ID.
 
 ## Usage
@@ -108,6 +113,7 @@ metabase-export \
 ```
 
 **Available options:**
+
 - `--source-url` - Source Metabase URL (or use `MB_SOURCE_URL` in .env)
 - `--source-username` - Username (or use `MB_SOURCE_USERNAME` in .env)
 - `--source-password` - Password (or use `MB_SOURCE_PASSWORD` in .env)
@@ -150,6 +156,7 @@ metabase-import \
 ```
 
 **Available options:**
+
 - `--target-url` - Target Metabase URL (or use `MB_TARGET_URL` in .env)
 - `--target-username` - Username (or use `MB_TARGET_USERNAME` in .env)
 - `--target-password` - Password (or use `MB_TARGET_PASSWORD` in .env)

@@ -40,22 +40,22 @@ check_service_health() {
 wait_for_service() {
     local service=$1
     local elapsed=0
-    
+
     echo -e "${YELLOW}Waiting for $service to be healthy...${NC}"
-    
+
     while [ $elapsed -lt $MAX_WAIT ]; do
         status=$(check_service_health $service)
-        
+
         if [ "$status" = "healthy" ]; then
             echo -e "${GREEN}✓ $service is healthy${NC}"
             return 0
         fi
-        
+
         sleep $CHECK_INTERVAL
         elapsed=$((elapsed + CHECK_INTERVAL))
         echo "  Still waiting... (${elapsed}s elapsed)"
     done
-    
+
     echo -e "${RED}✗ $service did not become healthy within ${MAX_WAIT}s${NC}"
     return 1
 }
@@ -116,11 +116,10 @@ else
     echo "  - Check logs: docker-compose -f $COMPOSE_FILE logs"
     echo ""
     echo -e "${YELLOW}Press Ctrl+C to stop services and exit${NC}"
-    
+
     # Keep services running for debugging
     trap - EXIT
     read -p "Press Enter to stop services..."
     cleanup
     exit 1
 fi
-

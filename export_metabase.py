@@ -1,5 +1,4 @@
-"""
-Metabase Export Tool
+"""Metabase Export Tool.
 
 This script connects to a source Metabase instance, traverses its collections,
 and exports cards (questions) and dashboards into a structured directory layout.
@@ -33,7 +32,8 @@ logger = setup_logging(__name__)
 class MetabaseExporter:
     """Handles the logic for exporting content from a Metabase instance."""
 
-    def __init__(self, config: ExportConfig):
+    def __init__(self, config: ExportConfig) -> None:
+        """Initialize the MetabaseExporter with the given configuration."""
         self.config = config
         self.client = MetabaseClient(
             base_url=config.source_url,
@@ -67,7 +67,7 @@ class MetabaseExporter:
         )
         return Manifest(meta=meta)
 
-    def run_export(self):
+    def run_export(self) -> None:
         """Main entry point to start the export process."""
         logger.info(f"Starting Metabase export from {self.config.source_url}")
         logger.info(f"Export directory: {self.export_dir.resolve()}")
@@ -129,7 +129,7 @@ class MetabaseExporter:
             logger.error(f"An unexpected error occurred: {e}", exc_info=True)
             sys.exit(2)
 
-    def _fetch_and_store_databases(self):
+    def _fetch_and_store_databases(self) -> None:
         """Fetches all databases from the source and adds them to the manifest."""
         databases_response = self.client.get_databases()
 
@@ -148,7 +148,7 @@ class MetabaseExporter:
 
     def _traverse_collections(
         self, collections: list[dict], parent_path: str = "", parent_id: int | None = None
-    ):
+    ) -> None:
         """Recursively traverses the collection tree and processes each collection."""
         for collection_data in tqdm(collections, desc="Processing Collections"):
             collection_id = collection_data.get("id")
@@ -215,7 +215,7 @@ class MetabaseExporter:
                         collection_data["children"], current_path, collection_id
                     )
 
-    def _process_collection_items(self, collection_id: Any, base_path: str):
+    def _process_collection_items(self, collection_id: Any, base_path: str) -> None:
         """Fetches and processes all items (cards, dashboards) in a single collection."""
         try:
             params = {"models": ["card", "dashboard"], "archived": self.config.include_archived}
@@ -238,8 +238,8 @@ class MetabaseExporter:
 
     @staticmethod
     def _extract_card_dependencies(card_data: dict) -> set[int]:
-        """
-        Extracts card IDs that this card depends on (references in source-table).
+        """Extracts card IDs that this card depends on (references in source-table).
+
         Returns a set of card IDs that must be exported before this card.
         """
         dependencies = set()
@@ -272,9 +272,8 @@ class MetabaseExporter:
 
     def _export_card_with_dependencies(
         self, card_id: int, base_path: str, dependency_chain: list[int] | None = None
-    ):
-        """
-        Exports a card and recursively exports all its dependencies.
+    ) -> None:
+        """Exports a card and recursively exports all its dependencies.
 
         Args:
             card_id: The ID of the card to export
@@ -359,9 +358,8 @@ class MetabaseExporter:
         except MetabaseAPIError as e:
             logger.error(f"Failed to fetch card {card_id} for dependency analysis: {e}")
 
-    def _export_card(self, card_id: int, base_path: str, card_data: dict | None = None):
-        """
-        Exports a single card.
+    def _export_card(self, card_id: int, base_path: str, card_data: dict | None = None) -> None:
+        """Exports a single card.
 
         Args:
             card_id: The ID of the card to export
@@ -421,7 +419,7 @@ class MetabaseExporter:
         except Exception as e:
             logger.error(f"An unexpected error occurred while exporting card ID {card_id}: {e}")
 
-    def _export_dashboard(self, dashboard_id: int, base_path: str):
+    def _export_dashboard(self, dashboard_id: int, base_path: str) -> None:
         """Exports a single dashboard."""
         try:
             logger.debug(f"Exporting dashboard ID {dashboard_id}")
@@ -460,7 +458,7 @@ class MetabaseExporter:
                 f"An unexpected error occurred while exporting dashboard ID {dashboard_id}: {e}"
             )
 
-    def _export_permissions(self):
+    def _export_permissions(self) -> None:
         """Exports permission groups and permissions graphs."""
         try:
             # Fetch permission groups

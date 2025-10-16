@@ -84,7 +84,7 @@ docker-clean: ## Clean up Docker volumes and containers
 
 lint: ## Run all linters
 	@echo "Running ruff..."
-	$(RUFF) check lib/ tests/ *.py
+	$(RUFF) check lib/ tests/ scripts/ *.py --fix
 	@echo ""
 	@echo "Running black check..."
 	$(BLACK) --check --diff lib/ tests/ *.py
@@ -92,11 +92,11 @@ lint: ## Run all linters
 	@echo "All linting checks passed!"
 
 format: ## Format code with black and ruff
-    @echo "Formatting with black..."
-    $(BLACK) lib/ tests/ *.py
-    @echo ""
-    @echo "Sorting imports with ruff..."
-    $(RUFF) check --select I --fix lib/ tests/ *.py
+	@echo "Running mypy type checker..."
+	$(BLACK) lib/ tests/ *.py
+	@echo ""
+	@echo "Sorting imports with ruff..."
+	$(RUFF) check --select I --fix lib/ tests/ *.py
 
 format-check: ## Check code formatting without making changes
 	$(BLACK) --check lib/ tests/ *.py
@@ -182,4 +182,3 @@ ci: lint type-check test-cov ## Run all CI checks locally
 all: clean install-dev quality test-cov build ## Run everything (clean, install, quality checks, tests, build)
 	@echo ""
 	@echo "✅ All tasks completed successfully!"
-

@@ -1,5 +1,5 @@
-"""
-Setup script for backward compatibility.
+"""Setup script for backward compatibility.
+
 All configuration is in pyproject.toml.
 """
 
