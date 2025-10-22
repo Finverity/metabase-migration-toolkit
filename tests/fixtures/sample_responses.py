@@ -116,6 +116,101 @@ SAMPLE_DASHBOARD = {
     "creator_id": 1,
 }
 
+# Dashboard with comprehensive filter examples
+SAMPLE_DASHBOARD_WITH_FILTERS = {
+    "id": 201,
+    "name": "Sales Dashboard with Filters",
+    "description": "Dashboard demonstrating various filter types and mappings",
+    "collection_id": 1,
+    "parameters": [
+        {
+            "id": "date_filter",
+            "name": "Date Range",
+            "slug": "date_range",
+            "type": "date/range",
+            "default": None,
+        },
+        {
+            "id": "category_filter",
+            "name": "Product Category",
+            "slug": "category",
+            "type": "string/=",
+            "default": "Electronics",
+            "values_source_type": "card",
+            "values_source_config": {
+                "card_id": 100,
+                "value_field": ["field", 10, None],
+            },
+        },
+        {
+            "id": "region_filter",
+            "name": "Region",
+            "slug": "region",
+            "type": "string/=",
+            "default": None,
+        },
+    ],
+    "dashcards": [
+        {
+            "id": 10,
+            "card_id": 100,
+            "dashboard_id": 201,
+            "size_x": 8,
+            "size_y": 6,
+            "row": 0,
+            "col": 0,
+            "parameter_mappings": [
+                {
+                    "parameter_id": "date_filter",
+                    "card_id": 100,
+                    "target": ["dimension", ["field", 3, {"temporal-unit": "month"}]],
+                },
+                {
+                    "parameter_id": "category_filter",
+                    "card_id": 100,
+                    "target": ["dimension", ["field", 10, None]],
+                },
+            ],
+            "visualization_settings": {
+                "graph.dimensions": ["created_at"],
+                "graph.metrics": ["sum"],
+            },
+        },
+        {
+            "id": 11,
+            "card_id": 101,
+            "dashboard_id": 201,
+            "size_x": 8,
+            "size_y": 6,
+            "row": 0,
+            "col": 8,
+            "parameter_mappings": [
+                {
+                    "parameter_id": "date_filter",
+                    "card_id": 101,
+                    "target": [
+                        "dimension",
+                        ["field", "created_at", {"base-type": "type/DateTime"}],
+                    ],
+                },
+                {
+                    "parameter_id": "region_filter",
+                    "card_id": 101,
+                    "target": ["dimension", ["field", 15, None]],
+                },
+            ],
+            "visualization_settings": {},
+        },
+    ],
+    "archived": False,
+    "enable_embedding": False,
+    "embedding_params": None,
+    "cache_ttl": None,
+    "created_at": "2025-01-10T10:00:00.000Z",
+    "updated_at": "2025-01-26T14:30:00.000Z",
+    "creator_id": 1,
+}
+
 SAMPLE_COLLECTIONS_TREE = [
     {
         "id": "root",
