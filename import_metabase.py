@@ -984,11 +984,15 @@ class MetabaseImporter:
                                     f"Remapped parameter card_id {source_card_id} -> {self._card_map[source_card_id]}"
                                 )
                             else:
-                                # Card not found, skip this parameter
+                                # Card not found, remove values_source_config but keep the parameter
                                 logger.warning(
-                                    f"Skipping dashboard parameter '{param.get('name')}' - references missing card {source_card_id}"
+                                    f"Dashboard parameter '{param.get('name')}' references missing card {source_card_id}. "
+                                    f"Importing parameter without values_source_config (filter values won't be populated from card)."
                                 )
-                                continue
+                                # Remove the values_source_config to avoid API errors
+                                del param_copy["values_source_config"]
+                                if "values_source_type" in param_copy:
+                                    del param_copy["values_source_type"]
                     remapped_parameters.append(param_copy)
 
                 # 4. Create dashboard with basic info first

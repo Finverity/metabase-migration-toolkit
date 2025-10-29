@@ -459,6 +459,19 @@ class MetabaseExporter:
                     if dashcard.get("card_id"):
                         card_ids.append(dashcard["card_id"])
 
+            # Extract card IDs from dashboard parameters (filters with values from cards)
+            if dashboard_data.get("parameters"):
+                for param in dashboard_data["parameters"]:
+                    if "values_source_config" in param and isinstance(
+                        param["values_source_config"], dict
+                    ):
+                        source_card_id = param["values_source_config"].get("card_id")
+                        if source_card_id and source_card_id not in card_ids:
+                            card_ids.append(source_card_id)
+                            logger.info(
+                                f"     Dashboard parameter '{param.get('name')}' references card {source_card_id} - will be exported as dependency"
+                            )
+
             dashboard_obj = Dashboard(
                 id=dashboard_id,
                 name=dashboard_data["name"],
