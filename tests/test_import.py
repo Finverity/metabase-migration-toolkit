@@ -450,3 +450,246 @@ class TestRemapCardQuery:
             remapped_data, success = importer._remap_card_query(card_data)
 
             assert success is False
+
+    def test_remap_card_query_with_table_id(self, sample_import_config):
+        """Test that table_id is remapped correctly."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up database and table mappings
+            importer.db_map = DatabaseMap(by_id={"1": 10})
+            importer._table_map = {(1, 27): 42}  # source table 27 -> target table 42
+
+            card_data = {
+                "id": 100,
+                "name": "Test Card",
+                "database_id": 1,
+                "table_id": 27,
+                "dataset_query": {
+                    "type": "query",
+                    "database": 1,
+                    "query": {"source-table": 27},
+                },
+            }
+
+            remapped_data, success = importer._remap_card_query(card_data)
+
+            assert success is True
+            assert remapped_data["table_id"] == 42
+            assert remapped_data["dataset_query"]["query"]["source-table"] == 42
+
+    def test_remap_field_ids_in_filter(self, sample_import_config):
+        """Test that field IDs in filters are remapped correctly."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up field mappings
+            importer._field_map = {(1, 201): 301, (1, 204): 304}
+
+            # Filter expression with field IDs
+            filter_expr = [
+                "and",
+                ["=", ["field", 201, {"base-type": "type/PostgresEnum"}], "CUSTOMER"],
+                ["=", ["field", 204, {"base-type": "type/PostgresEnum"}], "ACTIVE"],
+            ]
+
+            remapped_filter = importer._remap_field_ids_recursively(filter_expr, 1)
+
+            # Check that field IDs were remapped
+            assert remapped_filter[1][1][1] == 301  # First field ID
+            assert remapped_filter[2][1][1] == 304  # Second field ID
+
+    def test_remap_field_ids_in_aggregation(self, sample_import_config):
+        """Test that field IDs in aggregations are remapped correctly."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up field mappings
+            importer._field_map = {(1, 5): 105}
+
+            # Aggregation with field ID
+            aggregation = [["sum", ["field", 5, None]]]
+
+            remapped_agg = importer._remap_field_ids_recursively(aggregation, 1)
+
+            # Check that field ID was remapped
+            assert remapped_agg[0][1][1] == 105
+
+    def test_remap_field_ids_in_breakout(self, sample_import_config):
+        """Test that field IDs in breakouts are remapped correctly."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up field mappings
+            importer._field_map = {(1, 3): 103}
+
+            # Breakout with field ID
+            breakout = [["field", 3, {"temporal-unit": "month"}]]
+
+            remapped_breakout = importer._remap_field_ids_recursively(breakout, 1)
+
+            # Check that field ID was remapped
+            assert remapped_breakout[0][1] == 103
+
+    def test_remap_field_ids_in_dashboard_parameter_target(self, sample_import_config):
+        """Test that field IDs in dashboard parameter targets are remapped correctly."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up field mappings
+            importer._field_map = {(1, 10): 110}
+
+            # Parameter mapping target with field ID
+            target = ["dimension", ["field", 10, None]]
+
+            remapped_target = importer._remap_field_ids_recursively(target, 1)
+
+            # Check that field ID was remapped
+            assert remapped_target[1][1] == 110
+
+    def test_remap_field_ids_in_dashboard_parameter_value_field(self, sample_import_config):
+        """Test that field IDs in dashboard parameter value_field use the correct database ID."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up field mappings for database 3
+            importer._field_map = {(3, 218): 318}
+
+            # value_field with field ID from database 3
+            value_field = ["field", 218, {"base-type": "type/Text"}]
+
+            # Remap using database 3 (not database 7)
+            remapped_value_field = importer._remap_field_ids_recursively(value_field, 3)
+
+            # Check that field ID was remapped
+            assert remapped_value_field[1] == 318
+
+    def test_remap_result_metadata(self, sample_import_config):
+        """Test that field IDs and table IDs in result_metadata are remapped correctly."""
+        with patch("import_metabase.MetabaseClient"):
+            importer = MetabaseImporter(sample_import_config)
+
+            # Set up database, table, and field mappings
+            importer.db_map = DatabaseMap(by_id={"3": 4})
+            importer._table_map = {(3, 27): 42}
+            importer._field_map = {(3, 218): 318, (3, 210): 310}
+
+            # Card data with result_metadata
+            card_data = {
+                "id": 332,
+                "name": "List of Customers",
+                "database_id": 3,
+                "table_id": 27,
+                "dataset_query": {
+                    "type": "query",
+                    "database": 3,
+                    "query": {"source-table": 27},
+                },
+                "result_metadata": [
+                    {
+                        "id": 210,
+                        "name": "id",
+                        "table_id": 27,
+                        "field_ref": ["field", 210, {"base-type": "type/UUID"}],
+                    },
+                    {
+                        "id": 218,
+                        "name": "name",
+                        "table_id": 27,
+                        "field_ref": ["field", 218, {"base-type": "type/Text"}],
+                    },
+                ],
+            }
+
+            remapped_data, success = importer._remap_card_query(card_data)
+
+            assert success is True
+            # Check database ID was remapped
+            assert remapped_data["database_id"] == 4
+            # Check table ID was remapped
+            assert remapped_data["table_id"] == 42
+            # Check result_metadata field IDs were remapped
+            assert remapped_data["result_metadata"][0]["id"] == 310
+            assert remapped_data["result_metadata"][0]["table_id"] == 42
+            assert remapped_data["result_metadata"][0]["field_ref"][1] == 310
+            assert remapped_data["result_metadata"][1]["id"] == 318
+            assert remapped_data["result_metadata"][1]["table_id"] == 42
+            assert remapped_data["result_metadata"][1]["field_ref"][1] == 318
+
+
+class TestBuildTableAndFieldMappings:
+    """Test suite for _build_table_and_field_mappings method."""
+
+    def test_build_mappings_with_metadata(self, tmp_path):
+        """Test building table and field mappings from manifest metadata."""
+        # Create manifest with database metadata
+        manifest_data = {
+            "meta": {
+                "source_url": "http://source.com",
+                "export_timestamp": "2025-10-22T00:00:00Z",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"3": "company_service"},
+            "database_metadata": {
+                "3": {
+                    "tables": [
+                        {
+                            "id": 27,
+                            "name": "companies",
+                            "fields": [
+                                {"id": 201, "name": "company_type"},
+                                {"id": 204, "name": "kyc_status"},
+                            ],
+                        }
+                    ]
+                }
+            },
+            "collections": [],
+            "cards": [],
+            "dashboards": [],
+        }
+
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"3": 4}, "by_name": {"company_service": 4}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com", export_dir=str(tmp_path), db_map_path=str(db_map_path)
+        )
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            # Mock target database metadata
+            mock_client.get_database_metadata.return_value = {
+                "tables": [
+                    {
+                        "id": 42,
+                        "name": "companies",
+                        "fields": [
+                            {"id": 301, "name": "company_type"},
+                            {"id": 304, "name": "kyc_status"},
+                        ],
+                    }
+                ]
+            }
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            importer._build_table_and_field_mappings()
+
+            # Check table mapping
+            assert (3, 27) in importer._table_map
+            assert importer._table_map[(3, 27)] == 42
+
+            # Check field mappings
+            assert (3, 201) in importer._field_map
+            assert importer._field_map[(3, 201)] == 301
+            assert (3, 204) in importer._field_map
+            assert importer._field_map[(3, 204)] == 304

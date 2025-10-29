@@ -30,9 +30,18 @@ class TestDashboardFilterExport:
         with patch("export_metabase.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_dashboard.return_value = SAMPLE_DASHBOARD_WITH_FILTERS
+            # Mock get_card for cards referenced by the dashboard
+            mock_client.get_card.side_effect = lambda card_id: {
+                "id": card_id,
+                "name": f"Card {card_id}",
+                "collection_id": 1,
+                "database_id": 1,
+                "dataset_query": {"database": 1, "query": {"source-table": 1}},
+            }
             mock_client_class.return_value = mock_client
 
             exporter = MetabaseExporter(config)
+            exporter._collection_path_map = {1: "collections/test"}
             exporter._export_dashboard(201, "collections/test")
 
             # Verify dashboard was exported
@@ -73,9 +82,18 @@ class TestDashboardFilterExport:
         with patch("export_metabase.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_dashboard.return_value = SAMPLE_DASHBOARD_WITH_FILTERS
+            # Mock get_card for cards referenced by the dashboard
+            mock_client.get_card.side_effect = lambda card_id: {
+                "id": card_id,
+                "name": f"Card {card_id}",
+                "collection_id": 1,
+                "database_id": 1,
+                "dataset_query": {"database": 1, "query": {"source-table": 1}},
+            }
             mock_client_class.return_value = mock_client
 
             exporter = MetabaseExporter(config)
+            exporter._collection_path_map = {1: "collections/test"}
             exporter._export_dashboard(201, "collections/test")
 
             # Read exported dashboard
@@ -103,6 +121,50 @@ class TestDashboardFilterExport:
             # Check second dashcard mappings
             dashcard2 = exported_data["dashcards"][1]
             assert len(dashcard2["parameter_mappings"]) == 2
+
+    def test_export_dashboard_exports_referenced_cards(self, tmp_path):
+        """Test that cards referenced by dashboard parameters are exported."""
+        config = ExportConfig(
+            source_url="https://source.example.com",
+            export_dir=str(tmp_path / "export"),
+            include_dashboards=True,
+        )
+
+        with patch("export_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_dashboard.return_value = SAMPLE_DASHBOARD_WITH_FILTERS
+            # Mock get_card for cards referenced by the dashboard
+            mock_client.get_card.side_effect = lambda card_id: {
+                "id": card_id,
+                "name": f"Card {card_id}",
+                "collection_id": 1,
+                "database_id": 1,
+                "dataset_query": {"database": 1, "query": {"source-table": 1}},
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._collection_path_map = {1: "collections/test"}
+            exporter._export_dashboard(201, "collections/test")
+
+            # Verify that cards were exported
+            card_files = list(
+                (tmp_path / "export" / "collections" / "test" / "cards").glob("*.json")
+            )
+            assert len(card_files) == 2, "Expected 2 cards to be exported (100 and 101)"
+
+            # Verify card IDs
+            card_ids = set()
+            for card_file in card_files:
+                card_data = read_json_file(card_file)
+                card_ids.add(card_data["id"])
+
+            assert card_ids == {100, 101}, "Expected cards 100 and 101 to be exported"
+
+            # Verify cards are in manifest
+            assert len(exporter.manifest.cards) == 2
+            manifest_card_ids = {card.id for card in exporter.manifest.cards}
+            assert manifest_card_ids == {100, 101}
 
 
 class TestDashboardFilterImport:

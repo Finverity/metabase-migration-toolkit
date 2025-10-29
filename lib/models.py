@@ -85,6 +85,8 @@ class Manifest:
     permission_groups: list[PermissionGroup] = dataclasses.field(default_factory=list)
     permissions_graph: dict[str, Any] = dataclasses.field(default_factory=dict)
     collection_permissions_graph: dict[str, Any] = dataclasses.field(default_factory=dict)
+    # Database metadata: db_id -> {tables: [{id, name, fields: [{id, name}, ...]}, ...]}
+    database_metadata: dict[int, dict[str, Any]] = dataclasses.field(default_factory=dict)
 
 
 # --- Import-specific Models ---

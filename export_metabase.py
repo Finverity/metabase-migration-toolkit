@@ -162,6 +162,36 @@ class MetabaseExporter:
         self.manifest.databases = {db["id"]: db["name"] for db in databases}
         logger.info(f"Found {len(self.manifest.databases)} databases.")
 
+        # Fetch and store metadata for each database (tables and fields)
+        logger.info("Fetching database metadata (tables and fields)...")
+        for db in databases:
+            db_id = db["id"]
+            try:
+                logger.debug(f"Fetching metadata for database {db_id} ({db['name']})...")
+                metadata = self.client.get_database_metadata(db_id)
+
+                # Store simplified metadata: only id and name for tables and fields
+                simplified_metadata = {
+                    "tables": [
+                        {
+                            "id": table["id"],
+                            "name": table["name"],
+                            "fields": [
+                                {"id": field["id"], "name": field["name"]}
+                                for field in table.get("fields", [])
+                            ],
+                        }
+                        for table in metadata.get("tables", [])
+                    ]
+                }
+                self.manifest.database_metadata[db_id] = simplified_metadata
+                logger.debug(
+                    f"  -> Stored metadata for {len(simplified_metadata['tables'])} tables"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to fetch metadata for database {db_id}: {e}")
+                # Continue with other databases
+
     def _traverse_collections(
         self, collections: list[dict], parent_path: str = "", parent_id: int | None = None
     ) -> None:
@@ -471,6 +501,36 @@ class MetabaseExporter:
                             logger.info(
                                 f"     Dashboard parameter '{param.get('name')}' references card {source_card_id} - will be exported as dependency"
                             )
+
+            # Export all card dependencies
+            for card_id in card_ids:
+                if card_id not in self._exported_cards:
+                    logger.info(
+                        f"     Exporting card {card_id} (required by dashboard {dashboard_id})"
+                    )
+                    try:
+                        # Fetch the card to determine its collection
+                        card_data = self.client.get_card(card_id)
+                        card_collection_id = card_data.get("collection_id")
+
+                        # Determine the base path for the card
+                        if card_collection_id and card_collection_id in self._collection_path_map:
+                            card_base_path = self._collection_path_map[card_collection_id]
+                        else:
+                            # Use a special "dependencies" folder for cards outside the export scope
+                            card_base_path = "dependencies"
+                            logger.info(
+                                f"        Card {card_id} is outside export scope, placing in '{card_base_path}' folder"
+                            )
+
+                        # Export the card with its dependencies
+                        self._export_card_with_dependencies(card_id, card_base_path)
+
+                    except MetabaseAPIError as e:
+                        logger.error(f"        Failed to export card {card_id}: {e}")
+                        logger.warning(
+                            f"        Dashboard {dashboard_id} may fail to import due to missing card {card_id}"
+                        )
 
             dashboard_obj = Dashboard(
                 id=dashboard_id,

@@ -4,7 +4,7 @@ This directory contains the test suite for the Metabase Migration Toolkit.
 
 ## Structure
 
-```
+```text
 tests/
 ├── __init__.py                 # Test package initialization
 ├── conftest.py                 # Shared pytest fixtures
@@ -13,12 +13,18 @@ tests/
 ├── test_config.py              # Tests for configuration loading
 ├── test_models.py              # Tests for data models
 ├── test_utils.py               # Tests for utility functions
+├── test_export.py              # Tests for export functionality
+├── test_import.py              # Tests for import functionality (includes table/field ID remapping tests)
+├── test_embedding_settings.py  # Tests for embedding settings
+├── test_dashboard_filters.py   # Tests for dashboard filter handling
+├── test_dependency_resolution.py # Tests for dependency resolution
+├── test_error_handling.py       # Tests for error handling
 ├── fixtures/                   # Test data and fixtures
 │   ├── __init__.py
 │   └── sample_responses.py     # Sample API responses
 └── integration/                # Integration tests
     ├── __init__.py
-    └── test_export_import_flow.py
+    └── test_e2e_export_import.py
 ```
 
 ## Running Tests
@@ -257,6 +263,31 @@ pytest -n auto
 
 ```bash
 pytest --cache-clear
+```
+
+## Table & Field ID Remapping Tests
+
+The toolkit includes comprehensive tests for table and field ID remapping functionality:
+
+### Test Classes
+
+- **`TestRemapCardQuery`** - Tests for remapping database IDs, table IDs, and field IDs in card queries
+  - `test_remap_card_query_with_table_id` - Verifies table ID remapping
+  - `test_remap_field_ids_in_filter` - Verifies field ID remapping in filter expressions
+  - `test_remap_card_query_always_sets_database_field` - Verifies database ID remapping
+
+- **`TestBuildTableAndFieldMappings`** - Tests for building table and field ID mappings
+  - `test_build_mappings_with_metadata` - Verifies mappings are built correctly from manifest metadata
+
+### Running Table/Field Remapping Tests
+
+```bash
+# Run all remapping tests
+pytest tests/test_import.py::TestRemapCardQuery -v
+pytest tests/test_import.py::TestBuildTableAndFieldMappings -v
+
+# Run specific test
+pytest tests/test_import.py::TestRemapCardQuery::test_remap_card_query_with_table_id -v
 ```
 
 ## Best Practices
