@@ -52,8 +52,15 @@ class MetabaseImporter:
         self._card_map: dict[int, int] = {}
         self._group_map: dict[int, int] = {}  # Maps source group IDs to target group IDs
 
+        # Table and field mappings: (source_db_id, source_table_id) -> target_table_id
+        self._table_map: dict[tuple[int, int], int] = {}
+        # Field mappings: (source_db_id, source_field_id) -> target_field_id
+        self._field_map: dict[tuple[int, int], int] = {}
+
         # Caches of existing items on the target instance
         self._target_collections: list[dict[str, Any]] = []
+        # Cache of target database metadata: db_id -> {tables: [...], fields: [...]}
+        self._target_db_metadata: dict[int, dict[str, Any]] = {}
 
     def run_import(self) -> None:
         """Main entry point to start the import process."""
@@ -94,6 +101,10 @@ class MetabaseImporter:
         databases_dict = manifest_data.get("databases", {})
         databases_with_int_keys = {int(k): v for k, v in databases_dict.items()}
 
+        # Convert database_metadata keys from strings to integers as well
+        database_metadata_dict = manifest_data.get("database_metadata", {})
+        database_metadata_with_int_keys = {int(k): v for k, v in database_metadata_dict.items()}
+
         self.manifest = Manifest(
             meta=ManifestMeta(**manifest_data["meta"]),
             databases=databases_with_int_keys,
@@ -105,6 +116,7 @@ class MetabaseImporter:
             ],
             permissions_graph=manifest_data.get("permissions_graph", {}),
             collection_permissions_graph=manifest_data.get("collection_permissions_graph", {}),
+            database_metadata=database_metadata_with_int_keys,
         )
 
         db_map_path = Path(self.config.db_map_path)
@@ -191,6 +203,113 @@ class MetabaseImporter:
         except MetabaseAPIError as e:
             logger.error(f"Failed to validate database mappings: {e}")
             sys.exit(1)
+
+    def _build_table_and_field_mappings(self) -> None:
+        """Builds mappings between source and target table/field IDs.
+
+        This is necessary because table and field IDs are instance-specific.
+        We match tables by name within the same database.
+        """
+        logger.info("Building table and field ID mappings...")
+
+        try:
+            # For each source database, get its target equivalent
+            for source_db_id, source_db_name in self.manifest.databases.items():
+                target_db_id = self._resolve_db_id(source_db_id)
+                if not target_db_id:
+                    logger.debug(f"Skipping table mapping for unmapped database {source_db_id}")
+                    continue
+
+                # Get source database metadata from manifest
+                source_metadata = self.manifest.database_metadata.get(source_db_id, {})
+                source_tables = source_metadata.get("tables", [])
+
+                if not source_tables:
+                    logger.debug(
+                        f"No table metadata available for source database {source_db_id}. "
+                        f"Table ID remapping will not work."
+                    )
+                    continue
+
+                # Fetch target database metadata
+                if target_db_id not in self._target_db_metadata:
+                    logger.debug(f"Fetching metadata for target database {target_db_id}...")
+                    try:
+                        target_metadata_response = self.client.get_database_metadata(target_db_id)
+                        self._target_db_metadata[target_db_id] = target_metadata_response
+                    except MetabaseAPIError as e:
+                        logger.warning(
+                            f"Failed to fetch metadata for target database {target_db_id}: {e}. "
+                            f"Table ID remapping will not work for this database."
+                        )
+                        continue
+
+                target_metadata = self._target_db_metadata[target_db_id]
+                # Build a map of table names to table objects in target
+                target_tables_by_name = {t["name"]: t for t in target_metadata.get("tables", [])}
+                target_fields_by_table_id = {}
+                for table in target_metadata.get("tables", []):
+                    target_fields_by_table_id[table["id"]] = {
+                        f["name"]: f for f in table.get("fields", [])
+                    }
+
+                logger.debug(
+                    f"Mapping tables from source DB {source_db_id} ({source_db_name}) "
+                    f"to target DB {target_db_id}"
+                )
+                logger.debug(
+                    f"  Source has {len(source_tables)} tables, "
+                    f"target has {len(target_tables_by_name)} tables"
+                )
+
+                # Map each source table to target table by name
+                for source_table in source_tables:
+                    source_table_id = source_table["id"]
+                    source_table_name = source_table["name"]
+
+                    if source_table_name in target_tables_by_name:
+                        target_table = target_tables_by_name[source_table_name]
+                        target_table_id = target_table["id"]
+
+                        # Store the mapping
+                        mapping_key = (source_db_id, source_table_id)
+                        self._table_map[mapping_key] = target_table_id
+
+                        logger.debug(
+                            f"  Mapped table '{source_table_name}': "
+                            f"{source_table_id} (source) -> {target_table_id} (target)"
+                        )
+
+                        # Map fields within this table
+                        source_fields = source_table.get("fields", [])
+                        target_fields = target_fields_by_table_id.get(target_table_id, {})
+
+                        for source_field in source_fields:
+                            source_field_id = source_field["id"]
+                            source_field_name = source_field["name"]
+
+                            if source_field_name in target_fields:
+                                target_field = target_fields[source_field_name]
+                                target_field_id = target_field["id"]
+
+                                # Store the field mapping
+                                field_mapping_key = (source_db_id, source_field_id)
+                                self._field_map[field_mapping_key] = target_field_id
+
+                                logger.debug(
+                                    f"    Mapped field '{source_field_name}': "
+                                    f"{source_field_id} (source) -> {target_field_id} (target)"
+                                )
+                    else:
+                        logger.warning(
+                            f"  Table '{source_table_name}' (ID: {source_table_id}) "
+                            f"not found in target database {target_db_id}. "
+                            f"Cards using this table may fail to import."
+                        )
+
+        except Exception as e:
+            logger.warning(f"Failed to build table and field mappings: {e}", exc_info=True)
+            # This is not fatal - we'll try to import without mappings
 
     def _validate_embedding_enabled(self) -> None:
         """Validates that embedding is enabled on the target instance when importing embedding settings."""
@@ -321,6 +440,10 @@ class MetabaseImporter:
         logger.info("Validating database mappings against target instance...")
         self._validate_target_databases()
 
+        # Build table and field ID mappings
+        logger.info("Building table and field ID mappings...")
+        self._build_table_and_field_mappings()
+
         # Check if embedding is enabled when importing embedding settings
         if self.config.include_embedding_settings:
             self._validate_embedding_enabled()
@@ -353,7 +476,7 @@ class MetabaseImporter:
 
         report_path = (
             self.export_dir
-            / f"import_report_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+            / f"import_report_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
         )
         write_json_file(self.report, report_path)
         logger.info(f"Full import report saved to {report_path}")
@@ -560,8 +683,63 @@ class MetabaseImporter:
 
         return sorted_cards
 
+    def _remap_field_ids_recursively(self, data: Any, source_db_id: int) -> Any:
+        """Recursively remaps field IDs in any data structure (lists, dicts, or primitives).
+
+        This handles field references in all MBQL clauses including:
+        - Filters: ["and", ["=", ["field", 201, {...}], "CUSTOMER"]]
+        - Aggregations: ["sum", ["field", 5, None]]
+        - Breakouts: [["field", 3, {"temporal-unit": "month"}]]
+        - Order-by: [["asc", ["field", 10]]]
+        - Fields: [["field", 100], ["field", 200]]
+        - Expressions: {"+": [["field", 10], 5]}
+        - Dashboard parameter targets: ["dimension", ["field", 3, {...}]]
+        - Dashboard parameter value_field: ["field", 10, None]
+        """
+        if data is None:
+            return data
+
+        # Handle lists (most MBQL clauses are lists)
+        if isinstance(data, list):
+            if len(data) == 0:
+                return data
+
+            # Check if this is a field reference: ["field", field_id, {...}]
+            # or ["field-id", field_id] (older format)
+            if len(data) >= 2 and data[0] in ("field", "field-id"):
+                source_field_id = data[1]
+                if isinstance(source_field_id, int):
+                    mapping_key = (source_db_id, source_field_id)
+                    if mapping_key in self._field_map:
+                        target_field_id = self._field_map[mapping_key]
+                        result = list(data)  # Make a copy
+                        result[1] = target_field_id
+                        logger.debug(
+                            f"Remapped field ID from {source_field_id} to {target_field_id}"
+                        )
+                        return result
+                    else:
+                        logger.warning(
+                            f"No field ID mapping found for source field {source_field_id} in database {source_db_id}. "
+                            f"Keeping original field ID - this may cause issues."
+                        )
+                return data
+
+            # Recursively process all items in the list
+            return [self._remap_field_ids_recursively(item, source_db_id) for item in data]
+
+        # Handle dictionaries
+        if isinstance(data, dict):
+            return {
+                key: self._remap_field_ids_recursively(value, source_db_id)
+                for key, value in data.items()
+            }
+
+        # Primitive values (strings, numbers, booleans, None) - return as-is
+        return data
+
     def _remap_card_query(self, card_data: dict) -> tuple[dict, bool]:
-        """Remaps the database ID in a card's dataset_query and card references."""
+        """Remaps the database ID, table IDs, and field IDs in a card's dataset_query and card references."""
         data = copy.deepcopy(card_data)
         query = data.get("dataset_query", {})
 
@@ -581,7 +759,22 @@ class MetabaseImporter:
         if "database_id" in data:
             data["database_id"] = target_db_id
 
-        # Remap card references in source-table
+        # Remap table_id at the card level (if present)
+        if "table_id" in data and isinstance(data["table_id"], int):
+            source_table_id = data["table_id"]
+            # Try to find target table ID using the mapping
+            mapping_key = (source_db_id, source_table_id)
+            if mapping_key in self._table_map:
+                target_table_id = self._table_map[mapping_key]
+                data["table_id"] = target_table_id
+                logger.debug(f"Remapped table_id from {source_table_id} to {target_table_id}")
+            else:
+                logger.warning(
+                    f"No table ID mapping found for source table {source_table_id} in database {source_db_id}. "
+                    f"Keeping original table_id - this may cause issues if the table ID doesn't exist in target."
+                )
+
+        # Remap card references and table IDs in source-table
         inner_query = query.get("query", {})
         if inner_query:
             source_table = inner_query.get("source-table")
@@ -595,6 +788,18 @@ class MetabaseImporter:
                         )
                 except ValueError:
                     logger.warning(f"Invalid card reference format: {source_table}")
+            elif isinstance(source_table, int):
+                # This is a table ID, try to remap it
+                mapping_key = (source_db_id, source_table)
+                if mapping_key in self._table_map:
+                    target_table_id = self._table_map[mapping_key]
+                    inner_query["source-table"] = target_table_id
+                    logger.debug(f"Remapped source-table from {source_table} to {target_table_id}")
+                else:
+                    logger.warning(
+                        f"No table ID mapping found for source table {source_table} in database {source_db_id}. "
+                        f"Keeping original table ID - this may cause issues."
+                    )
 
             # Remap card references in joins
             joins = inner_query.get("joins", [])
@@ -610,6 +815,70 @@ class MetabaseImporter:
                             )
                     except ValueError:
                         logger.warning(f"Invalid card reference in join: {join_source_table}")
+                elif isinstance(join_source_table, int):
+                    # This is a table ID in a join, try to remap it
+                    mapping_key = (source_db_id, join_source_table)
+                    if mapping_key in self._table_map:
+                        target_table_id = self._table_map[mapping_key]
+                        join["source-table"] = target_table_id
+                        logger.debug(
+                            f"Remapped join source-table from {join_source_table} to {target_table_id}"
+                        )
+
+            # Remap field IDs in ALL query clauses (filter, aggregation, breakout, order-by, fields, expressions, etc.)
+            # This handles field references throughout the entire query structure
+            for key in ["filter", "aggregation", "breakout", "order-by", "fields", "expressions"]:
+                if key in inner_query:
+                    inner_query[key] = self._remap_field_ids_recursively(
+                        inner_query[key], source_db_id
+                    )
+
+        # Remap field IDs and table IDs in result_metadata
+        # result_metadata contains field references that Metabase uses to display results
+        if "result_metadata" in data and isinstance(data["result_metadata"], list):
+            remapped_metadata = []
+            for metadata_item in data["result_metadata"]:
+                if isinstance(metadata_item, dict):
+                    metadata_copy = metadata_item.copy()
+
+                    # Remap field_ref if present: ["field", field_id, {...}]
+                    if "field_ref" in metadata_copy:
+                        metadata_copy["field_ref"] = self._remap_field_ids_recursively(
+                            metadata_copy["field_ref"], source_db_id
+                        )
+
+                    # Remap the direct field ID if present
+                    if "id" in metadata_copy and isinstance(metadata_copy["id"], int):
+                        field_id = metadata_copy["id"]
+                        mapping_key = (source_db_id, field_id)
+                        if mapping_key in self._field_map:
+                            metadata_copy["id"] = self._field_map[mapping_key]
+                            logger.debug(
+                                f"Remapped result_metadata field ID from {field_id} to {self._field_map[mapping_key]}"
+                            )
+
+                    # Remap table_id if present
+                    if "table_id" in metadata_copy and isinstance(metadata_copy["table_id"], int):
+                        table_id = metadata_copy["table_id"]
+                        mapping_key = (source_db_id, table_id)
+                        if mapping_key in self._table_map:
+                            metadata_copy["table_id"] = self._table_map[mapping_key]
+                            logger.debug(
+                                f"Remapped result_metadata table ID from {table_id} to {self._table_map[mapping_key]}"
+                            )
+
+                    remapped_metadata.append(metadata_copy)
+                else:
+                    remapped_metadata.append(metadata_item)
+
+            data["result_metadata"] = remapped_metadata
+
+        # Remap field IDs in visualization_settings
+        # visualization_settings can contain field references in various formats
+        if "visualization_settings" in data:
+            data["visualization_settings"] = self._remap_field_ids_recursively(
+                data["visualization_settings"], source_db_id
+            )
 
         return data, True
 
@@ -912,6 +1181,17 @@ class MetabaseImporter:
                         # Copy parameter_mappings if present
                         if "parameter_mappings" in dashcard and dashcard["parameter_mappings"]:
                             clean_dashcard["parameter_mappings"] = []
+
+                            # Get the database ID for this dashcard's card (for field remapping)
+                            dashcard_db_id = None
+                            source_card_id = dashcard.get("card_id")
+                            if source_card_id:
+                                # Find the card in the manifest to get its database_id
+                                for manifest_card in self.manifest.cards:
+                                    if manifest_card.id == source_card_id:
+                                        dashcard_db_id = manifest_card.database_id
+                                        break
+
                             for param_mapping in dashcard["parameter_mappings"]:
                                 clean_param = param_mapping.copy()
                                 # Remap card_id in parameter_mappings
@@ -921,6 +1201,14 @@ class MetabaseImporter:
                                         clean_param["card_id"] = self._card_map[
                                             source_param_card_id
                                         ]
+
+                                # Remap field IDs in parameter mapping target
+                                # Target can contain field references like ["dimension", ["field", 3, {...}]]
+                                if "target" in clean_param and dashcard_db_id:
+                                    clean_param["target"] = self._remap_field_ids_recursively(
+                                        clean_param["target"], dashcard_db_id
+                                    )
+
                                 clean_dashcard["parameter_mappings"].append(clean_param)
 
                         # Copy series if present (for combo charts)
@@ -963,10 +1251,11 @@ class MetabaseImporter:
 
                         dashcards_to_import.append(clean_dashcard)
 
-                # 3. Clean dashboard data and remap card IDs in parameters
+                # 3. Clean dashboard data and remap card IDs and field IDs in parameters
                 payload = clean_for_create(dash_data)
                 parameters = payload.get("parameters", [])
                 remapped_parameters = []
+
                 for param in parameters:
                     param_copy = param.copy()
                     # Check if parameter has values_source_config with card_id
@@ -983,6 +1272,30 @@ class MetabaseImporter:
                                 logger.debug(
                                     f"Remapped parameter card_id {source_card_id} -> {self._card_map[source_card_id]}"
                                 )
+
+                                # Remap field IDs in value_field if present
+                                # We need to get the database ID from the card referenced in values_source_config
+                                if "value_field" in param_copy["values_source_config"]:
+                                    # Find the database ID for this specific card
+                                    param_source_db_id = None
+                                    for card in self.manifest.cards:
+                                        if card.id == source_card_id:
+                                            param_source_db_id = card.database_id
+                                            break
+
+                                    if param_source_db_id:
+                                        param_copy["values_source_config"]["value_field"] = (
+                                            self._remap_field_ids_recursively(
+                                                param_copy["values_source_config"]["value_field"],
+                                                param_source_db_id,
+                                            )
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"Could not determine database ID for card {source_card_id} "
+                                            f"referenced in parameter '{param.get('name')}'. "
+                                            f"Field IDs in value_field will not be remapped."
+                                        )
                             else:
                                 # Card not found, remove values_source_config but keep the parameter
                                 logger.warning(
@@ -993,6 +1306,7 @@ class MetabaseImporter:
                                 del param_copy["values_source_config"]
                                 if "values_source_type" in param_copy:
                                     del param_copy["values_source_type"]
+
                     remapped_parameters.append(param_copy)
 
                 # 4. Create dashboard with basic info first

@@ -1,7 +1,8 @@
 # Quick Start Guide - Metabase Migration Toolkit
 
-## Recent Updates (2025-10-10)
+## Recent Updates (2025-10-22)
 
+✅ **Table & Field ID Remapping**: Automatically remaps table and field IDs during import (NEW!)
 ✅ **Permissions Migration**: Export and import permissions to avoid 403 errors
 ✅ **Authentication Fixed**: Corrected `.env` file format
 ✅ **Dashboard Import Fixed**: Removed false error messages
@@ -99,6 +100,29 @@ Exporting Collection A:
 ```
 
 **Result**: Complete, self-contained export that imports without errors!
+
+### What's New: Table & Field ID Remapping
+
+The import now **automatically remaps table and field IDs**:
+
+When you have the same table name in different databases (e.g., "companies" in both `company_service` and
+`deal_service`), the toolkit ensures cards reference the correct table:
+
+```text
+Source Instance:
+- company_service (DB ID: 3) → companies table (ID: 27)
+- deal_service (DB ID: 4) → companies table (ID: 35)
+
+Target Instance:
+- company_service (DB ID: 4) → companies table (ID: 42)
+- deal_service (DB ID: 3) → companies table (ID: 51)
+
+After Import:
+- Card from company_service: DB 3→4 ✓, Table 27→42 ✓
+- Card from deal_service: DB 4→3 ✓, Table 35→51 ✓
+```
+
+**Result**: Cards correctly reference tables in the target instance, even when table IDs differ!
 
 ---
 
@@ -407,11 +431,19 @@ MB_TARGET_PASSWORD=password123
 
 The Metabase Migration Toolkit now provides:
 
+✅ **Table & Field ID Remapping**: Automatically remaps table and field IDs during import
 ✅ **Reliable Authentication**: Fixed `.env` parsing
 ✅ **Clean Dashboard Import**: No false error messages
 ✅ **Automatic Dependencies**: All card dependencies included automatically
 ✅ **Self-Contained Exports**: Import without missing dependency errors
+✅ **Permissions Migration**: Export and import permissions to avoid 403 errors
 ✅ **Robust Error Handling**: Graceful handling of edge cases
 ✅ **Clear Logging**: Detailed information about what's being exported/imported
 
 **Ready to migrate? Start with the export command above!**
+
+## Learn More
+
+- **Table & Field ID Remapping**: See [doc/TABLE_FIELD_ID_REMAPPING.md](doc/TABLE_FIELD_ID_REMAPPING.md)
+- **Permissions Migration**: See [doc/PERMISSIONS_MIGRATION.md](doc/PERMISSIONS_MIGRATION.md)
+- **Full Documentation**: See [README.md](README.md)

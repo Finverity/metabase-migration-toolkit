@@ -18,8 +18,13 @@ production use.
 - **Recursive Export:** Traverses the entire collection tree, preserving hierarchy.
 - **Selective Content:** Choose to include dashboards and archived items.
 - **Permissions Migration:** Export and import permission groups and access control settings.
-- **Embedding Settings Migration:** Export and import embedding configurations for dashboards and cards (NEW!).
+- **Embedding Settings Migration:** Export and import embedding configurations for dashboards and cards.
 - **Database Remapping:** Intelligently remaps questions and cards to new database IDs on the target instance.
+- **Table & Field ID Remapping:** Automatically remaps table IDs and field IDs in card queries (NEW!).
+  - Captures table and field metadata during export
+  - Builds intelligent mappings between source and target instances
+  - Remaps table IDs in card queries and filters
+  - Remaps field IDs in filter expressions
 - **Conflict Resolution:** Strategies for handling items that already exist on the target (`skip`, `overwrite`, `rename`).
 - **Idempotent Import:** Re-running an import with `skip` or `overwrite` produces a consistent state.
 - **Dry Run Mode:** Preview all import actions without making any changes to the target instance.
@@ -176,6 +181,48 @@ metabase-import \
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
 - `--include-embedding-settings` - Include embedding settings (enable_embedding and embedding_params) in import
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+## Table & Field ID Remapping
+
+The toolkit automatically remaps table IDs and field IDs during import, ensuring cards reference the correct
+tables and fields in the target instance.
+
+### Why This Matters
+
+In Metabase, each table and field has an instance-specific ID. When you have the same table name in different
+databases (e.g., "companies" in both `company_service` and `deal_service`), the table IDs will be different.
+Without proper remapping:
+
+- Cards would reference the wrong table
+- Filters with field IDs would break
+- Cards would appear to work but show data from the wrong source
+
+### How It Works
+
+1. **Export Phase**: The toolkit captures table and field metadata from the source instance
+2. **Mapping Phase**: During import, it builds intelligent mappings between source and target IDs based on table/field names
+3. **Remapping Phase**: All card queries are updated to use the correct target IDs
+
+### Example
+
+```text
+Source Instance:
+- Database: company_service (ID: 3)
+  - Table: companies (ID: 27)
+    - Field: company_type (ID: 201)
+
+Target Instance:
+- Database: company_service (ID: 4)
+  - Table: companies (ID: 42)
+    - Field: company_type (ID: 301)
+
+After Import:
+- Card database_id: 3 → 4 ✓
+- Card table_id: 27 → 42 ✓
+- Filter field_id: 201 → 301 ✓
+```
+
+For more details, see [Table ID Remapping Guide](TABLE_ID_REMAPPING_FIX.md).
 
 ## Permissions Migration
 

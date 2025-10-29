@@ -77,13 +77,15 @@ make test-integration
 1. **test_docker_services_running** - Verifies Docker services are accessible
 2. **test_sample_database_added** - Verifies sample databases were added
 3. **test_test_data_created** - Verifies test data was created in source
-4. **test_export_from_source** - Tests export functionality
-5. **test_import_to_target** - Tests import functionality
+4. **test_export_from_source** - Tests export functionality (including table/field metadata capture)
+5. **test_import_to_target** - Tests import functionality (including table/field ID remapping)
 6. **test_dry_run_import** - Tests dry-run mode
 7. **test_export_with_dependencies** - Tests card dependency resolution
 8. **test_conflict_strategy_skip** - Tests conflict handling
 9. **test_different_database_ids** - Tests database ID mapping
 10. **test_independent_instances** - Tests instance independence
+11. **test_table_id_remapping** - Tests that table IDs are correctly remapped (when same table name exists in different databases)
+12. **test_field_id_remapping** - Tests that field IDs in filters are correctly remapped
 
 ## Accessing Metabase Instances
 
@@ -95,7 +97,7 @@ While tests are running, you can access the Metabase instances:
 Login credentials:
 
 - Email: `admin@example.com`
-- Password: `Admin123!`
+- Password: ``
 
 ## Sample Data
 
@@ -106,6 +108,37 @@ The sample database contains:
 - `orders` table - Sample orders
 - `order_items` table - Order line items
 - Views for aggregated data
+
+## Table & Field ID Remapping in Integration Tests
+
+The integration tests verify that table and field ID remapping works correctly end-to-end:
+
+### What Gets Tested
+
+1. **Export captures metadata**: The export includes table and field metadata from the source instance
+2. **Mappings are built**: During import, the toolkit builds mappings between source and target table/field IDs
+3. **IDs are remapped**: Card queries are updated to use the correct target IDs
+4. **Filters work correctly**: Field IDs in filter expressions are remapped
+
+### Test Scenario
+
+When the same table name exists in different databases:
+
+```text
+Source Instance:
+- Database A (ID: 1) → Table "companies" (ID: 10)
+- Database B (ID: 2) → Table "companies" (ID: 20)
+
+Target Instance:
+- Database A (ID: 100) → Table "companies" (ID: 110)
+- Database B (ID: 200) → Table "companies" (ID: 220)
+
+After Import:
+- Card from Source DB A → Target DB A (100) with table ID 110 ✓
+- Card from Source DB B → Target DB B (200) with table ID 220 ✓
+```
+
+The integration tests verify this scenario works correctly.
 
 ## Troubleshooting
 

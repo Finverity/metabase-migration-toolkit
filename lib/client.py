@@ -287,6 +287,18 @@ class MetabaseClient:
         """Updates the permissions graph for collection access."""
         return self._request("put", "/collection/graph", json=graph).json()
 
+    def get_database_metadata(self, database_id: int) -> Any:
+        """Fetches metadata for a specific database, including tables and fields."""
+        return self._request("get", f"/database/{database_id}/metadata").json()
+
+    def get_table(self, table_id: int) -> Any:
+        """Fetches metadata for a specific table."""
+        return self._request("get", f"/table/{table_id}").json()
+
+    def get_field(self, field_id: int) -> Any:
+        """Fetches metadata for a specific field."""
+        return self._request("get", f"/field/{field_id}").json()
+
     def is_embedding_enabled(self) -> bool:
         """Check if embedding is enabled on the Metabase instance.
 
