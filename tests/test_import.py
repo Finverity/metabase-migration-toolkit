@@ -693,3 +693,202 @@ class TestBuildTableAndFieldMappings:
             assert importer._field_map[(3, 201)] == 301
             assert (3, 204) in importer._field_map
             assert importer._field_map[(3, 204)] == 304
+
+
+class TestConflictResolution:
+    """Test suite for conflict resolution strategies."""
+
+    def test_find_existing_card_in_collection(self, sample_import_config):
+        """Test finding an existing card by name in a collection."""
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+
+            # Mock the get_collection_items response
+            mock_client.get_collection_items.return_value = {
+                "data": [
+                    {"id": 1, "name": "Existing Card", "model": "card"},
+                    {"id": 2, "name": "Another Card", "model": "card"},
+                    {"id": 3, "name": "Some Dashboard", "model": "dashboard"},
+                ]
+            }
+
+            importer = MetabaseImporter(sample_import_config)
+
+            # Test finding existing card
+            result = importer._find_existing_card_in_collection("Existing Card", 10)
+            assert result is not None
+            assert result["id"] == 1
+            assert result["name"] == "Existing Card"
+
+            # Test card not found
+            result = importer._find_existing_card_in_collection("Non-existent Card", 10)
+            assert result is None
+
+            # Verify correct API call
+            mock_client.get_collection_items.assert_called_with(10)
+
+    def test_find_existing_dashboard_in_collection(self, sample_import_config):
+        """Test finding an existing dashboard by name in a collection."""
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+
+            # Mock the get_collection_items response
+            mock_client.get_collection_items.return_value = {
+                "data": [
+                    {"id": 1, "name": "Existing Dashboard", "model": "dashboard"},
+                    {"id": 2, "name": "Another Dashboard", "model": "dashboard"},
+                    {"id": 3, "name": "Some Card", "model": "card"},
+                ]
+            }
+
+            importer = MetabaseImporter(sample_import_config)
+
+            # Test finding existing dashboard
+            result = importer._find_existing_dashboard_in_collection("Existing Dashboard", 10)
+            assert result is not None
+            assert result["id"] == 1
+            assert result["name"] == "Existing Dashboard"
+
+            # Test dashboard not found
+            result = importer._find_existing_dashboard_in_collection("Non-existent Dashboard", 10)
+            assert result is None
+
+    def test_generate_unique_name_for_card(self, sample_import_config):
+        """Test generating unique names for cards."""
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+
+            # Mock responses: first call finds "Test Card", second finds "Test Card (1)"
+            # third call finds nothing (unique name found)
+            mock_client.get_collection_items.side_effect = [
+                {"data": [{"id": 1, "name": "Test Card", "model": "card"}]},
+                {"data": [{"id": 2, "name": "Test Card (1)", "model": "card"}]},
+                {"data": []},
+            ]
+
+            importer = MetabaseImporter(sample_import_config)
+
+            # Should return "Test Card (2)" since "Test Card" and "Test Card (1)" exist
+            unique_name = importer._generate_unique_name("Test Card", 10, "card")
+            assert unique_name == "Test Card (2)"
+
+    def test_generate_unique_name_no_conflict(self, sample_import_config):
+        """Test generating unique name when there's no conflict."""
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+
+            # Mock response: no existing items
+            mock_client.get_collection_items.return_value = {"data": []}
+
+            importer = MetabaseImporter(sample_import_config)
+
+            # Should return original name since no conflict
+            unique_name = importer._generate_unique_name("New Card", 10, "card")
+            assert unique_name == "New Card"
+
+    def test_collection_conflict_skip_strategy(
+        self, sample_import_config, manifest_file, db_map_file
+    ):
+        """Test collection import with skip conflict strategy."""
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(manifest_file.parent),
+            db_map_path=str(db_map_file),
+            conflict_strategy="skip",
+        )
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+
+            # Mock existing collection
+            mock_client.get_collections_tree.return_value = [
+                {"id": 100, "name": "Test Collection", "parent_id": None}
+            ]
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            importer._import_collections()
+
+            # Should skip and map to existing collection
+            assert importer._collection_map[1] == 100
+            assert importer.report.summary["collections"]["skipped"] == 1
+            assert importer.report.summary["collections"]["created"] == 0
+
+            # Should not call create_collection
+            mock_client.create_collection.assert_not_called()
+
+    def test_collection_conflict_overwrite_strategy(
+        self, sample_import_config, manifest_file, db_map_file
+    ):
+        """Test collection import with overwrite conflict strategy."""
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(manifest_file.parent),
+            db_map_path=str(db_map_file),
+            conflict_strategy="overwrite",
+        )
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+
+            # Mock existing collection
+            mock_client.get_collections_tree.return_value = [
+                {"id": 100, "name": "Test Collection", "parent_id": None}
+            ]
+            mock_client.update_collection.return_value = {"id": 100, "name": "Test Collection"}
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            importer._import_collections()
+
+            # Should update existing collection
+            assert importer._collection_map[1] == 100
+            assert importer.report.summary["collections"]["updated"] == 1
+            assert importer.report.summary["collections"]["created"] == 0
+
+            # Should call update_collection
+            mock_client.update_collection.assert_called_once()
+            mock_client.create_collection.assert_not_called()
+
+    def test_collection_conflict_rename_strategy(
+        self, sample_import_config, manifest_file, db_map_file
+    ):
+        """Test collection import with rename conflict strategy."""
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(manifest_file.parent),
+            db_map_path=str(db_map_file),
+            conflict_strategy="rename",
+        )
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+
+            # Mock existing collection with same name
+            # First call: check for "Test Collection" (exists)
+            # Second call: check for "Test Collection (1)" (doesn't exist)
+            mock_client.get_collections_tree.side_effect = [
+                [{"id": 100, "name": "Test Collection", "parent_id": None}],
+                [{"id": 100, "name": "Test Collection", "parent_id": None}],
+            ]
+            mock_client.create_collection.return_value = {"id": 101, "name": "Test Collection (1)"}
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            importer._import_collections()
+
+            # Should create with renamed collection
+            assert importer.report.summary["collections"]["created"] == 1
+            assert importer.report.summary["collections"]["skipped"] == 0
+
+            # Should call create_collection with renamed name
+            mock_client.create_collection.assert_called_once()
+            call_args = mock_client.create_collection.call_args[0][0]
+            assert call_args["name"] == "Test Collection (1)"

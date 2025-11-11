@@ -10,7 +10,7 @@ import datetime
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from tqdm import tqdm
 
@@ -526,9 +526,131 @@ class MetabaseImporter:
                 return None
         return found_collection
 
+    def _find_existing_card_in_collection(
+        self, name: str, collection_id: int | None
+    ) -> dict[Any, Any] | None:
+        """Finds an existing card by name in a specific collection.
+
+        Args:
+            name: The name of the card to find
+            collection_id: The collection ID to search in (None for root collection)
+
+        Returns:
+            The card dict if found, None otherwise
+        """
+        try:
+            # Use 'root' for the root collection, otherwise use the collection ID
+            coll_id: int | str = "root" if collection_id is None else collection_id
+            items = self.client.get_collection_items(coll_id)
+
+            # Filter for cards (model='card') with matching name
+            for item in items.get("data", []):
+                if item.get("model") == "card" and item.get("name") == name:
+                    return item  # type: ignore[no-any-return]
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to check for existing card '{name}': {e}")
+            return None
+
+    def _find_existing_dashboard_in_collection(
+        self, name: str, collection_id: int | None
+    ) -> dict[Any, Any] | None:
+        """Finds an existing dashboard by name in a specific collection.
+
+        Args:
+            name: The name of the dashboard to find
+            collection_id: The collection ID to search in (None for root collection)
+
+        Returns:
+            The dashboard dict if found, None otherwise
+        """
+        try:
+            # Use 'root' for the root collection, otherwise use the collection ID
+            coll_id: int | str = "root" if collection_id is None else collection_id
+            items = self.client.get_collection_items(coll_id)
+
+            # Filter for dashboards (model='dashboard') with matching name
+            for item in items.get("data", []):
+                if item.get("model") == "dashboard" and item.get("name") == name:
+                    return item  # type: ignore[no-any-return]
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to check for existing dashboard '{name}': {e}")
+            return None
+
+    def _generate_unique_name(
+        self, base_name: str, collection_id: int | None, item_type: str
+    ) -> str:
+        """Generates a unique name by appending a number if needed.
+
+        Args:
+            base_name: The original name
+            collection_id: The collection to check for conflicts
+            item_type: Either 'card' or 'dashboard'
+
+        Returns:
+            A unique name that doesn't conflict with existing items
+        """
+        # Try the base name first
+        if item_type == "card":
+            existing = self._find_existing_card_in_collection(base_name, collection_id)
+        else:
+            existing = self._find_existing_dashboard_in_collection(base_name, collection_id)
+
+        if not existing:
+            return base_name
+
+        # Try appending numbers until we find a unique name
+        counter = 1
+        while True:
+            new_name = f"{base_name} ({counter})"
+            if item_type == "card":
+                existing = self._find_existing_card_in_collection(new_name, collection_id)
+            else:
+                existing = self._find_existing_dashboard_in_collection(new_name, collection_id)
+
+            if not existing:
+                return new_name
+            counter += 1
+
+    def _flatten_collection_tree(
+        self, collections: list[dict], parent_id: int | None = None
+    ) -> list[dict]:
+        """Recursively flattens a collection tree into a list of collections."""
+        flat_list = []
+        for coll in collections:
+            # Skip root collection (it's a special case)
+            if coll.get("id") == "root":
+                # Process root's children
+                if "children" in coll:
+                    flat_list.extend(self._flatten_collection_tree(coll["children"], None))
+                continue
+
+            # Add current collection with its parent_id
+            flat_coll = {
+                "id": coll["id"],
+                "name": coll["name"],
+                "parent_id": parent_id,
+            }
+            flat_list.append(flat_coll)
+
+            # Recursively process children
+            if "children" in coll and coll["children"]:
+                flat_list.extend(self._flatten_collection_tree(coll["children"], coll["id"]))
+
+        return flat_list
+
     def _import_collections(self) -> None:
         """Imports all collections from the manifest."""
         sorted_collections = sorted(self.manifest.collections, key=lambda c: c.path)
+
+        # Flatten the collection tree into a list for easier lookup
+        flat_target_collections = self._flatten_collection_tree(self._target_collections)
+
+        print(f"\n[DEBUG] Total target collections (flattened): {len(flat_target_collections)}")
+        print("[DEBUG] Target collections:")
+        for tc in flat_target_collections:
+            print(f"[DEBUG]   - '{tc['name']}' (ID: {tc['id']}, parent_id: {tc.get('parent_id')})")
 
         for collection in tqdm(sorted_collections, desc="Importing Collections"):
             try:
@@ -538,28 +660,95 @@ class MetabaseImporter:
 
                 # Check for existing collection on target
                 existing_coll = None
-                # Naive check by name and parent_id
-                for tc in self.client.get_collections_tree(params={"archived": True}):
+                # Check by name and parent_id using flattened collections
+                print(
+                    f"\n[DEBUG] Looking for: name='{collection.name}', target_parent_id={target_parent_id}, source_parent_id={collection.parent_id}"
+                )
+                for tc in flat_target_collections:
+                    if tc["name"] == collection.name:
+                        print(
+                            f"[DEBUG]   Found name match: '{tc['name']}', tc_parent_id={tc.get('parent_id')}, match={tc.get('parent_id') == target_parent_id}"
+                        )
                     if tc["name"] == collection.name and tc.get("parent_id") == target_parent_id:
                         existing_coll = tc
+                        print(f"[DEBUG]   ✓ MATCH! Using existing ID: {tc['id']}")
                         break
+                if not existing_coll:
+                    print("[DEBUG]   ✗ No match found, will create new collection")
 
                 if existing_coll:
-                    self._collection_map[collection.id] = existing_coll["id"]
-                    self.report.add(
-                        ImportReportItem(
-                            "collection",
-                            "skipped",
-                            collection.id,
-                            existing_coll["id"],
-                            collection.name,
-                            "Exists on target",
+                    # Handle conflict based on strategy
+                    if self.config.conflict_strategy == "skip":
+                        # Skip and reuse existing collection
+                        self._collection_map[collection.id] = existing_coll["id"]
+                        self.report.add(
+                            ImportReportItem(
+                                "collection",
+                                "skipped",
+                                collection.id,
+                                existing_coll["id"],
+                                collection.name,
+                                "Already exists (skipped)",
+                            )
                         )
-                    )
-                    continue
+                        logger.debug(
+                            f"Skipped collection '{collection.name}' - already exists with ID {existing_coll['id']}"
+                        )
+                        continue
+
+                    elif self.config.conflict_strategy == "overwrite":
+                        # Update existing collection
+                        update_payload = {
+                            "name": collection.name,
+                            "description": collection.description,
+                            "parent_id": target_parent_id,
+                        }
+                        updated_coll = self.client.update_collection(
+                            existing_coll["id"], clean_for_create(update_payload)
+                        )
+                        self._collection_map[collection.id] = updated_coll["id"]
+                        self.report.add(
+                            ImportReportItem(
+                                "collection",
+                                "updated",
+                                collection.id,
+                                updated_coll["id"],
+                                collection.name,
+                            )
+                        )
+                        logger.debug(
+                            f"Updated collection '{collection.name}' (ID: {updated_coll['id']})"
+                        )
+                        continue
+
+                    elif self.config.conflict_strategy == "rename":
+                        # Create with a new name - fall through to creation logic below
+                        # We'll modify the name before creating
+                        pass
+
+                # Prepare payload for creation
+                collection_name = collection.name
+                if existing_coll and self.config.conflict_strategy == "rename":
+                    # Generate a unique name
+                    counter = 1
+                    while True:
+                        new_name = f"{collection.name} ({counter})"
+                        # Check if this name exists
+                        name_exists = False
+                        for tc in self.client.get_collections_tree(params={"archived": True}):
+                            if tc["name"] == new_name and tc.get("parent_id") == target_parent_id:
+                                name_exists = True
+                                break
+                        if not name_exists:
+                            collection_name = new_name
+                            logger.info(
+                                f"Renamed collection '{collection.name}' to '{collection_name}' to avoid conflict"
+                            )
+                            break
+                        counter += 1
 
                 payload = {
-                    "name": collection.name,
+                    "name": collection_name,
                     "description": collection.description,
                     "parent_id": target_parent_id,
                 }
@@ -568,9 +757,10 @@ class MetabaseImporter:
                 self._collection_map[collection.id] = new_coll["id"]
                 self.report.add(
                     ImportReportItem(
-                        "collection", "created", collection.id, new_coll["id"], collection.name
+                        "collection", "created", collection.id, new_coll["id"], collection_name
                     )
                 )
+                logger.debug(f"Created collection '{collection_name}' (ID: {new_coll['id']})")
 
             except Exception as e:
                 logger.error(f"Failed to import collection '{collection.name}': {e}")
@@ -929,12 +1119,60 @@ class MetabaseImporter:
                 )
                 card_data["collection_id"] = target_collection_id
 
-                # 3. Handle Conflicts (simplified for this example)
-                # A real implementation would query the target instance
-                if self.config.conflict_strategy == "skip":
-                    # Assume it doesn't exist for now
-                    pass
+                # 3. Handle Conflicts - check if card already exists
+                existing_card = self._find_existing_card_in_collection(
+                    card.name, target_collection_id
+                )
 
+                if existing_card:
+                    # Handle conflict based on strategy
+                    if self.config.conflict_strategy == "skip":
+                        # Skip this card and map to existing
+                        self._card_map[card.id] = existing_card["id"]
+                        self.report.add(
+                            ImportReportItem(
+                                "card",
+                                "skipped",
+                                card.id,
+                                existing_card["id"],
+                                card.name,
+                                "Already exists (skipped)",
+                            )
+                        )
+                        logger.debug(
+                            f"Skipped card '{card.name}' - already exists with ID {existing_card['id']}"
+                        )
+                        continue
+
+                    elif self.config.conflict_strategy == "overwrite":
+                        # Update existing card
+                        payload = clean_for_create(card_data)
+
+                        # Remove embedding settings if not configured to include them
+                        if not self.config.include_embedding_settings:
+                            payload.pop("enable_embedding", None)
+                            payload.pop("embedding_params", None)
+
+                        updated_card = self.client.update_card(existing_card["id"], payload)
+                        self._card_map[card.id] = updated_card["id"]
+                        self.report.add(
+                            ImportReportItem(
+                                "card", "updated", card.id, updated_card["id"], card.name
+                            )
+                        )
+                        logger.debug(f"Updated card '{card.name}' (ID: {updated_card['id']})")
+                        continue
+
+                    elif self.config.conflict_strategy == "rename":
+                        # Generate a unique name and create new card
+                        card_data["name"] = self._generate_unique_name(
+                            card.name, target_collection_id, "card"
+                        )
+                        logger.info(
+                            f"Renamed card '{card.name}' to '{card_data['name']}' to avoid conflict"
+                        )
+
+                # Create new card (either no conflict or rename strategy)
                 payload = clean_for_create(card_data)
 
                 # Remove embedding settings if not configured to include them
@@ -946,9 +1184,13 @@ class MetabaseImporter:
                 new_card = self.client.create_card(payload)
                 self._card_map[card.id] = new_card["id"]
                 self.report.add(
-                    ImportReportItem("card", "created", card.id, new_card["id"], card.name)
+                    ImportReportItem(
+                        "card", "created", card.id, new_card["id"], card_data.get("name", card.name)
+                    )
                 )
-                logger.debug(f"Successfully imported card {card.id} -> {new_card['id']}")
+                logger.debug(
+                    f"Successfully imported card '{card_data.get('name', card.name)}' {card.id} -> {new_card['id']}"
+                )
 
             except MetabaseAPIError as e:
                 error_msg = str(e)
@@ -1309,17 +1551,68 @@ class MetabaseImporter:
 
                     remapped_parameters.append(param_copy)
 
-                # 4. Create dashboard with basic info first
-                create_payload = {
-                    "name": payload["name"],
-                    "collection_id": target_collection_id,
-                    "description": payload.get("description"),
-                    "parameters": remapped_parameters,
-                }
-                new_dash = self.client.create_dashboard(create_payload)
+                # 4. Check for existing dashboard and handle conflicts
+                existing_dashboard = self._find_existing_dashboard_in_collection(
+                    dash.name, target_collection_id
+                )
 
-                # 5. Update dashboard with dashcards and other settings
+                dashboard_name = dash.name
+                dashboard_id = None
+                action_taken: str = "created"
+
+                if existing_dashboard:
+                    # Handle conflict based on strategy
+                    if self.config.conflict_strategy == "skip":
+                        # Skip this dashboard
+                        self.report.add(
+                            ImportReportItem(
+                                "dashboard",
+                                "skipped",
+                                dash.id,
+                                existing_dashboard["id"],
+                                dash.name,
+                                "Already exists (skipped)",
+                            )
+                        )
+                        logger.debug(
+                            f"Skipped dashboard '{dash.name}' - already exists with ID {existing_dashboard['id']}"
+                        )
+                        continue
+
+                    elif self.config.conflict_strategy == "overwrite":
+                        # Use existing dashboard ID for update
+                        dashboard_id = existing_dashboard["id"]
+                        action_taken = "updated"
+                        logger.debug(
+                            f"Will overwrite existing dashboard '{dash.name}' (ID: {dashboard_id})"
+                        )
+
+                    elif self.config.conflict_strategy == "rename":
+                        # Generate a unique name and create new dashboard
+                        dashboard_name = self._generate_unique_name(
+                            dash.name, target_collection_id, "dashboard"
+                        )
+                        logger.info(
+                            f"Renamed dashboard '{dash.name}' to '{dashboard_name}' to avoid conflict"
+                        )
+
+                # 5. Create or update dashboard
+                if dashboard_id is None:
+                    # Create new dashboard
+                    create_payload = {
+                        "name": dashboard_name,
+                        "collection_id": target_collection_id,
+                        "description": payload.get("description"),
+                        "parameters": remapped_parameters,
+                    }
+                    new_dash = self.client.create_dashboard(create_payload)
+                    dashboard_id = new_dash["id"]
+                    logger.debug(f"Created dashboard '{dashboard_name}' (ID: {dashboard_id})")
+
+                # 6. Update dashboard with dashcards and other settings
                 update_payload = {
+                    "name": dashboard_name,
+                    "description": payload.get("description"),
                     "parameters": remapped_parameters,
                     "cache_ttl": payload.get("cache_ttl"),
                 }
@@ -1345,7 +1638,7 @@ class MetabaseImporter:
                 if dashcards_to_import:
                     update_payload["dashcards"] = dashcards_to_import
                     logger.debug(
-                        f"Updating dashboard {new_dash['id']} with {len(dashcards_to_import)} dashcards"
+                        f"Updating dashboard {dashboard_id} with {len(dashcards_to_import)} dashcards"
                     )
 
                     # Verify no dashcard has problematic fields
@@ -1362,10 +1655,22 @@ class MetabaseImporter:
                 # Remove None values
                 update_payload = {k: v for k, v in update_payload.items() if v is not None}
 
-                updated_dash = self.client.update_dashboard(new_dash["id"], update_payload)
+                updated_dash = self.client.update_dashboard(dashboard_id, update_payload)
 
                 self.report.add(
-                    ImportReportItem("dashboard", "created", dash.id, updated_dash["id"], dash.name)
+                    ImportReportItem(
+                        "dashboard",
+                        cast(
+                            Literal["created", "updated", "skipped", "failed", "success", "error"],
+                            action_taken,
+                        ),
+                        dash.id,
+                        updated_dash["id"],
+                        dashboard_name,
+                    )
+                )
+                logger.debug(
+                    f"Successfully {action_taken} dashboard '{dashboard_name}' (ID: {updated_dash['id']})"
                 )
 
             except Exception as e:
