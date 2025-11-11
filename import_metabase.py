@@ -1324,6 +1324,15 @@ class MetabaseImporter:
                     "cache_ttl": payload.get("cache_ttl"),
                 }
 
+                # Include dashboard display settings
+                # width: Controls dashboard width mode (e.g., "fixed", "full")
+                if "width" in payload:
+                    update_payload["width"] = payload["width"]
+
+                # auto_apply_filters: Controls whether filters are automatically applied
+                if "auto_apply_filters" in payload:
+                    update_payload["auto_apply_filters"] = payload["auto_apply_filters"]
+
                 # Include embedding settings if configured
                 # Note: Embedding must be enabled in Metabase settings for these to work
                 if self.config.include_embedding_settings:

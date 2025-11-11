@@ -415,3 +415,42 @@ class TestDashboardFilterImport:
                 (p for p in create_payload["parameters"] if p["id"] == "date_filter"), None
             )
             assert date_param is not None
+
+    def test_import_dashboard_preserves_display_settings(self, setup_import_test):
+        """Test that dashboard display settings (width, auto_apply_filters) are preserved during import."""
+        config = ImportConfig(
+            target_url="https://target.example.com",
+            export_dir=str(setup_import_test["export_dir"]),
+            db_map_path=str(setup_import_test["db_map_path"]),
+            dry_run=False,
+        )
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_collections_tree.return_value = []
+
+            created_dashboard = {"id": 301, "name": "Sales Dashboard with Filters"}
+            mock_client.create_dashboard.return_value = created_dashboard
+            mock_client.update_dashboard.return_value = created_dashboard
+
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            importer._collection_map = {1: 10}
+            importer._card_map = {100: 200, 101: 201}
+
+            # Import dashboards
+            importer._import_dashboards()
+
+            # Verify update_dashboard was called with display settings
+            assert mock_client.update_dashboard.called
+            update_payload = mock_client.update_dashboard.call_args[0][1]
+
+            # Verify width setting is preserved
+            assert "width" in update_payload
+            assert update_payload["width"] == "fixed"
+
+            # Verify auto_apply_filters setting is preserved
+            assert "auto_apply_filters" in update_payload
+            assert update_payload["auto_apply_filters"] is True
