@@ -806,12 +806,13 @@ class TestConflictResolution:
             mock_client_class.return_value = mock_client
 
             # Mock existing collection
-            mock_client.get_collections_tree.return_value = [
-                {"id": 100, "name": "Test Collection", "parent_id": None}
-            ]
+            existing_collections = [{"id": 100, "name": "Test Collection", "parent_id": None}]
+            mock_client.get_collections_tree.return_value = existing_collections
 
             importer = MetabaseImporter(config)
             importer._load_export_package()
+            # Set _target_collections before calling _import_collections
+            importer._target_collections = existing_collections
             importer._import_collections()
 
             # Should skip and map to existing collection
@@ -838,13 +839,14 @@ class TestConflictResolution:
             mock_client_class.return_value = mock_client
 
             # Mock existing collection
-            mock_client.get_collections_tree.return_value = [
-                {"id": 100, "name": "Test Collection", "parent_id": None}
-            ]
+            existing_collections = [{"id": 100, "name": "Test Collection", "parent_id": None}]
+            mock_client.get_collections_tree.return_value = existing_collections
             mock_client.update_collection.return_value = {"id": 100, "name": "Test Collection"}
 
             importer = MetabaseImporter(config)
             importer._load_export_package()
+            # Set _target_collections before calling _import_collections
+            importer._target_collections = existing_collections
             importer._import_collections()
 
             # Should update existing collection
@@ -872,16 +874,20 @@ class TestConflictResolution:
             mock_client_class.return_value = mock_client
 
             # Mock existing collection with same name
-            # First call: check for "Test Collection" (exists)
+            existing_collections = [{"id": 100, "name": "Test Collection", "parent_id": None}]
+
+            # First call: initial fetch for _target_collections
             # Second call: check for "Test Collection (1)" (doesn't exist)
             mock_client.get_collections_tree.side_effect = [
-                [{"id": 100, "name": "Test Collection", "parent_id": None}],
-                [{"id": 100, "name": "Test Collection", "parent_id": None}],
+                existing_collections,
+                existing_collections,  # Still only has original collection
             ]
             mock_client.create_collection.return_value = {"id": 101, "name": "Test Collection (1)"}
 
             importer = MetabaseImporter(config)
             importer._load_export_package()
+            # Set _target_collections before calling _import_collections
+            importer._target_collections = existing_collections
             importer._import_collections()
 
             # Should create with renamed collection
