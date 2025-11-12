@@ -67,22 +67,6 @@ class MetabaseExporter:
         )
         return Manifest(meta=meta)
 
-    def _filter_embedding_settings(self, data: dict) -> dict:
-        """Remove embedding settings from data if not included in config.
-
-        Args:
-            data: The card or dashboard data dictionary
-
-        Returns:
-            A copy of the data with embedding settings removed if necessary
-        """
-        if not self.config.include_embedding_settings:
-            # Create a copy to avoid modifying the original
-            data = data.copy()
-            data.pop("enable_embedding", None)
-            data.pop("embedding_params", None)
-        return data
-
     def run_export(self) -> None:
         """Main entry point to start the export process."""
         logger.info(f"Starting Metabase export from {self.config.source_url}")
@@ -441,9 +425,7 @@ class MetabaseExporter:
             file_path_str = f"{base_path}/cards/card_{card_id}_{card_slug}.json"
             file_path = self.export_dir / file_path_str
 
-            # Filter embedding settings if not included in config
-            filtered_data = self._filter_embedding_settings(card_data)
-            write_json_file(filtered_data, file_path)
+            write_json_file(card_data, file_path)
             checksum = calculate_checksum(file_path)
 
             card_obj = Card(
@@ -477,9 +459,7 @@ class MetabaseExporter:
             file_path_str = f"{base_path}/dashboards/dash_{dashboard_id}_{dash_slug}.json"
             file_path = self.export_dir / file_path_str
 
-            # Filter embedding settings if not included in config
-            filtered_data = self._filter_embedding_settings(dashboard_data)
-            write_json_file(filtered_data, file_path)
+            write_json_file(dashboard_data, file_path)
             checksum = calculate_checksum(file_path)
 
             # Extract card IDs from dashcards

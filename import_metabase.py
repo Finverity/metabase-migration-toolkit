@@ -311,52 +311,6 @@ class MetabaseImporter:
             logger.warning(f"Failed to build table and field mappings: {e}", exc_info=True)
             # This is not fatal - we'll try to import without mappings
 
-    def _validate_embedding_enabled(self) -> None:
-        """Validates that embedding is enabled on the target instance when importing embedding settings."""
-        try:
-            is_enabled = self.client.is_embedding_enabled()
-
-            if not is_enabled:
-                logger.warning("=" * 80)
-                logger.warning("⚠️  EMBEDDING NOT ENABLED ON TARGET INSTANCE")
-                logger.warning("=" * 80)
-                logger.warning(
-                    "You are importing embedding settings (--include-embedding-settings), but"
-                )
-                logger.warning(
-                    "embedding does not appear to be enabled on the target Metabase instance."
-                )
-                logger.warning("")
-                logger.warning("IMPACT:")
-                logger.warning(
-                    "  - The enable_embedding and embedding_params fields will be imported"
-                )
-                logger.warning(
-                    "  - However, they will not function until embedding is enabled globally"
-                )
-                logger.warning("")
-                logger.warning("TO ENABLE EMBEDDING:")
-                logger.warning("  1. Log in to the target Metabase instance as an administrator")
-                logger.warning("  2. Go to Settings > Admin settings > Embedding")
-                logger.warning("  3. Enable 'Embedded analytics'")
-                logger.warning("  4. Set an embedding secret key (or generate one)")
-                logger.warning("")
-                logger.warning("NOTE:")
-                logger.warning(
-                    "  - Embedding may require a Pro or Enterprise license depending on your Metabase version"
-                )
-                logger.warning(
-                    "  - The embedding secret key is instance-specific and must be configured separately"
-                )
-                logger.warning("=" * 80)
-                logger.warning("")
-            else:
-                logger.info("✅ Embedding is enabled on the target instance.")
-
-        except MetabaseAPIError as e:
-            logger.error(f"Failed to fetch databases from target instance: {e}")
-            sys.exit(1)
-
     def _perform_dry_run(self) -> None:
         """Simulates the import process and reports on planned actions."""
         logger.info("--- Starting Dry Run ---")
@@ -443,10 +397,6 @@ class MetabaseImporter:
         # Build table and field ID mappings
         logger.info("Building table and field ID mappings...")
         self._build_table_and_field_mappings()
-
-        # Check if embedding is enabled when importing embedding settings
-        if self.config.include_embedding_settings:
-            self._validate_embedding_enabled()
 
         logger.info("Fetching existing collections from target...")
         self._target_collections = self.client.get_collections_tree(params={"archived": True})
@@ -1148,11 +1098,6 @@ class MetabaseImporter:
                         # Update existing card
                         payload = clean_for_create(card_data)
 
-                        # Remove embedding settings if not configured to include them
-                        if not self.config.include_embedding_settings:
-                            payload.pop("enable_embedding", None)
-                            payload.pop("embedding_params", None)
-
                         updated_card = self.client.update_card(existing_card["id"], payload)
                         self._card_map[card.id] = updated_card["id"]
                         self.report.add(
@@ -1174,12 +1119,6 @@ class MetabaseImporter:
 
                 # Create new card (either no conflict or rename strategy)
                 payload = clean_for_create(card_data)
-
-                # Remove embedding settings if not configured to include them
-                # Note: Embedding must be enabled in Metabase settings for these to work
-                if not self.config.include_embedding_settings:
-                    payload.pop("enable_embedding", None)
-                    payload.pop("embedding_params", None)
 
                 new_card = self.client.create_card(payload)
                 self._card_map[card.id] = new_card["id"]
@@ -1625,14 +1564,6 @@ class MetabaseImporter:
                 # auto_apply_filters: Controls whether filters are automatically applied
                 if "auto_apply_filters" in payload:
                     update_payload["auto_apply_filters"] = payload["auto_apply_filters"]
-
-                # Include embedding settings if configured
-                # Note: Embedding must be enabled in Metabase settings for these to work
-                if self.config.include_embedding_settings:
-                    if "enable_embedding" in payload:
-                        update_payload["enable_embedding"] = payload["enable_embedding"]
-                    if "embedding_params" in payload:
-                        update_payload["embedding_params"] = payload["embedding_params"]
 
                 # Only add dashcards if there are any to import
                 if dashcards_to_import:

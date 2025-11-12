@@ -298,20 +298,3 @@ class MetabaseClient:
     def get_field(self, field_id: int) -> Any:
         """Fetches metadata for a specific field."""
         return self._request("get", f"/field/{field_id}").json()
-
-    def is_embedding_enabled(self) -> bool:
-        """Check if embedding is enabled on the Metabase instance.
-
-        Returns:
-            True if embedding is enabled, False otherwise
-        """
-        try:
-            # Try to get session properties (available to all users)
-            response = self._request("get", "/session/properties").json()
-            # Check for enable-embedding setting
-            # The setting name uses kebab-case in the API
-            return bool(response.get("enable-embedding", False))
-        except Exception as e:
-            logger.warning(f"Could not determine if embedding is enabled: {e}")
-            # If we can't determine, assume it's not enabled
-            return False

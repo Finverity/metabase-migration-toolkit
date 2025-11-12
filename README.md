@@ -18,7 +18,6 @@ production use.
 - **Recursive Export:** Traverses the entire collection tree, preserving hierarchy.
 - **Selective Content:** Choose to include dashboards and archived items.
 - **Permissions Migration:** Export and import permission groups and access control settings.
-- **Embedding Settings Migration:** Export and import embedding configurations for dashboards and cards.
 - **Database Remapping:** Intelligently remaps questions and cards to new database IDs on the target instance.
 - **Table & Field ID Remapping:** Automatically remaps table IDs and field IDs in card queries (NEW!).
   - Captures table and field metadata during export
@@ -133,7 +132,6 @@ metabase-export \
 - `--include-dashboards` - Include dashboards in export
 - `--include-archived` - Include archived items
 - `--include-permissions` - Include permissions (groups and access control) in export
-- `--include-embedding-settings` - Include embedding settings (enable_embedding and embedding_params) in export
 - `--root-collections` - Comma-separated collection IDs to export (optional)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
 
@@ -179,7 +177,6 @@ metabase-import \
 - `--dry-run` - Preview changes without applying them
 - `--include-archived` - Include archived items in the import
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
-- `--include-embedding-settings` - Include embedding settings (enable_embedding and embedding_params) in import
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
 
 ## Table & Field ID Remapping
@@ -238,48 +235,3 @@ metabase-export --export-dir "./export" --include-permissions
 # Import with permissions
 metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permissions
 ```
-
-## Embedding Settings Migration
-
-The toolkit supports exporting and importing embedding settings for dashboards and cards. This includes the
-`enable_embedding` flag and `embedding_params` configuration.
-
-### Prerequisites
-
-- **Embedding must be enabled** in the Metabase Admin settings on both source and target instances
-- May require a **Pro or Enterprise license** depending on your Metabase version
-- The **embedding secret key** must be configured separately on each instance (it is NOT exported/imported for security reasons)
-
-### Usage
-
-**Export with embedding settings:**
-
-```bash
-metabase-export \
-    --export-dir "./export" \
-    --include-dashboards \
-    --include-embedding-settings
-```
-
-**Import with embedding settings:**
-
-```bash
-metabase-import \
-    --export-dir "./export" \
-    --db-map "./db_map.json" \
-    --include-embedding-settings
-```
-
-### Important Notes
-
-1. **Embedding must be enabled globally:** The toolkit will warn you if embedding is not enabled on the target
-   instance, but it will still import the settings. They won't function until embedding is enabled.
-
-2. **Secret key is instance-specific:** Each Metabase instance has its own embedding secret key. You must configure
-   this separately in the Admin settings on the target instance.
-
-3. **License requirements:** Depending on your Metabase version, embedding features may require a Pro or Enterprise
-   license.
-
-4. **Default behavior:** By default (without the `--include-embedding-settings` flag), embedding settings are **NOT**
-   exported or imported to avoid issues with instances that don't have embedding enabled.

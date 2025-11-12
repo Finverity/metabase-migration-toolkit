@@ -210,37 +210,6 @@ metabase-import \
     --conflict overwrite
 ```
 
-### Scenario 4: Migrate with Embedding Settings
-
-**Goal**: Migrate dashboards and cards with their embedding configurations
-
-**Prerequisites:**
-
-- Embedding must be enabled in Admin settings on both source and target instances
-- May require Pro or Enterprise license
-- Embedding secret key must be configured separately on target instance
-
-```bash
-# 1. Export with embedding settings
-metabase-export \
-    --export-dir "./migration_with_embedding" \
-    --include-dashboards \
-    --include-embedding-settings
-
-# 2. Import with embedding settings
-metabase-import \
-    --export-dir "./migration_with_embedding" \
-    --db-map "./db_map.json" \
-    --include-embedding-settings \
-    --conflict skip
-```
-
-**Important Notes:**
-
-- The toolkit will warn you if embedding is not enabled on the target instance
-- Embedding settings will be imported but won't function until embedding is enabled globally
-- The embedding secret key is NOT migrated (it's instance-specific and must be set manually)
-
 ---
 
 ## Troubleshooting
