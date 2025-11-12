@@ -21,7 +21,6 @@ class ExportConfig:
     include_dashboards: bool = False
     include_archived: bool = False
     include_permissions: bool = False
-    include_embedding_settings: bool = False
     root_collection_ids: list[int] | None = None
     log_level: str = "INFO"
 
@@ -41,7 +40,6 @@ class ImportConfig:
     dry_run: bool = False
     include_archived: bool = False
     apply_permissions: bool = False
-    include_embedding_settings: bool = False
     log_level: str = "INFO"
 
 
@@ -83,11 +81,6 @@ def get_export_args() -> ExportConfig:
         help="Include permissions (groups and access control) in the export",
     )
     parser.add_argument(
-        "--include-embedding-settings",
-        action="store_true",
-        help="Include embedding settings (enable_embedding and embedding_params) in the export",
-    )
-    parser.add_argument(
         "--root-collections",
         help="Comma-separated list of root collection IDs to export (empty=all)",
     )
@@ -116,7 +109,6 @@ def get_export_args() -> ExportConfig:
         include_dashboards=args.include_dashboards,
         include_archived=args.include_archived,
         include_permissions=args.include_permissions,
-        include_embedding_settings=args.include_embedding_settings,
         root_collection_ids=(
             [int(c_id) for c_id in args.root_collections.split(",")]
             if args.root_collections
@@ -177,11 +169,6 @@ def get_import_args() -> ImportConfig:
         help="Apply permissions from the export (requires admin privileges)",
     )
     parser.add_argument(
-        "--include-embedding-settings",
-        action="store_true",
-        help="Include embedding settings (enable_embedding and embedding_params) in the import",
-    )
-    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -207,6 +194,5 @@ def get_import_args() -> ImportConfig:
         dry_run=args.dry_run,
         include_archived=args.include_archived,
         apply_permissions=args.apply_permissions,
-        include_embedding_settings=args.include_embedding_settings,
         log_level=args.log_level,
     )
