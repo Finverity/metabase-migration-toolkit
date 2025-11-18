@@ -209,7 +209,6 @@ metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permiss
 **Documentation:**
 
 - [Permissions Migration Guide](../docs/PERMISSIONS_MIGRATION.md) - Comprehensive guide
-- [Implementation Details](../doc/PERMISSIONS_IMPLEMENTATION.md) - Technical details
 
 ## Development
 
