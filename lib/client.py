@@ -123,7 +123,9 @@ class MetabaseClient:
             (requests.exceptions.ConnectionError, requests.exceptions.Timeout, MetabaseAPIError)
         ),
         before_sleep=lambda retry_state: logger.warning(
-            f"Retrying API call due to {retry_state.outcome.exception()} (Attempt {retry_state.attempt_number})"
+            f"Retrying API call due to "
+            f"{retry_state.outcome.exception() if retry_state.outcome is not None else 'unknown error'} "
+            f"(Attempt {retry_state.attempt_number})",
         ),
     )
     def _request(self, method: str, endpoint: str, **kwargs: Any) -> requests.Response:

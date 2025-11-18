@@ -1,0 +1,12 @@
+{
+  "by_id": {
+    "3": 7,
+    "5": 9,
+    "8": 12
+  },
+  "by_name": {
+    "analytics_db": 7,
+    "events_db": 9,
+    "warehouse_db": 12
+  }
+}

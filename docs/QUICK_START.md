@@ -353,6 +353,14 @@ MB_TARGET_PASSWORD=password123
 2. Falls back to `by_name` for name-based mapping
 3. Fails if no mapping found
 
+For concrete examples, see the sample mapping files in the repository:
+
+- `samples/db_map/db_map.single_db.json` – minimal single-database mapping
+- `samples/db_map/db_map.multi_db.json` – multi-database mapping, useful for complex environments
+
+You can also look at the example flows in `samples/flows/` and the CI/CD template in
+`samples/cicd/github-actions-export-import.yml` for end-to-end usage patterns.
+
 ---
 
 ## Best Practices
@@ -413,6 +421,6 @@ The Metabase Migration Toolkit now provides:
 
 ## Learn More
 
-- **Table & Field ID Remapping**: See [doc/TABLE_FIELD_ID_REMAPPING.md](doc/TABLE_FIELD_ID_REMAPPING.md)
-- **Permissions Migration**: See [doc/PERMISSIONS_MIGRATION.md](doc/PERMISSIONS_MIGRATION.md)
-- **Full Documentation**: See [README.md](README.md)
+- **Table & Field ID Remapping**: See [docs/TABLE_FIELD_ID_REMAPPING.md](TABLE_FIELD_ID_REMAPPING.md)
+- **Permissions Migration**: See [docs/PERMISSIONS_MIGRATION.md](PERMISSIONS_MIGRATION.md)
+- **Full Documentation**: See [README.md](../README.md)

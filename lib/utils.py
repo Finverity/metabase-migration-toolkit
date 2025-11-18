@@ -22,12 +22,12 @@ class CustomJsonEncoder(json.JSONEncoder):
 
     def default(self, o: Any) -> Any:
         """Encode dataclasses as dictionaries."""
-        if dataclasses.is_dataclass(o):
+        if dataclasses.is_dataclass(o) and not isinstance(o, type):
             return dataclasses.asdict(o)
         return super().default(o)
 
 
-def setup_logging(name_or_level: str = "INFO", level: str = None) -> logging.Logger:
+def setup_logging(name_or_level: str = "INFO", level: str | None = None) -> logging.Logger:
     """Configures and returns a structured logger.
 
     Args:
