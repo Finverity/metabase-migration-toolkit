@@ -208,9 +208,7 @@ metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permiss
 
 **Documentation:**
 
-- [Permissions Migration Guide](../doc/PERMISSIONS_MIGRATION.md) - Comprehensive guide
-- [Quick Reference](../PERMISSIONS_QUICKREF.md) - Quick reference card
-- [Implementation Details](../doc/PERMISSIONS_IMPLEMENTATION.md) - Technical details
+- [Permissions Migration Guide](../docs/PERMISSIONS_MIGRATION.md) - Comprehensive guide
 
 ## Development
 
@@ -469,7 +467,7 @@ We welcome contributions! Here's how to get started:
 - Ensure all custom permission groups exist on target instance
 - Verify database mapping is complete in `db_map.json`
 - Check that import user has admin privileges
-- See [Permissions Migration Guide](../doc/PERMISSIONS_MIGRATION.md) for details
+- See [Permissions Migration Guide](../docs/PERMISSIONS_MIGRATION.md) for details
 
 ### CI/CD Issues
 

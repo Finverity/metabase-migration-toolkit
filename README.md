@@ -224,7 +224,7 @@ For more details, see [Table ID Remapping Guide](TABLE_ID_REMAPPING_FIX.md).
 ## Permissions Migration
 
 The toolkit supports exporting and importing permissions to solve the common "403 Forbidden" errors after migration.
-See the [Permissions Migration Guide](doc/PERMISSIONS_MIGRATION.md) for detailed instructions.
+See the [Permissions Migration Guide](docs/PERMISSIONS_MIGRATION.md) for detailed instructions.
 
 **Quick example:**
 
@@ -235,3 +235,15 @@ metabase-export --export-dir "./export" --include-permissions
 # Import with permissions
 metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permissions
 ```
+
+## Samples and Examples
+
+The repository includes a `samples/` directory with ready-to-use templates:
+
+- `samples/db_map/db_map.single_db.json` – minimal single-database mapping example
+- `samples/db_map/db_map.multi_db.json` – example mapping for multiple databases
+- `samples/flows/export_import_basic.sh` – basic end-to-end export/import flow using `.env`
+- `samples/flows/export_import_multi_env.sh` – example promotion flow between environments
+- `samples/cicd/github-actions-export-import.yml` – minimal GitHub Actions workflow showing export/import in CI
+
+Use these as starting points and adapt them to your own environments and naming conventions.

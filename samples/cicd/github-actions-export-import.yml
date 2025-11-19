@@ -1,0 +1,160 @@
+name: Metabase Sync (Direct Environment-to-Environment)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_environment:
+        description: 'Source environment to export from'
+        type: environment
+        required: true
+      target_environment:
+        description: 'Target environment to import to'
+        type: environment
+        required: true
+      conflict_strategy:
+        description: 'How to handle conflicts with existing items'
+        type: choice
+        required: true
+        default: 'overwrite'
+        options:
+          - skip
+          - overwrite
+
+jobs:
+  export:
+    name: Export from Source
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.source_environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install metabase-migration-toolkit 1.0.7
+        run: |
+          python -m pip install --upgrade pip
+          pip install "metabase-migration-toolkit==1.0.7"
+      - name: Export all Metabase metadata
+        env:
+          MB_SOURCE_URL: ${{ vars.METABASE_URL }}
+          MB_SOURCE_USERNAME: ${{ vars.METABASE_USER }}
+          MB_SOURCE_PASSWORD: ${{ secrets.METABASE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "=== Starting Metabase Export ==="
+          echo "Source environment: ${{ inputs.source_environment }}"
+          # Do NOT print URL or credentials
+          metabase-export \
+            --source-url "${MB_SOURCE_URL}" \
+            --source-username "${MB_SOURCE_USERNAME}" \
+            --source-password "${MB_SOURCE_PASSWORD}" \
+            --export-dir "./metabase-state" \
+            --root-collections "24" \
+            --include-dashboards \
+            --include-archived \
+            --log-level INFO
+          echo "Export complete."
+      - name: Upload exported Metabase state
+        uses: actions/upload-artifact@v4
+        with:
+          name: metabase-export-${{ github.run_id }}
+          path: metabase-state/
+          retention-days: 1
+
+      - name: Upload database mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-map-${{ github.run_id }}
+          path: db_map.json
+          retention-days: 1
+
+  import:
+    name: Import to Target
+    runs-on: ubuntu-latest
+    needs: export
+    environment: ${{ inputs.target_environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download exported Metabase state
+        uses: actions/download-artifact@v4
+        with:
+          name: metabase-export-${{ github.run_id }}
+          path: metabase-state/
+
+      - name: Download database mapping
+        uses: actions/download-artifact@v4
+        with:
+          name: db-map-${{ github.run_id }}
+          path: .
+
+      # Removed broken "Download scripts" step
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install metabase-migration-toolkit 1.0.7
+        run: |
+          python -m pip install --upgrade pip
+          pip install "metabase-migration-toolkit==1.0.7"
+      - name: Verify export files and database mapping exist
+        run: |
+          set -euo pipefail
+          echo "=== Verifying files ==="
+          if [ ! -d "metabase-state" ]; then
+            echo "❌ ERROR: metabase-state directory not found"
+            exit 1
+          fi
+          if [ ! -f "metabase-state/manifest.json" ]; then
+            echo "❌ ERROR: manifest.json missing in export"
+            exit 1
+          fi
+          if [ ! -f "db_map.json" ]; then
+            echo "❌ ERROR: db_map.json missing"
+            exit 1
+          fi
+          echo "All required files present."
+      - name: Import all Metabase metadata
+        env:
+          MB_TARGET_URL: ${{ vars.METABASE_URL }}
+          MB_TARGET_USERNAME: ${{ vars.METABASE_USER }}
+          MB_TARGET_PASSWORD: ${{ secrets.METABASE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "=== Starting Metabase Import ==="
+          echo "Target environment: ${{ inputs.target_environment }}"
+          echo "Conflict strategy: ${{ inputs.conflict_strategy }}"
+          metabase-import \
+            --target-url "${MB_TARGET_URL}" \
+            --target-username "${MB_TARGET_USERNAME}" \
+            --target-password "${MB_TARGET_PASSWORD}" \
+            --export-dir "./metabase-state" \
+            --db-map "./db_map.json" \
+            --conflict ${{ inputs.conflict_strategy }} \
+            --log-level INFO
+          echo "Import complete."
+      - name: Sync Summary
+        if: always()
+        run: |
+          echo "## 📊 Metabase Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Source Environment:** \`${{ inputs.source_environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Environment:** \`${{ inputs.target_environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Conflict Strategy:** \`${{ inputs.conflict_strategy }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Synced using:** metabase-migration-toolkit" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ **Status:** Sync completed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Status:** Sync failed" >> $GITHUB_STEP_SUMMARY
+          fi
