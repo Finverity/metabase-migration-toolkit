@@ -428,6 +428,9 @@ class MetabaseExporter:
             write_json_file(card_data, file_path)
             checksum = calculate_checksum(file_path)
 
+            # Check if this card is a model (dataset)
+            is_model = card_data.get("dataset", False)
+
             card_obj = Card(
                 id=card_id,
                 name=card_data["name"],
@@ -436,13 +439,16 @@ class MetabaseExporter:
                 file_path=file_path_str,
                 checksum=checksum,
                 archived=card_data.get("archived", False),
+                dataset=is_model,
             )
             self.manifest.cards.append(card_obj)
 
             # Mark as exported
             self._exported_cards.add(card_id)
 
-            logger.info(f"  -> Exported Card: '{card_data['name']}' (ID: {card_id})")
+            # Log with model/question distinction
+            item_type = "Model" if is_model else "Card"
+            logger.info(f"  -> Exported {item_type}: '{card_data['name']}' (ID: {card_id})")
 
         except MetabaseAPIError as e:
             logger.error(f"Failed to export card ID {card_id}: {e}")

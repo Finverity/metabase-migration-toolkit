@@ -1031,10 +1031,16 @@ class MetabaseImporter:
             if not card.archived or self.config.include_archived
         ]
 
+        # Count models vs questions
+        model_count = sum(1 for card in cards_to_import if card.dataset)
+        question_count = len(cards_to_import) - model_count
+
         # Sort cards in topological order (dependencies first)
         logger.info("Analyzing card dependencies...")
         sorted_cards = self._topological_sort_cards(cards_to_import)
-        logger.info(f"Importing {len(sorted_cards)} cards in dependency order...")
+        logger.info(
+            f"Importing {len(sorted_cards)} cards ({model_count} models, {question_count} questions) in dependency order..."
+        )
 
         for card in tqdm(sorted_cards, desc="Importing Cards"):
             try:
@@ -1105,7 +1111,13 @@ class MetabaseImporter:
                                 "card", "updated", card.id, updated_card["id"], card.name
                             )
                         )
-                        logger.debug(f"Updated card '{card.name}' (ID: {updated_card['id']})")
+
+                        # Log with model/question distinction
+                        is_model = card_data.get("dataset", False)
+                        item_type = "Model" if is_model else "Card"
+                        logger.debug(
+                            f"Updated {item_type} '{card.name}' (ID: {updated_card['id']})"
+                        )
                         continue
 
                     elif self.config.conflict_strategy == "rename":
@@ -1127,8 +1139,12 @@ class MetabaseImporter:
                         "card", "created", card.id, new_card["id"], card_data.get("name", card.name)
                     )
                 )
+
+                # Log with model/question distinction
+                is_model = card_data.get("dataset", False)
+                item_type = "Model" if is_model else "Card"
                 logger.debug(
-                    f"Successfully imported card '{card_data.get('name', card.name)}' {card.id} -> {new_card['id']}"
+                    f"Successfully imported {item_type} '{card_data.get('name', card.name)}' {card.id} -> {new_card['id']}"
                 )
 
             except MetabaseAPIError as e:
