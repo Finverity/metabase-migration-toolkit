@@ -479,7 +479,7 @@ class MetabaseImporter:
     def _find_existing_card_in_collection(
         self, name: str, collection_id: int | None
     ) -> dict[Any, Any] | None:
-        """Finds an existing card by name in a specific collection.
+        """Finds an existing card or model by name in a specific collection.
 
         Args:
             name: The name of the card to find
@@ -493,9 +493,10 @@ class MetabaseImporter:
             coll_id: int | str = "root" if collection_id is None else collection_id
             items = self.client.get_collection_items(coll_id)
 
-            # Filter for cards (model='card') with matching name
+            # Filter for cards (model='card' or 'dataset') with matching name
+            # Models are returned as model='dataset' in Metabase API
             for item in items.get("data", []):
-                if item.get("model") == "card" and item.get("name") == name:
+                if item.get("model") in ("card", "dataset") and item.get("name") == name:
                     return item  # type: ignore[no-any-return]
             return None
         except Exception as e:

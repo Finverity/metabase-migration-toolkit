@@ -246,9 +246,13 @@ class MetabaseExporter:
                     )
 
     def _process_collection_items(self, collection_id: Any, base_path: str) -> None:
-        """Fetches and processes all items (cards, dashboards) in a single collection."""
+        """Fetches and processes all items (cards, dashboards, models) in a single collection."""
         try:
-            params = {"models": ["card", "dashboard"], "archived": self.config.include_archived}
+            # Include 'dataset' to fetch models (Metabase models are returned as model='dataset')
+            params = {
+                "models": ["card", "dashboard", "dataset"],
+                "archived": self.config.include_archived,
+            }
             items_response = self.client.get_collection_items(collection_id, params)
             items = items_response.get("data", [])
 
@@ -258,7 +262,8 @@ class MetabaseExporter:
 
             for item in items:
                 model = item.get("model")
-                if model == "card":
+                # Both 'card' and 'dataset' (models) are exported as cards
+                if model in ("card", "dataset"):
                     self._export_card_with_dependencies(item["id"], base_path)
                 elif model == "dashboard" and self.config.include_dashboards:
                     self._export_dashboard(item["id"], base_path)
