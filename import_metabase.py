@@ -479,7 +479,7 @@ class MetabaseImporter:
     def _find_existing_card_in_collection(
         self, name: str, collection_id: int | None
     ) -> dict[Any, Any] | None:
-        """Finds an existing card by name in a specific collection.
+        """Finds an existing card or model by name in a specific collection.
 
         Args:
             name: The name of the card to find
@@ -493,9 +493,10 @@ class MetabaseImporter:
             coll_id: int | str = "root" if collection_id is None else collection_id
             items = self.client.get_collection_items(coll_id)
 
-            # Filter for cards (model='card') with matching name
+            # Filter for cards (model='card' or 'dataset') with matching name
+            # Models are returned as model='dataset' in Metabase API
             for item in items.get("data", []):
-                if item.get("model") == "card" and item.get("name") == name:
+                if item.get("model") in ("card", "dataset") and item.get("name") == name:
                     return item  # type: ignore[no-any-return]
             return None
         except Exception as e:
@@ -1031,10 +1032,16 @@ class MetabaseImporter:
             if not card.archived or self.config.include_archived
         ]
 
+        # Count models vs questions
+        model_count = sum(1 for card in cards_to_import if card.dataset)
+        question_count = len(cards_to_import) - model_count
+
         # Sort cards in topological order (dependencies first)
         logger.info("Analyzing card dependencies...")
         sorted_cards = self._topological_sort_cards(cards_to_import)
-        logger.info(f"Importing {len(sorted_cards)} cards in dependency order...")
+        logger.info(
+            f"Importing {len(sorted_cards)} cards ({model_count} models, {question_count} questions) in dependency order..."
+        )
 
         for card in tqdm(sorted_cards, desc="Importing Cards"):
             try:
@@ -1105,7 +1112,13 @@ class MetabaseImporter:
                                 "card", "updated", card.id, updated_card["id"], card.name
                             )
                         )
-                        logger.debug(f"Updated card '{card.name}' (ID: {updated_card['id']})")
+
+                        # Log with model/question distinction
+                        is_model = card_data.get("dataset", False)
+                        item_type = "Model" if is_model else "Card"
+                        logger.debug(
+                            f"Updated {item_type} '{card.name}' (ID: {updated_card['id']})"
+                        )
                         continue
 
                     elif self.config.conflict_strategy == "rename":
@@ -1127,8 +1140,12 @@ class MetabaseImporter:
                         "card", "created", card.id, new_card["id"], card_data.get("name", card.name)
                     )
                 )
+
+                # Log with model/question distinction
+                is_model = card_data.get("dataset", False)
+                item_type = "Model" if is_model else "Card"
                 logger.debug(
-                    f"Successfully imported card '{card_data.get('name', card.name)}' {card.id} -> {new_card['id']}"
+                    f"Successfully imported {item_type} '{card_data.get('name', card.name)}' {card.id} -> {new_card['id']}"
                 )
 
             except MetabaseAPIError as e:

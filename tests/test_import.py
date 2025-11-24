@@ -898,3 +898,156 @@ class TestConflictResolution:
             mock_client.create_collection.assert_called_once()
             call_args = mock_client.create_collection.call_args[0][0]
             assert call_args["name"] == "Test Collection (1)"
+
+
+class TestModelImport:
+    """Test suite for importing Metabase models (cards with dataset=True)."""
+
+    def test_import_model_preserves_dataset_field(self, sample_import_config, tmp_path):
+        """Test that importing a model preserves the dataset=True field."""
+        import dataclasses
+
+        from lib.models import Card, Manifest, ManifestMeta
+        from tests.fixtures.sample_responses import SAMPLE_MODEL
+
+        # Setup export directory with model data
+        export_dir = tmp_path / "export"
+        export_dir.mkdir()
+        cards_dir = export_dir / "cards"
+        cards_dir.mkdir()
+
+        # Write model JSON file
+        model_file = cards_dir / "card_102_customer-base-model.json"
+        with open(model_file, "w") as f:
+            json.dump(SAMPLE_MODEL, f)
+
+        # Create manifest with model
+        manifest = Manifest(
+            meta=ManifestMeta(
+                source_url="https://source.example.com",
+                export_timestamp="2025-01-01T00:00:00Z",
+                tool_version="1.0.0",
+                cli_args={},
+            ),
+            cards=[
+                Card(
+                    id=102,
+                    name="Customer Base Model",
+                    collection_id=None,
+                    database_id=2,
+                    file_path="cards/card_102_customer-base-model.json",
+                    checksum="abc123",
+                    dataset=True,  # Model flag
+                )
+            ],
+        )
+
+        # Write manifest
+        manifest_file = export_dir / "manifest.json"
+        with open(manifest_file, "w") as f:
+            json.dump(dataclasses.asdict(manifest), f)
+
+        # Create db_map file
+        db_map_data = {"by_id": {"2": 3}, "by_name": {}}
+        db_map_file = export_dir / "db_map.json"
+        with open(db_map_file, "w") as f:
+            json.dump(db_map_data, f)
+
+        # Setup import config
+        config = ImportConfig(
+            target_url="https://target.example.com",
+            export_dir=str(export_dir),
+            db_map_path=str(db_map_file),
+        )
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = [{"id": 3, "name": "Target DB"}]
+            mock_client.get_collections_tree.return_value = []
+            mock_client.create_card.return_value = {"id": 202, "name": "Customer Base Model"}
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            importer._import_cards()
+
+            # Verify create_card was called with dataset=True
+            mock_client.create_card.assert_called_once()
+            call_args = mock_client.create_card.call_args[0][0]
+            assert call_args["dataset"] is True
+            assert call_args["name"] == "Customer Base Model"
+
+    def test_import_question_without_dataset_field(self, sample_import_config, tmp_path):
+        """Test that importing a regular question works correctly."""
+        import dataclasses
+
+        from lib.models import Card, Manifest, ManifestMeta
+        from tests.fixtures.sample_responses import SAMPLE_CARD
+
+        # Setup export directory with card data
+        export_dir = tmp_path / "export"
+        export_dir.mkdir()
+        cards_dir = export_dir / "cards"
+        cards_dir.mkdir()
+
+        # Write card JSON file
+        card_file = cards_dir / "card_100_monthly-revenue.json"
+        with open(card_file, "w") as f:
+            json.dump(SAMPLE_CARD, f)
+
+        # Create manifest with card (no dataset field)
+        manifest = Manifest(
+            meta=ManifestMeta(
+                source_url="https://source.example.com",
+                export_timestamp="2025-01-01T00:00:00Z",
+                tool_version="1.0.0",
+                cli_args={},
+            ),
+            cards=[
+                Card(
+                    id=100,
+                    name="Monthly Revenue",
+                    collection_id=None,
+                    database_id=2,
+                    file_path="cards/card_100_monthly-revenue.json",
+                    checksum="def456",
+                    dataset=False,  # Regular question
+                )
+            ],
+        )
+
+        # Write manifest
+        manifest_file = export_dir / "manifest.json"
+        with open(manifest_file, "w") as f:
+            json.dump(dataclasses.asdict(manifest), f)
+
+        # Create db_map file
+        db_map_data = {"by_id": {"2": 3}, "by_name": {}}
+        db_map_file = export_dir / "db_map.json"
+        with open(db_map_file, "w") as f:
+            json.dump(db_map_data, f)
+
+        # Setup import config
+        config = ImportConfig(
+            target_url="https://target.example.com",
+            export_dir=str(export_dir),
+            db_map_path=str(db_map_file),
+        )
+
+        with patch("import_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = [{"id": 3, "name": "Target DB"}]
+            mock_client.get_collections_tree.return_value = []
+            mock_client.create_card.return_value = {"id": 200, "name": "Monthly Revenue"}
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            importer._import_cards()
+
+            # Verify create_card was called without dataset field (or dataset=False)
+            mock_client.create_card.assert_called_once()
+            call_args = mock_client.create_card.call_args[0][0]
+            # dataset field should either not be present or be False
+            assert call_args.get("dataset", False) is False
+            assert call_args["name"] == "Monthly Revenue"

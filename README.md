@@ -8,7 +8,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 This toolkit provides two command-line tools, `metabase-export` and `metabase-import`, designed for exporting and
-importing Metabase content (collections, questions, and dashboards) between instances.
+importing Metabase content (collections, questions, models, and dashboards) between instances.
 
 It's built to be robust, handling API rate limits, pagination, and providing clear logging and error handling for
 production use.
@@ -17,6 +17,7 @@ production use.
 
 - **Recursive Export:** Traverses the entire collection tree, preserving hierarchy.
 - **Selective Content:** Choose to include dashboards and archived items.
+- **Model Support:** Fully supports Metabase models (cards with `dataset=true`), preserving their model status during migration.
 - **Permissions Migration:** Export and import permission groups and access control settings.
 - **Database Remapping:** Intelligently remaps questions and cards to new database IDs on the target instance.
 - **Table & Field ID Remapping:** Automatically remaps table IDs and field IDs in card queries (NEW!).

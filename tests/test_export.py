@@ -304,3 +304,49 @@ class TestExportDirectory:
 
             # Directory should not exist yet
             assert not exporter.export_dir.exists()
+
+
+class TestModelExport:
+    """Test suite for exporting Metabase models (cards with dataset=True)."""
+
+    def test_export_model_preserves_dataset_field(self, sample_export_config, tmp_path):
+        """Test that exporting a model preserves the dataset=True field."""
+        from tests.fixtures.sample_responses import SAMPLE_MODEL
+
+        config = ExportConfig(source_url="https://example.com", export_dir=str(tmp_path / "export"))
+
+        with patch("export_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = SAMPLE_MODEL
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card(102, "test-collection")
+
+            # Check that the card was added to manifest with dataset=True
+            assert len(exporter.manifest.cards) == 1
+            exported_card = exporter.manifest.cards[0]
+            assert exported_card.id == 102
+            assert exported_card.name == "Customer Base Model"
+            assert exported_card.dataset is True
+
+    def test_export_question_has_dataset_false(self, sample_export_config, tmp_path):
+        """Test that exporting a regular question has dataset=False."""
+        from tests.fixtures.sample_responses import SAMPLE_CARD
+
+        config = ExportConfig(source_url="https://example.com", export_dir=str(tmp_path / "export"))
+
+        with patch("export_metabase.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = SAMPLE_CARD
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card(100, "test-collection")
+
+            # Check that the card was added to manifest with dataset=False (default)
+            assert len(exporter.manifest.cards) == 1
+            exported_card = exporter.manifest.cards[0]
+            assert exported_card.id == 100
+            assert exported_card.name == "Monthly Revenue"
+            assert exported_card.dataset is False

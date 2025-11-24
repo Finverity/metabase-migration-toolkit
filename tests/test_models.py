@@ -85,6 +85,29 @@ class TestCard:
         assert "name" in fields
         assert "collection_id" in fields
         assert "database_id" in fields
+        assert "dataset" in fields
+
+    def test_card_as_model(self):
+        """Test creating a Card as a model (dataset=True)."""
+        model = Card(id=100, name="Test Model", collection_id=1, database_id=1, dataset=True)
+
+        assert model.id == 100
+        assert model.name == "Test Model"
+        assert model.dataset is True
+
+    def test_card_as_question(self):
+        """Test creating a Card as a question (dataset=False, default)."""
+        question = Card(id=101, name="Test Question", collection_id=1, database_id=1)
+
+        assert question.id == 101
+        assert question.name == "Test Question"
+        assert question.dataset is False  # Default value
+
+    def test_card_dataset_field_explicit_false(self):
+        """Test creating a Card with dataset explicitly set to False."""
+        card = Card(id=102, name="Test Card", collection_id=1, database_id=1, dataset=False)
+
+        assert card.dataset is False
 
 
 class TestDashboard:

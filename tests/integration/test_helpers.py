@@ -384,11 +384,11 @@ class MetabaseTestHelper:
             return []
 
     def get_cards_in_collection(self, collection_id: int) -> list[dict[str, Any]]:
-        """Get all cards in a collection."""
+        """Get all cards and models in a collection."""
         try:
             response = requests.get(
                 f"{self.api_url}/collection/{collection_id}/items",
-                params={"models": "card"},
+                params={"models": ["card", "dataset"]},
                 headers=self._get_headers(),
                 timeout=10,
             )

@@ -69,6 +69,62 @@ SAMPLE_CARD_WITH_DEPENDENCY = {
     "updated_at": "2025-01-22T16:45:00.000Z",
 }
 
+SAMPLE_MODEL = {
+    "id": 102,
+    "name": "Customer Base Model",
+    "description": "Curated customer data model",
+    "collection_id": 1,
+    "database_id": 2,
+    "dataset": True,  # This marks it as a model
+    "dataset_query": {
+        "type": "query",
+        "database": 2,
+        "query": {
+            "source-table": 15,
+            "fields": [
+                ["field", 20, None],  # customer_id
+                ["field", 21, None],  # customer_name
+                ["field", 22, None],  # email
+                ["field", 23, None],  # created_at
+            ],
+        },
+    },
+    "display": "table",
+    "visualization_settings": {},
+    "archived": False,
+    "result_metadata": [
+        {"name": "customer_id", "display_name": "Customer ID", "base_type": "type/Integer"},
+        {"name": "customer_name", "display_name": "Customer Name", "base_type": "type/Text"},
+        {"name": "email", "display_name": "Email", "base_type": "type/Text"},
+        {"name": "created_at", "display_name": "Created At", "base_type": "type/DateTime"},
+    ],
+    "created_at": "2025-01-08T09:00:00.000Z",
+    "updated_at": "2025-01-20T14:30:00.000Z",
+    "creator_id": 1,
+    "creator": {"id": 1, "email": "admin@example.com", "first_name": "Admin", "last_name": "User"},
+}
+
+SAMPLE_QUESTION_BASED_ON_MODEL = {
+    "id": 103,
+    "name": "Active Customers",
+    "description": "Question based on Customer Base Model",
+    "collection_id": 1,
+    "database_id": 2,
+    "dataset_query": {
+        "type": "query",
+        "database": 2,
+        "query": {
+            "source-table": "card__102",  # Depends on model 102
+            "filter": ["=", ["field", "status", {"base-type": "type/Text"}], "Active"],
+        },
+    },
+    "display": "table",
+    "visualization_settings": {},
+    "archived": False,
+    "created_at": "2025-01-15T10:00:00.000Z",
+    "updated_at": "2025-01-22T11:00:00.000Z",
+}
+
 SAMPLE_DASHBOARD = {
     "id": 200,
     "name": "Marketing Overview",

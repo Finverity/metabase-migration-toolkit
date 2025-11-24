@@ -36,6 +36,7 @@ class Card:
     checksum: str = ""
     archived: bool = False
     dataset_query: dict[str, Any] | None = None
+    dataset: bool = False  # True if this card is a model (dataset)
 
 
 @dataclasses.dataclass
