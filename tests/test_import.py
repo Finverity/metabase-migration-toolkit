@@ -28,9 +28,9 @@ class TestMetabaseImporterInit:
             assert importer.manifest is None
             assert importer.db_map is None
             assert isinstance(importer.report, ImportReport)
-            assert importer._collection_map == {}
-            assert importer._card_map == {}
-            assert importer._target_collections == []
+            assert importer.id_remapper is None
+            assert importer.validator is None
+            assert importer.conflict_resolver is None
 
     def test_init_creates_client(self, sample_import_config):
         """Test that initialization creates a MetabaseClient."""
