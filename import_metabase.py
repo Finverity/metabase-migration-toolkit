@@ -722,7 +722,11 @@ class MetabaseImporter:
                 )
 
     def _extract_card_dependencies(self, card_data: dict) -> set[int]:
-        """Extracts card IDs that this card depends on (references in source-table).
+        """Extracts card IDs that this card depends on.
+
+        Handles both:
+        - MBQL card references (format: "card__123" in source-table)
+        - Native SQL card references (format: {{#123-name}} in native queries)
 
         Returns a set of card IDs that must be imported before this card.
         """
@@ -751,6 +755,22 @@ class MetabaseImporter:
                     dependencies.add(card_id)
                 except ValueError:
                     logger.warning(f"Invalid card reference in join: {join_source_table}")
+
+        # Check for card references in native SQL queries (format: {{#123-name}})
+        native_query = dataset_query.get("native", {})
+        if native_query and isinstance(native_query, dict):
+            sql = native_query.get("query")
+            if sql and isinstance(sql, str):
+                # Pattern matches {{#123-anything}} where 123 is the card ID
+                pattern = r"\{\{#(\d+)-[^}]+\}\}"
+                matches = re.findall(pattern, sql)
+                for match in matches:
+                    try:
+                        card_id = int(match)
+                        dependencies.add(card_id)
+                        logger.debug(f"Found SQL card reference dependency: card {card_id}")
+                    except ValueError:
+                        logger.warning(f"Invalid card ID in SQL reference: {match}")
 
         return dependencies
 
@@ -879,6 +899,49 @@ class MetabaseImporter:
         # Primitive values (strings, numbers, booleans, None) - return as-is
         return data
 
+    def _remap_native_sql_card_references(self, sql: str | None) -> str | None:
+        """Remaps card ID references in native SQL queries.
+
+        Metabase native SQL queries can reference other cards/models using the syntax:
+        {{#ID-name}} where ID is the card ID and name is a slug of the card name.
+
+        Example: FROM {{#50-filtered-test-server-dataset}}
+
+        This method replaces source card IDs with their corresponding target card IDs.
+
+        Args:
+            sql: The native SQL query string
+
+        Returns:
+            The SQL string with card IDs remapped to target IDs
+        """
+        if not sql:
+            return sql
+
+        # Pattern matches {{#123-anything}} where 123 is the card ID
+        # The card ID is followed by a hyphen and the card name slug
+        pattern = r"\{\{#(\d+)-([^}]+)\}\}"
+
+        def replace_card_reference(match: re.Match) -> str:
+            source_card_id = int(match.group(1))
+            card_name_slug = match.group(2)
+
+            if source_card_id in self._card_map:
+                target_card_id = self._card_map[source_card_id]
+                logger.debug(
+                    f"Remapped SQL card reference from {{{{#{source_card_id}-{card_name_slug}}}}} "
+                    f"to {{{{#{target_card_id}-{card_name_slug}}}}}"
+                )
+                return f"{{{{#{target_card_id}-{card_name_slug}}}}}"
+            else:
+                logger.warning(
+                    f"No card mapping found for SQL card reference {{{{#{source_card_id}-{card_name_slug}}}}}. "
+                    f"The referenced card may not have been imported yet."
+                )
+                return str(match.group(0))  # Return original if no mapping
+
+        return re.sub(pattern, replace_card_reference, sql)
+
     def _remap_card_query(self, card_data: dict) -> tuple[dict, bool]:
         """Remaps the database ID, table IDs, and field IDs in a card's dataset_query and card references."""
         data = copy.deepcopy(card_data)
@@ -972,6 +1035,19 @@ class MetabaseImporter:
                 if key in inner_query:
                     inner_query[key] = self._remap_field_ids_recursively(
                         inner_query[key], source_db_id
+                    )
+
+        # Remap card references in native SQL queries
+        # Native SQL queries can reference other cards/models using {{#ID-name}} syntax
+        native_query = query.get("native", {})
+        if native_query and isinstance(native_query, dict):
+            sql = native_query.get("query")
+            if sql and isinstance(sql, str):
+                remapped_sql = self._remap_native_sql_card_references(sql)
+                if remapped_sql != sql:
+                    native_query["query"] = remapped_sql
+                    logger.info(
+                        f"Remapped card references in native SQL query for card '{data.get('name', 'Unknown')}'"
                     )
 
         # Remap field IDs and table IDs in result_metadata
