@@ -6,7 +6,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 A comprehensive Python toolkit for migrating Metabase content (collections, questions, and dashboards) between
-instances. Built for production use with robust error handling, API rate limiting, and intelligent database remapping.
+instances. Includes error handling, API rate limiting, and intelligent database remapping.
 
 ## Table of Contents
 
