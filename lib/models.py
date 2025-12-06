@@ -133,9 +133,9 @@ class ImportPlan:
 class ImportReportItem:
     """Represents the result of a single item import."""
 
-    entity_type: Literal["collection", "card", "dashboard"]
+    entity_type: Literal["collection", "card", "dashboard", "permissions"]
     status: Literal["created", "updated", "skipped", "failed", "success", "error"]
-    source_id: int
+    source_id: int | None
     target_id: int | None
     name: str
     reason: str | None = None
