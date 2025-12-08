@@ -7,8 +7,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-This toolkit provides two command-line tools, `metabase-export` and `metabase-import`, designed for exporting and
-importing Metabase content (collections, questions, models, and dashboards) between instances.
+This toolkit provides three command-line tools designed for exporting and importing Metabase content
+(collections, questions, models, and dashboards) between instances:
+
+- `metabase-export` - Export content from a source Metabase instance
+- `metabase-import` - Import content to a target Metabase instance
+- `metabase-sync` - Combined export and import in a single operation
 
 It's built to be robust, handling API rate limits, pagination, and providing clear logging and error handling for
 production use.
@@ -44,7 +48,8 @@ production use.
 pip install metabase-migration-toolkit
 ```
 
-After installation, the `metabase-export` and `metabase-import` commands will be available globally in your environment.
+After installation, the `metabase-export`, `metabase-import`, and `metabase-sync` commands will be available
+globally in your environment.
 
 ### Option 2: Install from TestPyPI (for testing)
 
@@ -179,6 +184,83 @@ metabase-import \
 - `--include-archived` - Include archived items in the import
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+### 3. Syncing (Export + Import in One Operation)
+
+The `metabase-sync` command combines export and import into a single operation, making it easy to synchronize
+content between Metabase instances.
+
+**Example using .env file (Recommended):**
+
+```bash
+# All credentials are read from .env file
+metabase-sync \
+    --export-dir "./metabase_export" \
+    --db-map "./db_map.json" \
+    --include-dashboards \
+    --include-permissions \
+    --apply-permissions \
+    --conflict overwrite \
+    --log-level INFO
+```
+
+**Example using CLI flags:**
+
+```bash
+metabase-sync \
+    --source-url "https://source-metabase.example.com/" \
+    --source-username "user@example.com" \
+    --source-password "source_password" \
+    --target-url "https://target-metabase.example.com/" \
+    --target-username "user@example.com" \
+    --target-password "target_password" \
+    --export-dir "./metabase_export" \
+    --db-map "./db_map.json" \
+    --include-dashboards \
+    --include-permissions \
+    --apply-permissions \
+    --conflict overwrite \
+    --root-collections "24" \
+    --log-level INFO
+```
+
+**Available options:**
+
+*Source Instance:*
+
+- `--source-url` - Source Metabase URL (or use `MB_SOURCE_URL` in .env)
+- `--source-username` - Source username (or use `MB_SOURCE_USERNAME` in .env)
+- `--source-password` - Source password (or use `MB_SOURCE_PASSWORD` in .env)
+- `--source-session` - Source session token (or use `MB_SOURCE_SESSION_TOKEN` in .env)
+- `--source-token` - Source personal API token (or use `MB_SOURCE_PERSONAL_TOKEN` in .env)
+
+*Target Instance:*
+
+- `--target-url` - Target Metabase URL (or use `MB_TARGET_URL` in .env)
+- `--target-username` - Target username (or use `MB_TARGET_USERNAME` in .env)
+- `--target-password` - Target password (or use `MB_TARGET_PASSWORD` in .env)
+- `--target-session` - Target session token (or use `MB_TARGET_SESSION_TOKEN` in .env)
+- `--target-token` - Target personal API token (or use `MB_TARGET_PERSONAL_TOKEN` in .env)
+
+*Shared Options:*
+
+- `--export-dir` - Directory to save/load exported files (required)
+- `--db-map` - Path to database mapping JSON file (required)
+- `--metabase-version` - Metabase version (or use `MB_METABASE_VERSION` in .env)
+- `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+*Export Options:*
+
+- `--include-dashboards` - Include dashboards in the export
+- `--include-archived` - Include archived items
+- `--include-permissions` - Include permissions (groups and access control)
+- `--root-collections` - Comma-separated list of root collection IDs to export
+
+*Import Options:*
+
+- `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
+- `--dry-run` - Perform a dry run without making any changes
+- `--apply-permissions` - Apply permissions from the export (requires admin privileges)
 
 ## Table & Field ID Remapping
 

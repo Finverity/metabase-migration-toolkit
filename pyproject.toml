@@ -73,10 +73,11 @@ Changelog = "https://github.com/Finverity/metabase-migration-toolkit/blob/main/C
 [project.scripts]
 metabase-export = "export_metabase:main"
 metabase-import = "import_metabase:main"
+metabase-sync = "sync_metabase:main"
 
 [tool.setuptools]
 packages = ["lib"]
-py-modules = ["export_metabase", "import_metabase"]
+py-modules = ["export_metabase", "import_metabase", "sync_metabase"]
 
 [tool.setuptools.package-data]
 lib = ["py.typed"]

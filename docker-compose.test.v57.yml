@@ -1,8 +1,10 @@
+# Docker Compose for testing with Metabase v57 (MBQL 5 format)
+# Use with: MB_METABASE_VERSION=v57 docker compose -f docker-compose.test.v57.yml up -d
 services:
   # PostgreSQL database for source Metabase
   source-postgres:
     image: postgres:15-alpine
-    container_name: metabase-source-postgres
+    container_name: metabase-source-postgres-v57
     environment:
       POSTGRES_DB: metabase_source
       POSTGRES_USER: metabase
@@ -10,19 +12,19 @@ services:
     ports:
       - "5435:5432"
     volumes:
-      - source-postgres-data:/var/lib/postgresql/data
+      - source-postgres-data-v57:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U metabase"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - metabase-test-network
+      - metabase-test-network-v57
 
   # PostgreSQL database for target Metabase
   target-postgres:
     image: postgres:15-alpine
-    container_name: metabase-target-postgres
+    container_name: metabase-target-postgres-v57
     environment:
       POSTGRES_DB: metabase_target
       POSTGRES_USER: metabase
@@ -30,19 +32,19 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - target-postgres-data:/var/lib/postgresql/data
+      - target-postgres-data-v57:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U metabase"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - metabase-test-network
+      - metabase-test-network-v57
 
   # Sample data database (shared between source and target)
   sample-data-postgres:
     image: postgres:15-alpine
-    container_name: metabase-sample-data
+    container_name: metabase-sample-data-v57
     environment:
       POSTGRES_DB: sample_data
       POSTGRES_USER: sample_user
@@ -50,7 +52,7 @@ services:
     ports:
       - "5434:5432"
     volumes:
-      - sample-data:/var/lib/postgresql/data
+      - sample-data-v57:/var/lib/postgresql/data
       - ./tests/integration/fixtures/init-sample-data.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sample_user"]
@@ -58,12 +60,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - metabase-test-network
+      - metabase-test-network-v57
 
-  # Source Metabase instance
+  # Source Metabase instance (v57)
   source-metabase:
-    image: metabase/metabase:v0.56.1
-    container_name: metabase-source
+    image: metabase/metabase:v0.57.2
+    container_name: metabase-source-v57
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: metabase_source
@@ -87,14 +89,14 @@ services:
       retries: 10
       start_period: 120s
     networks:
-      - metabase-test-network
+      - metabase-test-network-v57
     volumes:
-      - source-metabase-data:/metabase-data
+      - source-metabase-data-v57:/metabase-data
 
-  # Target Metabase instance
+  # Target Metabase instance (v57)
   target-metabase:
-    image: metabase/metabase:v0.56.1
-    container_name: metabase-target
+    image: metabase/metabase:v0.57.2
+    container_name: metabase-target-v57
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: metabase_target
@@ -118,17 +120,17 @@ services:
       retries: 10
       start_period: 120s
     networks:
-      - metabase-test-network
+      - metabase-test-network-v57
     volumes:
-      - target-metabase-data:/metabase-data
+      - target-metabase-data-v57:/metabase-data
 
 networks:
-  metabase-test-network:
+  metabase-test-network-v57:
     driver: bridge
 
 volumes:
-  source-postgres-data:
-  target-postgres-data:
-  sample-data:
-  source-metabase-data:
-  target-metabase-data:
+  source-postgres-data-v57:
+  target-postgres-data-v57:
+  sample-data-v57:
+  source-metabase-data-v57:
+  target-metabase-data-v57:
