@@ -350,10 +350,11 @@ def get_export_args() -> ExportConfig:
 
     # Get metabase_version from args or env
     version_str = args.metabase_version or os.getenv("MB_METABASE_VERSION")
+    metabase_version: MetabaseVersion = DEFAULT_METABASE_VERSION
     try:
         metabase_version = _parse_metabase_version(version_str)
     except ValueError as e:
-        parser.error(str(e))
+        parser.error(str(e))  # parser.error() raises SystemExit, never returns
 
     # Parse root collection IDs
     root_collection_ids: list[int] | None = None
@@ -383,9 +384,11 @@ def get_export_args() -> ExportConfig:
         )
     except ConfigValidationError as e:
         parser.error(str(e))
+        raise  # Unreachable: parser.error() raises SystemExit
     except Exception as e:
         # Handle Pydantic validation errors
         parser.error(f"Configuration error: {e}")
+        raise  # Unreachable: parser.error() raises SystemExit
 
 
 def get_import_args() -> ImportConfig:
@@ -462,10 +465,11 @@ def get_import_args() -> ImportConfig:
 
     # Get metabase_version from args or env
     version_str = args.metabase_version or os.getenv("MB_METABASE_VERSION")
+    metabase_version: MetabaseVersion = DEFAULT_METABASE_VERSION
     try:
         metabase_version = _parse_metabase_version(version_str)
     except ValueError as e:
-        parser.error(str(e))
+        parser.error(str(e))  # parser.error() raises SystemExit, never returns
 
     # Create config object with validation
     try:
@@ -486,9 +490,11 @@ def get_import_args() -> ImportConfig:
         )
     except ConfigValidationError as e:
         parser.error(str(e))
+        raise  # Unreachable: parser.error() raises SystemExit
     except Exception as e:
         # Handle Pydantic validation errors
         parser.error(f"Configuration error: {e}")
+        raise  # Unreachable: parser.error() raises SystemExit
 
 
 class SyncConfig(BaseModel):
@@ -778,10 +784,11 @@ def get_sync_args() -> SyncConfig:
 
     # Get metabase_version from args or env
     version_str = args.metabase_version or os.getenv("MB_METABASE_VERSION")
+    metabase_version: MetabaseVersion = DEFAULT_METABASE_VERSION
     try:
         metabase_version = _parse_metabase_version(version_str)
     except ValueError as e:
-        parser.error(str(e))
+        parser.error(str(e))  # parser.error() raises SystemExit, never returns
 
     # Parse root collection IDs
     root_collection_ids: list[int] | None = None
@@ -820,6 +827,8 @@ def get_sync_args() -> SyncConfig:
         )
     except ConfigValidationError as e:
         parser.error(str(e))
+        raise  # Unreachable: parser.error() raises SystemExit
     except Exception as e:
         # Handle Pydantic validation errors
         parser.error(f"Configuration error: {e}")
+        raise  # Unreachable: parser.error() raises SystemExit

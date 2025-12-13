@@ -221,6 +221,7 @@ class ExportService:
                             try:
                                 actual_parent_id = int(parts[-1])
                             except (ValueError, IndexError):
+                                # If parsing fails, keep actual_parent_id as None
                                 pass
 
                 collection_obj = Collection(
