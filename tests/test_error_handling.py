@@ -148,33 +148,82 @@ class TestFileErrorHandling:
 
 
 class TestConfigurationErrors:
-    """Test suite for configuration error handling."""
+    """Test suite for configuration error handling with Pydantic validation."""
 
     def test_missing_required_config_fields(self):
         """Test that missing required fields raise errors."""
-        with pytest.raises(TypeError):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
             ExportConfig()
 
     def test_invalid_log_level(self):
-        """Test handling of invalid log level."""
-        config = ExportConfig(
-            source_url="https://example.com", export_dir="./export", log_level="INVALID"
-        )
+        """Test handling of invalid log level - now validated by Pydantic."""
+        from pydantic import ValidationError
 
-        # Should accept any string, but logging setup might handle it
-        assert config.log_level == "INVALID"
+        with pytest.raises(ValidationError) as exc_info:
+            ExportConfig(
+                source_url="https://example.com",
+                export_dir="./export",
+                source_session_token="token",
+                log_level="INVALID",
+            )
+
+        assert "log_level" in str(exc_info.value)
 
     def test_invalid_conflict_strategy(self):
-        """Test that invalid conflict strategy is accepted (validation happens elsewhere)."""
-        config = ImportConfig(
-            target_url="https://example.com",
-            export_dir="./export",
-            db_map_path="./db_map.json",
-            conflict_strategy="invalid",
-        )
+        """Test that invalid conflict strategy is rejected by Pydantic."""
+        from pydantic import ValidationError
 
-        # Type hint suggests only certain values, but no runtime validation
-        assert config.conflict_strategy == "invalid"
+        with pytest.raises(ValidationError) as exc_info:
+            ImportConfig(
+                target_url="https://example.com",
+                export_dir="./export",
+                db_map_path="./db_map.json",
+                target_session_token="token",
+                conflict_strategy="invalid",
+            )
+
+        # Pydantic will reject the invalid literal value
+        assert "conflict" in str(exc_info.value).lower() or "literal" in str(exc_info.value).lower()
+
+    def test_missing_authentication(self):
+        """Test that missing authentication is rejected."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            ExportConfig(
+                source_url="https://example.com",
+                export_dir="./export",
+            )
+
+        assert "authentication" in str(exc_info.value).lower()
+
+    def test_invalid_url_scheme(self):
+        """Test that invalid URL scheme is rejected."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            ExportConfig(
+                source_url="ftp://example.com",
+                export_dir="./export",
+                source_session_token="token",
+            )
+
+        assert "http or https" in str(exc_info.value)
+
+    def test_path_traversal_rejected(self):
+        """Test that path traversal patterns are rejected."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            ExportConfig(
+                source_url="https://example.com",
+                export_dir="../../../etc",
+                source_session_token="token",
+            )
+
+        assert "traversal" in str(exc_info.value)
 
 
 class TestDataValidationErrors:
@@ -343,7 +392,9 @@ class TestAuthenticationErrors:
             mock_post.side_effect = requests.exceptions.RequestException(response=mock_response)
 
             client = MetabaseClient(
-                base_url="https://example.com", username="invalid@example.com", password="wrong"
+                base_url="https://example.com",
+                username="invalid@example.com",
+                password="wrong",  # pragma: allowlist secret
             )
 
             with pytest.raises(MetabaseAPIError, match="Authentication failed"):

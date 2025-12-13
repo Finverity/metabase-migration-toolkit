@@ -25,9 +25,10 @@ class TestDashboardFilterExport:
             source_url="https://source.example.com",
             export_dir=str(tmp_path / "export"),
             include_dashboards=True,
+            source_session_token="token",
         )
 
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_dashboard.return_value = SAMPLE_DASHBOARD_WITH_FILTERS
             # Mock get_card for cards referenced by the dashboard
@@ -77,9 +78,10 @@ class TestDashboardFilterExport:
             source_url="https://source.example.com",
             export_dir=str(tmp_path / "export"),
             include_dashboards=True,
+            source_session_token="token",
         )
 
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_dashboard.return_value = SAMPLE_DASHBOARD_WITH_FILTERS
             # Mock get_card for cards referenced by the dashboard
@@ -128,9 +130,10 @@ class TestDashboardFilterExport:
             source_url="https://source.example.com",
             export_dir=str(tmp_path / "export"),
             include_dashboards=True,
+            source_session_token="token",
         )
 
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_dashboard.return_value = SAMPLE_DASHBOARD_WITH_FILTERS
             # Mock get_card for cards referenced by the dashboard
@@ -220,16 +223,20 @@ class TestDashboardFilterImport:
 
     def test_import_dashboard_preserves_parameters(self, setup_import_test):
         """Test that dashboard parameters are preserved during import."""
+        from lib.handlers.base import ImportContext
+
         config = ImportConfig(
             target_url="https://target.example.com",
             export_dir=str(setup_import_test["export_dir"]),
             db_map_path=str(setup_import_test["db_map_path"]),
             dry_run=False,
+            target_session_token="token",
         )
 
-        with patch("import_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
 
             # Mock create_dashboard to capture the payload
             created_dashboard = {"id": 301, "name": "Sales Dashboard with Filters"}
@@ -241,8 +248,23 @@ class TestDashboardFilterImport:
             importer = MetabaseImporter(config)
             # Load manifest
             importer._load_export_package()
-            importer._collection_map = {1: 10}  # Map source collection to target
-            importer._card_map = {100: 200, 101: 201}  # Map source cards to target
+
+            # Set up the context (normally done in _perform_import)
+            importer._context = ImportContext(
+                config=importer.config,
+                client=importer.client,
+                manifest=importer.manifest,
+                export_dir=importer.export_dir,
+                id_mapper=importer._id_mapper,
+                query_remapper=importer._query_remapper,
+                report=importer.report,
+                target_collections=[],
+            )
+
+            # Set up the mappings on the id_mapper
+            importer._id_mapper.set_collection_mapping(1, 10)
+            importer._id_mapper.set_card_mapping(100, 200)
+            importer._id_mapper.set_card_mapping(101, 201)
 
             # Import dashboards
             importer._import_dashboards()
@@ -267,16 +289,20 @@ class TestDashboardFilterImport:
 
     def test_import_dashboard_remaps_parameter_mapping_card_ids(self, setup_import_test):
         """Test that card IDs in parameter mappings are remapped during import."""
+        from lib.handlers.base import ImportContext
+
         config = ImportConfig(
             target_url="https://target.example.com",
             export_dir=str(setup_import_test["export_dir"]),
             db_map_path=str(setup_import_test["db_map_path"]),
             dry_run=False,
+            target_session_token="token",
         )
 
-        with patch("import_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
 
             created_dashboard = {"id": 301, "name": "Sales Dashboard with Filters"}
             mock_client.create_dashboard.return_value = created_dashboard
@@ -286,8 +312,23 @@ class TestDashboardFilterImport:
 
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            importer._collection_map = {1: 10}
-            importer._card_map = {100: 200, 101: 201}
+
+            # Set up the context (normally done in _perform_import)
+            importer._context = ImportContext(
+                config=importer.config,
+                client=importer.client,
+                manifest=importer.manifest,
+                export_dir=importer.export_dir,
+                id_mapper=importer._id_mapper,
+                query_remapper=importer._query_remapper,
+                report=importer.report,
+                target_collections=[],
+            )
+
+            # Set up the mappings on the id_mapper
+            importer._id_mapper.set_collection_mapping(1, 10)
+            importer._id_mapper.set_card_mapping(100, 200)
+            importer._id_mapper.set_card_mapping(101, 201)
 
             # Import dashboards
             importer._import_dashboards()
@@ -323,16 +364,20 @@ class TestDashboardFilterImport:
 
     def test_import_dashboard_preserves_filter_dependencies(self, setup_import_test):
         """Test that filter dependencies and relationships are maintained."""
+        from lib.handlers.base import ImportContext
+
         config = ImportConfig(
             target_url="https://target.example.com",
             export_dir=str(setup_import_test["export_dir"]),
             db_map_path=str(setup_import_test["db_map_path"]),
             dry_run=False,
+            target_session_token="token",
         )
 
-        with patch("import_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
 
             created_dashboard = {"id": 301, "name": "Sales Dashboard with Filters"}
             mock_client.create_dashboard.return_value = created_dashboard
@@ -342,8 +387,23 @@ class TestDashboardFilterImport:
 
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            importer._collection_map = {1: 10}
-            importer._card_map = {100: 200, 101: 201}
+
+            # Set up the context (normally done in _perform_import)
+            importer._context = ImportContext(
+                config=importer.config,
+                client=importer.client,
+                manifest=importer.manifest,
+                export_dir=importer.export_dir,
+                id_mapper=importer._id_mapper,
+                query_remapper=importer._query_remapper,
+                report=importer.report,
+                target_collections=[],
+            )
+
+            # Set up the mappings on the id_mapper
+            importer._id_mapper.set_collection_mapping(1, 10)
+            importer._id_mapper.set_card_mapping(100, 200)
+            importer._id_mapper.set_card_mapping(101, 201)
 
             # Import dashboards
             importer._import_dashboards()
@@ -366,16 +426,20 @@ class TestDashboardFilterImport:
 
     def test_import_dashboard_with_missing_parameter_card(self, setup_import_test):
         """Test that parameters are still imported even if referenced card is missing."""
+        from lib.handlers.base import ImportContext
+
         config = ImportConfig(
             target_url="https://target.example.com",
             export_dir=str(setup_import_test["export_dir"]),
             db_map_path=str(setup_import_test["db_map_path"]),
             dry_run=False,
+            target_session_token="token",
         )
 
-        with patch("import_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
 
             created_dashboard = {"id": 301, "name": "Sales Dashboard with Filters"}
             mock_client.create_dashboard.return_value = created_dashboard
@@ -385,9 +449,23 @@ class TestDashboardFilterImport:
 
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            importer._collection_map = {1: 10}
+
+            # Set up the context (normally done in _perform_import)
+            importer._context = ImportContext(
+                config=importer.config,
+                client=importer.client,
+                manifest=importer.manifest,
+                export_dir=importer.export_dir,
+                id_mapper=importer._id_mapper,
+                query_remapper=importer._query_remapper,
+                report=importer.report,
+                target_collections=[],
+            )
+
+            # Set up the mappings on the id_mapper
+            importer._id_mapper.set_collection_mapping(1, 10)
             # Card 100 is NOT in the map (simulating missing card)
-            importer._card_map = {101: 201}
+            importer._id_mapper.set_card_mapping(101, 201)
 
             # Import dashboards
             importer._import_dashboards()
@@ -418,16 +496,20 @@ class TestDashboardFilterImport:
 
     def test_import_dashboard_preserves_display_settings(self, setup_import_test):
         """Test that dashboard display settings (width, auto_apply_filters) are preserved during import."""
+        from lib.handlers.base import ImportContext
+
         config = ImportConfig(
             target_url="https://target.example.com",
             export_dir=str(setup_import_test["export_dir"]),
             db_map_path=str(setup_import_test["db_map_path"]),
             dry_run=False,
+            target_session_token="token",
         )
 
-        with patch("import_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
 
             created_dashboard = {"id": 301, "name": "Sales Dashboard with Filters"}
             mock_client.create_dashboard.return_value = created_dashboard
@@ -437,8 +519,23 @@ class TestDashboardFilterImport:
 
             importer = MetabaseImporter(config)
             importer._load_export_package()
-            importer._collection_map = {1: 10}
-            importer._card_map = {100: 200, 101: 201}
+
+            # Set up the context (normally done in _perform_import)
+            importer._context = ImportContext(
+                config=importer.config,
+                client=importer.client,
+                manifest=importer.manifest,
+                export_dir=importer.export_dir,
+                id_mapper=importer._id_mapper,
+                query_remapper=importer._query_remapper,
+                report=importer.report,
+                target_collections=[],
+            )
+
+            # Set up the mappings on the id_mapper
+            importer._id_mapper.set_collection_mapping(1, 10)
+            importer._id_mapper.set_card_mapping(100, 200)
+            importer._id_mapper.set_card_mapping(101, 201)
 
             # Import dashboards
             importer._import_dashboards()
