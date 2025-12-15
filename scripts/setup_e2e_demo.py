@@ -17,10 +17,10 @@ import sys
 import time
 from pathlib import Path
 
+from tests.integration.test_helpers import MetabaseTestHelper
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from tests.integration.test_helpers import MetabaseTestHelper
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,16 +32,16 @@ logger = logging.getLogger(__name__)
 SOURCE_URL = "http://localhost:3002"
 TARGET_URL = "http://localhost:3003"
 ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "Admin123!"
+ADMIN_PASSWORD = "Admin123!"  # pragma: allowlist secret  # nosec B105
 
 # Sample database connection details (inside Docker network)
-SAMPLE_DB_CONFIG = {
+SAMPLE_DB_CONFIG: dict[str, str | int] = {
     "name": "Sample Data",
     "host": "sample-data-postgres",
     "port": 5432,
     "dbname": "sample_data",
     "user": "sample_user",
-    "password": "sample_password",
+    "password": "sample_password",  # pragma: allowlist secret
 }
 
 
@@ -86,22 +86,27 @@ def setup_metabase_instance(helper: MetabaseTestHelper, name: str) -> int | None
 
     # Add sample database if not exists
     databases = helper.get_databases()
-    sample_db = next(
-        (db for db in databases if db.get("name") == SAMPLE_DB_CONFIG["name"]), None
-    )
+    sample_db = next((db for db in databases if db.get("name") == SAMPLE_DB_CONFIG["name"]), None)
 
     if sample_db:
         db_id = sample_db["id"]
         logger.info(f"Sample database already exists with ID: {db_id}")
     else:
-        db_id = helper.add_database(**SAMPLE_DB_CONFIG)
+        db_id = helper.add_database(
+            name=str(SAMPLE_DB_CONFIG["name"]),
+            port=int(SAMPLE_DB_CONFIG["port"]),
+            host=str(SAMPLE_DB_CONFIG["host"]),
+            dbname=str(SAMPLE_DB_CONFIG["dbname"]),
+            user=str(SAMPLE_DB_CONFIG["user"]),
+            password=str(SAMPLE_DB_CONFIG["password"]),
+        )
         if db_id:
             logger.info(f"Added Sample Data database with ID: {db_id}")
         else:
             logger.error("Failed to add sample database")
             return None
 
-    return db_id
+    return int(db_id) if db_id else None
 
 
 def create_test_content(helper: MetabaseTestHelper, db_id: int) -> dict:
@@ -124,17 +129,17 @@ def create_test_content(helper: MetabaseTestHelper, db_id: int) -> dict:
     def get_field_id(table_name: str, field_name: str) -> int | None:
         for field in tables[table_name].get("fields", []):
             if field["name"] == field_name:
-                return field["id"]
+                field_id = field["id"]
+                return int(field_id) if isinstance(field_id, int) else None
         return None
 
     # Field IDs
     users_id_field = get_field_id("users", "id")
     users_is_active_field = get_field_id("users", "is_active")
     products_category_field = get_field_id("products", "category")
-    products_price_field = get_field_id("products", "price")
     orders_user_id_field = get_field_id("orders", "user_id")
 
-    created = {"collections": [], "cards": [], "models": [], "dashboards": []}
+    created: dict[str, list[int]] = {"collections": [], "cards": [], "models": [], "dashboards": []}
 
     # Create collections
     logger.info("\nCreating collections...")
@@ -302,7 +307,7 @@ def generate_db_map(
     target_by_name = {db["name"]: db["id"] for db in target_dbs}
 
     # Map source databases to target by name
-    db_map = {"by_id": {}}
+    db_map: dict[str, dict[str, int]] = {"by_id": {}}
     for source_db in source_dbs:
         source_id = source_db["id"]
         source_name = source_db["name"]
@@ -358,10 +363,11 @@ def main() -> int:
     logger.info("\n" + "=" * 60)
     logger.info("SETUP COMPLETE!")
     logger.info("=" * 60)
-    logger.info(f"""
+    logger.info(
+        f"""
 Source Metabase: {SOURCE_URL}
 Target Metabase: {TARGET_URL}
-Credentials: {ADMIN_EMAIL} / {ADMIN_PASSWORD}
+Credentials: {ADMIN_EMAIL} / ******
 
 Created in Source:
   Collections: {len([c for c in created.get('collections', []) if c])}
@@ -376,7 +382,7 @@ Next steps - Run migration:
   1. Export: python export_metabase.py \\
        --source-url {SOURCE_URL} \\
        --source-username {ADMIN_EMAIL} \\
-       --source-password {ADMIN_PASSWORD} \\
+       --source-password '******' \\
        --export-dir {export_dir} \\
        --include-dashboards \\
        --metabase-version v57
@@ -384,13 +390,14 @@ Next steps - Run migration:
   2. Import: python import_metabase.py \\
        --target-url {TARGET_URL} \\
        --target-username {ADMIN_EMAIL} \\
-       --target-password {ADMIN_PASSWORD} \\
+       --target-password '******' \\
        --export-dir {export_dir} \\
        --db-map {db_map_path} \\
        --metabase-version v57
 
 Or use: make demo-migrate
-""")
+"""
+    )
 
     return 0
 

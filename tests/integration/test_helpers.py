@@ -193,7 +193,7 @@ class MetabaseTestHelper:
 
                 # Wait for sync to complete
                 self._wait_for_database_sync(db_id)
-                return db_id
+                return db_id  # type: ignore[no-any-return]
             else:
                 logger.error(f"Failed to add database: {response.status_code} - {response.text}")
                 return None
@@ -239,7 +239,7 @@ class MetabaseTestHelper:
                 if isinstance(data, list):
                     return data
                 elif isinstance(data, dict) and "data" in data:
-                    return data["data"]
+                    return data["data"]  # type: ignore[no-any-return]
             return []
 
         except Exception as e:
@@ -255,7 +255,7 @@ class MetabaseTestHelper:
                 timeout=30,
             )
             if response.status_code == 200:
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
             return None
         except Exception as e:
             logger.error(f"Error getting database metadata: {e}")
@@ -267,7 +267,7 @@ class MetabaseTestHelper:
         if metadata:
             for table in metadata.get("tables", []):
                 if table.get("name") == table_name:
-                    return table.get("id")
+                    return table.get("id")  # type: ignore[no-any-return]
         return None
 
     def get_field_id_by_name(self, db_id: int, table_name: str, field_name: str) -> int | None:
@@ -278,7 +278,7 @@ class MetabaseTestHelper:
                 if table.get("name") == table_name:
                     for field in table.get("fields", []):
                         if field.get("name") == field_name:
-                            return field.get("id")
+                            return field.get("id")  # type: ignore[no-any-return]
         return None
 
     # =========================================================================
@@ -295,7 +295,11 @@ class MetabaseTestHelper:
             Collection ID if successful, None otherwise
         """
         try:
-            collection_data = {"name": name, "description": description, "color": "#509EE3"}
+            collection_data: dict[str, str | int] = {
+                "name": name,
+                "description": description,
+                "color": "#509EE3",
+            }
 
             if parent_id is not None:
                 collection_data["parent_id"] = parent_id
@@ -310,7 +314,7 @@ class MetabaseTestHelper:
             if response.status_code in [200, 201]:
                 collection_id = response.json().get("id")
                 logger.info(f"Created collection '{name}' with ID {collection_id}")
-                return collection_id
+                return collection_id  # type: ignore[no-any-return]
             else:
                 logger.error(
                     f"Failed to create collection: {response.status_code} - {response.text}"
@@ -329,7 +333,7 @@ class MetabaseTestHelper:
             )
 
             if response.status_code == 200:
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
             return []
 
         except Exception as e:
@@ -345,7 +349,7 @@ class MetabaseTestHelper:
                 timeout=10,
             )
             if response.status_code == 200:
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
             return None
         except Exception as e:
             logger.error(f"Error getting collection: {e}")
@@ -369,7 +373,7 @@ class MetabaseTestHelper:
 
             if response.status_code == 200:
                 data = response.json()
-                return data.get("data", []) if isinstance(data, dict) else data
+                return data.get("data", []) if isinstance(data, dict) else data  # type: ignore[no-any-return]
             return []
 
         except Exception as e:
@@ -423,7 +427,7 @@ class MetabaseTestHelper:
             if response.status_code in [200, 201]:
                 card_id = response.json().get("id")
                 logger.info(f"Created card '{name}' with ID {card_id}")
-                return card_id
+                return card_id  # type: ignore[no-any-return]
             else:
                 logger.error(f"Failed to create card: {response.status_code} - {response.text}")
                 return None
@@ -473,7 +477,7 @@ class MetabaseTestHelper:
             if response.status_code in [200, 201]:
                 model_id = response.json().get("id")
                 logger.info(f"Created model '{name}' with ID {model_id}")
-                return model_id
+                return model_id  # type: ignore[no-any-return]
             else:
                 logger.error(f"Failed to create model: {response.status_code} - {response.text}")
                 return None
@@ -516,7 +520,7 @@ class MetabaseTestHelper:
                 timeout=10,
             )
             if response.status_code == 200:
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
             return None
         except Exception as e:
             logger.error(f"Error getting card: {e}")
@@ -577,7 +581,7 @@ class MetabaseTestHelper:
         try:
             # Build aggregation
             if aggregation_type == "count":
-                aggregation = [["count"]]
+                aggregation: list[list[Any]] = [["count"]]
             elif aggregation_field_id:
                 aggregation = [[aggregation_type, ["field", aggregation_field_id, None]]]
             else:
@@ -758,7 +762,7 @@ class MetabaseTestHelper:
                 for idx, card_id in enumerate(card_ids):
                     self._add_card_to_dashboard(dashboard_id, card_id, row=idx * 4)
 
-            return dashboard_id
+            return dashboard_id  # type: ignore[no-any-return]
 
         except Exception as e:
             logger.error(f"Error creating dashboard: {e}")
@@ -847,15 +851,17 @@ class MetabaseTestHelper:
             existing_cards = []
             if dashboard:
                 for dc in dashboard.get("dashcards", []):
-                    existing_cards.append({
-                        "id": dc.get("id"),
-                        "card_id": dc.get("card_id"),
-                        "row": dc.get("row", 0),
-                        "col": dc.get("col", 0),
-                        "size_x": dc.get("size_x", 4),
-                        "size_y": dc.get("size_y", 4),
-                        "parameter_mappings": dc.get("parameter_mappings", []),
-                    })
+                    existing_cards.append(
+                        {
+                            "id": dc.get("id"),
+                            "card_id": dc.get("card_id"),
+                            "row": dc.get("row", 0),
+                            "col": dc.get("col", 0),
+                            "size_x": dc.get("size_x", 4),
+                            "size_y": dc.get("size_y", 4),
+                            "parameter_mappings": dc.get("parameter_mappings", []),
+                        }
+                    )
 
             # Add new card
             new_card: dict[str, Any] = {
@@ -884,7 +890,7 @@ class MetabaseTestHelper:
                 # Find the newly added card (last one or the one with our card_id)
                 for card in result.get("cards", []):
                     if card.get("card_id") == card_id:
-                        return card.get("id")
+                        return card.get("id")  # type: ignore[no-any-return]
                 return None
 
             # Fall back to v56 POST method
@@ -906,7 +912,7 @@ class MetabaseTestHelper:
             )
 
             if response.status_code in [200, 201]:
-                return response.json().get("id")
+                return response.json().get("id")  # type: ignore[no-any-return]
             return None
 
         except Exception as e:
@@ -922,7 +928,7 @@ class MetabaseTestHelper:
                 timeout=10,
             )
             if response.status_code == 200:
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
             return None
         except Exception as e:
             logger.error(f"Error getting dashboard: {e}")
@@ -968,7 +974,7 @@ class MetabaseTestHelper:
             )
 
             if response.status_code in [200, 201]:
-                return response.json().get("id")
+                return response.json().get("id")  # type: ignore[no-any-return]
             logger.error(f"Failed to add text card: {response.status_code} - {response.text}")
             return None
 
@@ -1074,7 +1080,7 @@ class MetabaseTestHelper:
             if response.status_code in [200, 201]:
                 group_id = response.json().get("id")
                 logger.info(f"Created permission group '{name}' with ID {group_id}")
-                return group_id
+                return group_id  # type: ignore[no-any-return]
             else:
                 logger.error(
                     f"Failed to create permission group: {response.status_code} - {response.text}"
@@ -1095,7 +1101,7 @@ class MetabaseTestHelper:
             )
 
             if response.status_code == 200:
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
             return []
 
         except Exception as e:
@@ -1112,7 +1118,7 @@ class MetabaseTestHelper:
             )
 
             if response.status_code == 200:
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
             return None
 
         except Exception as e:
@@ -1186,7 +1192,7 @@ class MetabaseTestHelper:
             )
 
             if response.status_code == 200:
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
             return None
 
         except Exception as e:
@@ -1240,7 +1246,7 @@ class MetabaseTestHelper:
     # Cleanup Methods
     # =========================================================================
 
-    def cleanup_test_data(self):
+    def cleanup_test_data(self) -> None:
         """Clean up test collections and cards."""
         try:
             # Get all collections
@@ -1318,9 +1324,7 @@ class MetabaseTestHelper:
 
         return True
 
-    def verify_model_reference_card(
-        self, card_id: int, expected_model_id: int
-    ) -> tuple[bool, str]:
+    def verify_model_reference_card(self, card_id: int, expected_model_id: int) -> tuple[bool, str]:
         """Verify that a SQL card's model reference has been correctly remapped.
 
         Checks that:
@@ -1699,7 +1703,7 @@ class MetabaseTestHelper:
                 if agg_type == "count":
                     agg_list.append(["count"])
                 elif field_id is not None:
-                    agg_list.append([agg_type, ["field", field_id, None]])
+                    agg_list.append([agg_type, ["field", field_id, None]])  # type: ignore[list-item]
 
             query_dict: dict[str, Any] = {
                 "source-table": table_id,

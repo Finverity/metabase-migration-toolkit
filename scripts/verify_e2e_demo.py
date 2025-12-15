@@ -9,16 +9,16 @@ This script verifies that the migration was successful by:
 Usage:
     python scripts/verify_e2e_demo.py
 """
-
-import json
 import logging
 import sys
 from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import requests
 
 from tests.integration.test_helpers import MetabaseTestHelper
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,10 +29,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 TARGET_URL = "http://localhost:3003"
 ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "Admin123!"
-
-
-import requests
+ADMIN_PASSWORD = "Admin123!"  # pragma: allowlist secret  # nosec B105
 
 
 def find_card_by_name(helper: MetabaseTestHelper, name: str) -> dict | None:
@@ -116,12 +113,10 @@ def verify_model_reference_remapping(
     # Check 1: SQL contains the correct model ID reference
     expected_sql_pattern = f"{{{{#{model_id}-"
     if expected_sql_pattern not in sql:
-        errors.append(
-            f"SQL does not contain expected pattern '{expected_sql_pattern}'"
-        )
-        logger.error(f"  ✗ SQL pattern check failed")
+        errors.append(f"SQL does not contain expected pattern '{expected_sql_pattern}'")
+        logger.error("  ✗ SQL pattern check failed")
     else:
-        logger.info(f"  ✓ SQL contains correct model ID reference")
+        logger.info("  ✓ SQL contains correct model ID reference")
 
     # Check 2: Template tag key, name, and card-id are all consistent
     for tag_key, tag_data in template_tags.items():
@@ -132,7 +127,7 @@ def verify_model_reference_remapping(
         tag_name = tag_data.get("name", "")
         tag_display_name = tag_data.get("display-name", "")
 
-        logger.info(f"\n  Template tag details:")
+        logger.info("\n  Template tag details:")
         logger.info(f"    Key: {tag_key}")
         logger.info(f"    card-id: {tag_card_id}")
         logger.info(f"    name: {tag_name}")
@@ -144,39 +139,37 @@ def verify_model_reference_remapping(
             errors.append(
                 f"Template tag KEY '{tag_key}' does not start with '{expected_key_prefix}'"
             )
-            logger.error(f"  ✗ Tag key has wrong model ID")
+            logger.error("  ✗ Tag key has wrong model ID")
         else:
-            logger.info(f"  ✓ Tag key has correct model ID")
+            logger.info("  ✓ Tag key has correct model ID")
 
         # The card-id should match the model ID
         if tag_card_id != model_id:
             errors.append(
                 f"Template tag card-id ({tag_card_id}) does not match model ID ({model_id})"
             )
-            logger.error(f"  ✗ Tag card-id mismatch")
+            logger.error("  ✗ Tag card-id mismatch")
         else:
-            logger.info(f"  ✓ Tag card-id matches model ID")
+            logger.info("  ✓ Tag card-id matches model ID")
 
         # The name should match the key
         if tag_name != tag_key:
-            errors.append(
-                f"Template tag name '{tag_name}' does not match key '{tag_key}'"
-            )
-            logger.error(f"  ✗ Tag name does not match key")
+            errors.append(f"Template tag name '{tag_name}' does not match key '{tag_key}'")
+            logger.error("  ✗ Tag name does not match key")
         else:
-            logger.info(f"  ✓ Tag name matches key")
+            logger.info("  ✓ Tag name matches key")
 
         # The display-name should contain the new model ID
         if f"#{model_id}" not in tag_display_name and str(model_id) not in tag_display_name:
             errors.append(
                 f"Template tag display-name '{tag_display_name}' does not contain model ID {model_id}"
             )
-            logger.error(f"  ✗ Tag display-name has wrong model ID")
+            logger.error("  ✗ Tag display-name has wrong model ID")
         else:
-            logger.info(f"  ✓ Tag display-name has correct model ID")
+            logger.info("  ✓ Tag display-name has correct model ID")
 
     # Check 3: Try to execute the card
-    logger.info(f"\n  Attempting to execute SQL card...")
+    logger.info("\n  Attempting to execute SQL card...")
     try:
         response = requests.post(
             f"{helper.api_url}/card/{sql_card_id}/query",
@@ -184,15 +177,17 @@ def verify_model_reference_remapping(
             timeout=30,
         )
         if response.status_code in [200, 202]:
-            logger.info(f"  ✓ Card executed successfully!")
+            logger.info("  ✓ Card executed successfully!")
         else:
             error_msg = response.json().get("message", response.text)
             if "missing required parameters" in error_msg.lower():
                 errors.append(f"Card execution failed: {error_msg}")
-                logger.error(f"  ✗ Card execution failed with missing parameters")
+                logger.error("  ✗ Card execution failed with missing parameters")
                 logger.error(f"    Error: {error_msg}")
             else:
-                logger.warning(f"  ⚠ Card execution returned {response.status_code}: {error_msg[:100]}")
+                logger.warning(
+                    f"  ⚠ Card execution returned {response.status_code}: {error_msg[:100]}"
+                )
     except Exception as e:
         logger.warning(f"  ⚠ Could not execute card: {e}")
 
@@ -242,7 +237,8 @@ def main() -> int:
     if success:
         logger.info("✓ VERIFICATION PASSED!")
         logger.info("=" * 60)
-        logger.info("""
+        logger.info(
+            """
 All checks passed:
   ✓ SQL contains correct model ID reference
   ✓ Template tag key has correct model ID
@@ -252,7 +248,8 @@ All checks passed:
   ✓ Card can be executed successfully
 
 The model reference remapping is working correctly!
-""")
+"""
+        )
         return 0
     else:
         logger.error("✗ VERIFICATION FAILED!")
@@ -260,13 +257,15 @@ The model reference remapping is working correctly!
         logger.error("\nErrors found:")
         for error in errors:
             logger.error(f"  - {error}")
-        logger.error("""
+        logger.error(
+            """
 This indicates a bug in the migration remapping logic.
 Check lib/remapping/query_remapper.py for issues with:
   - _remap_template_tags()
   - _remap_tag_name()
   - _remap_sql_card_references()
-""")
+"""
+        )
         return 1
 
 
