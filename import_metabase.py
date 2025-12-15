@@ -9,7 +9,10 @@ This is a thin CLI wrapper around the ImportService.
 
 import sys
 
-from lib.client import MetabaseAPIError  # noqa: F401 - backward compat
+from lib.client import (
+    MetabaseAPIError,  # noqa: F401 - backward compat
+    MetabaseClient,  # noqa: F401 - backward compat
+)
 from lib.config import get_import_args
 from lib.services import ImportService
 from lib.utils import setup_logging
