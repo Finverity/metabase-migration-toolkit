@@ -10,7 +10,7 @@ This is a thin CLI wrapper around the ExportService.
 
 import sys
 
-from lib.client import MetabaseAPIError, MetabaseClient  # noqa: F401 - backward compat
+from lib.client import MetabaseAPIError  # noqa: F401 - backward compat
 from lib.config import get_export_args
 from lib.services import ExportService
 from lib.utils import setup_logging
