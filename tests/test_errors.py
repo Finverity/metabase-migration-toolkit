@@ -53,6 +53,7 @@ class TestMigrationError:
         """Test that the error can be raised and caught."""
         with pytest.raises(MigrationError) as exc_info:
             raise MigrationError("Test error", details={"foo": "bar"})
+
         assert exc_info.value.message == "Test error"
         assert exc_info.value.details == {"foo": "bar"}
 
