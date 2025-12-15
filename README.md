@@ -35,6 +35,46 @@ production use.
 - **Secure:** Handles credentials via environment variables or CLI flags and never logs or exports sensitive information.
 - **Reliable:** Implements exponential backoff and retries for network requests.
 
+## Supported Metabase Versions
+
+The toolkit supports the following Metabase versions:
+
+| Version | Metabase Release | Query Format | Status |
+|---------|------------------|--------------|--------|
+| `v56`   | v0.56.x          | MBQL 4       | Default, fully supported |
+| `v57`   | v0.57.x          | MBQL 5 (stages) | Fully supported |
+
+### Key Differences Between Versions
+
+**v56 (MBQL 4):**
+- Legacy query format with `:type` field
+- Native queries use `:native.query` structure
+- Card references: `source-table: "card__123"`
+
+**v57 (MBQL 5):**
+- Modern query format with `:lib/type` field
+- Uses `:stages` array structure for queries
+- Card references: `source-card: 123` (integer)
+- Template tags use `#` prefix: `#123-model-name`
+
+### Version Compatibility
+
+**Important:** Source and target Metabase instances must be the same version. Cross-version migration (e.g., v56 to v57) is not supported.
+
+### Specifying Version
+
+Use the `--metabase-version` flag or `MB_METABASE_VERSION` environment variable:
+
+```bash
+# Via CLI flag
+metabase-export --metabase-version v57 ...
+metabase-import --metabase-version v57 ...
+metabase-sync --metabase-version v57 ...
+
+# Via environment variable
+export MB_METABASE_VERSION=v57
+```
+
 ## Prerequisites
 
 - Python 3.10+

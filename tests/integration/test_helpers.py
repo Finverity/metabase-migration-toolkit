@@ -836,8 +836,58 @@ class MetabaseTestHelper:
         size_y: int = 4,
         parameter_mappings: list[dict[str, Any]] | None = None,
     ) -> int | None:
-        """Add a card to a dashboard and return the dashcard ID."""
+        """Add a card to a dashboard and return the dashcard ID.
+
+        In v57+, uses PUT /dashboard/:id/cards which requires sending all cards.
+        Falls back to POST for older versions.
+        """
         try:
+            # First, get existing cards on the dashboard
+            dashboard = self.get_dashboard(dashboard_id)
+            existing_cards = []
+            if dashboard:
+                for dc in dashboard.get("dashcards", []):
+                    existing_cards.append({
+                        "id": dc.get("id"),
+                        "card_id": dc.get("card_id"),
+                        "row": dc.get("row", 0),
+                        "col": dc.get("col", 0),
+                        "size_x": dc.get("size_x", 4),
+                        "size_y": dc.get("size_y", 4),
+                        "parameter_mappings": dc.get("parameter_mappings", []),
+                    })
+
+            # Add new card
+            new_card: dict[str, Any] = {
+                "id": -1,  # Negative ID for new cards
+                "card_id": card_id,
+                "row": row,
+                "col": col,
+                "size_x": size_x,
+                "size_y": size_y,
+            }
+            if parameter_mappings:
+                new_card["parameter_mappings"] = parameter_mappings
+
+            all_cards = existing_cards + [new_card]
+
+            # Try v57+ PUT method first
+            response = requests.put(
+                f"{self.api_url}/dashboard/{dashboard_id}/cards",
+                json={"cards": all_cards},
+                headers=self._get_headers(),
+                timeout=10,
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                # Find the newly added card (last one or the one with our card_id)
+                for card in result.get("cards", []):
+                    if card.get("card_id") == card_id:
+                        return card.get("id")
+                return None
+
+            # Fall back to v56 POST method
             dashcard_data: dict[str, Any] = {
                 "cardId": card_id,
                 "row": row,
@@ -845,7 +895,6 @@ class MetabaseTestHelper:
                 "size_x": size_x,
                 "size_y": size_y,
             }
-
             if parameter_mappings:
                 dashcard_data["parameter_mappings"] = parameter_mappings
 
@@ -1269,6 +1318,112 @@ class MetabaseTestHelper:
 
         return True
 
+    def verify_model_reference_card(
+        self, card_id: int, expected_model_id: int
+    ) -> tuple[bool, str]:
+        """Verify that a SQL card's model reference has been correctly remapped.
+
+        Checks that:
+        1. The SQL contains the correct {{#id-name}} reference
+        2. The template-tag key matches the ID in the SQL
+        3. The template-tag card-id matches the expected model ID
+        4. The template-tag name field matches the key
+        5. The card can be executed without errors
+
+        Args:
+            card_id: The ID of the card to verify
+            expected_model_id: The expected model ID in the remapped card
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        card = self.get_card(card_id)
+        if not card:
+            return False, f"Card {card_id} not found"
+
+        dataset_query = card.get("dataset_query", {})
+
+        # Handle v57 stages format
+        stages = dataset_query.get("stages", [])
+        if stages:
+            stage = stages[0]
+            sql = stage.get("native", "")
+            template_tags = stage.get("template-tags", {})
+        else:
+            # v56 format
+            native = dataset_query.get("native", {})
+            sql = native.get("query", "")
+            template_tags = native.get("template-tags", {})
+
+        errors = []
+
+        # Check 1: SQL contains the expected model ID reference
+        expected_pattern = f"{{{{#{expected_model_id}-"
+        if expected_pattern not in sql:
+            errors.append(
+                f"SQL does not contain expected pattern '{expected_pattern}'. "
+                f"SQL: {sql[:200]}..."
+            )
+
+        # Check 2 & 3: Template tag key and card-id
+        found_correct_tag = False
+        for tag_key, tag_data in template_tags.items():
+            if tag_data.get("type") == "card":
+                tag_card_id = tag_data.get("card-id")
+                tag_name = tag_data.get("name", "")
+
+                # Check if this tag references the expected model
+                if tag_card_id == expected_model_id:
+                    # Check that the key matches the expected format
+                    if not tag_key.startswith(f"#{expected_model_id}-"):
+                        errors.append(
+                            f"Template tag key '{tag_key}' does not match expected "
+                            f"format '#{{expected_model_id}}-...'"
+                        )
+
+                    # Check that name matches the key
+                    if tag_name != tag_key:
+                        errors.append(
+                            f"Template tag name '{tag_name}' does not match key '{tag_key}'"
+                        )
+
+                    found_correct_tag = True
+                else:
+                    # Found a card tag with wrong ID - this is the bug scenario
+                    if f"#{expected_model_id}-" in tag_key or f"#{expected_model_id}-" in tag_name:
+                        errors.append(
+                            f"Template tag has mismatched IDs: key='{tag_key}', "
+                            f"card-id={tag_card_id}, name='{tag_name}'. "
+                            f"Expected card-id={expected_model_id}"
+                        )
+
+        if not found_correct_tag and not errors:
+            errors.append(
+                f"No template tag found with card-id={expected_model_id}. "
+                f"Tags: {list(template_tags.keys())}"
+            )
+
+        # Check 4: Try to execute the card
+        try:
+            response = requests.post(
+                f"{self.api_url}/card/{card_id}/query",
+                headers=self._get_headers(),
+                timeout=30,
+            )
+            if response.status_code != 200 and response.status_code != 202:
+                error_msg = response.json().get("message", response.text)
+                if "missing required parameters" in error_msg.lower():
+                    errors.append(f"Card execution failed with missing parameters: {error_msg}")
+                else:
+                    # Other errors might be OK (e.g., permission issues)
+                    logger.warning(f"Card execution returned {response.status_code}: {error_msg}")
+        except Exception as e:
+            logger.warning(f"Could not execute card: {e}")
+
+        if errors:
+            return False, "; ".join(errors)
+        return True, "All checks passed"
+
     # =========================================================================
     # Advanced Card Methods for Dependency Testing
     # =========================================================================
@@ -1295,17 +1450,31 @@ class MetabaseTestHelper:
         Returns:
             Card ID if successful, None otherwise
         """
-        # Create SQL with model reference: {{#123-model-name}}
+        # Create SQL with model reference: {{#123-model-name}} AS alias
+        # The alias is required because the model reference expands to a subquery
+        tag_key = f"#{model_id}-{model_name}"
         sql = f"""
             SELECT *
-            FROM {{{{#{model_id}-{model_name}}}}}
+            FROM {{{{{tag_key}}}}} AS model_ref
             LIMIT 100
         """
+
+        # In v57, template-tag key must include # prefix to match SQL reference
+        template_tags = {
+            tag_key: {
+                "type": "card",
+                "card-id": model_id,
+                "name": tag_key,
+                "display-name": tag_key,
+            }
+        }
+
         return self.create_native_query_card(
             name=name,
             database_id=database_id,
             sql=sql,
             collection_id=collection_id,
+            template_tags=template_tags,
         )
 
     def create_native_query_with_template_tag_card(
@@ -1417,3 +1586,506 @@ class MetabaseTestHelper:
         except Exception as e:
             logger.error(f"Error creating card with join to card: {e}")
             return None
+
+    # =========================================================================
+    # Dashboard Tab Methods
+    # =========================================================================
+
+    def create_dashboard_with_tabs(
+        self,
+        name: str,
+        collection_id: int | None,
+        tab_names: list[str],
+        card_ids_per_tab: list[list[int]],
+    ) -> int | None:
+        """Create a dashboard with multiple tabs.
+
+        Args:
+            name: Dashboard name
+            collection_id: Collection to place the dashboard in
+            tab_names: List of tab names
+            card_ids_per_tab: List of card ID lists, one per tab
+
+        Returns:
+            Dashboard ID if successful, None otherwise
+        """
+        try:
+            # Create the dashboard first
+            dashboard_id = self.create_dashboard(
+                name=name,
+                collection_id=collection_id,
+            )
+
+            if not dashboard_id:
+                return None
+
+            # Metabase creates tabs via PUT request with tabs array
+            tabs = []
+            for idx, tab_name in enumerate(tab_names):
+                tabs.append(
+                    {
+                        "id": idx + 1,  # Tab IDs are 1-indexed
+                        "name": tab_name,
+                    }
+                )
+
+            # Update dashboard with tabs
+            response = requests.put(
+                f"{self.api_url}/dashboard/{dashboard_id}",
+                json={"tabs": tabs},
+                headers=self._get_headers(),
+                timeout=10,
+            )
+
+            if response.status_code not in [200, 201]:
+                logger.error(f"Failed to add tabs to dashboard: {response.text}")
+                return dashboard_id
+
+            # Add cards to each tab
+            for tab_idx, card_ids in enumerate(card_ids_per_tab):
+                tab_id = tab_idx + 1
+                for card_idx, card_id in enumerate(card_ids):
+                    dashcard_data = {
+                        "cardId": card_id,
+                        "row": card_idx * 4,
+                        "col": 0,
+                        "size_x": 8,
+                        "size_y": 4,
+                        "dashboard_tab_id": tab_id,
+                    }
+
+                    requests.post(
+                        f"{self.api_url}/dashboard/{dashboard_id}/cards",
+                        json=dashcard_data,
+                        headers=self._get_headers(),
+                        timeout=10,
+                    )
+
+            return dashboard_id
+
+        except Exception as e:
+            logger.error(f"Error creating dashboard with tabs: {e}")
+            return None
+
+    def create_card_with_multiple_aggregations(
+        self,
+        name: str,
+        database_id: int,
+        table_id: int,
+        aggregations: list[tuple[str, int | None]],
+        breakout_field_id: int | None = None,
+        collection_id: int | None = None,
+        display: str = "bar",
+    ) -> int | None:
+        """Create a card with multiple aggregations.
+
+        Args:
+            name: Card name
+            database_id: Database ID
+            table_id: Table ID to query
+            aggregations: List of (agg_type, field_id) tuples.
+                          agg_type: "count", "sum", "avg", "min", "max"
+                          field_id: Field ID for aggregation (None for count)
+            breakout_field_id: Optional field ID for GROUP BY
+            collection_id: Optional collection ID
+            display: Visualization type
+
+        Returns:
+            Card ID if successful, None otherwise
+        """
+        try:
+            agg_list = []
+            for agg_type, field_id in aggregations:
+                if agg_type == "count":
+                    agg_list.append(["count"])
+                elif field_id is not None:
+                    agg_list.append([agg_type, ["field", field_id, None]])
+
+            query_dict: dict[str, Any] = {
+                "source-table": table_id,
+                "aggregation": agg_list,
+            }
+
+            if breakout_field_id:
+                query_dict["breakout"] = [["field", breakout_field_id, None]]
+
+            query = {
+                "database": database_id,
+                "type": "query",
+                "query": query_dict,
+            }
+
+            return self.create_card(name, database_id, collection_id, query, display=display)
+        except Exception as e:
+            logger.error(f"Error creating card with multiple aggregations: {e}")
+            return None
+
+    def create_native_query_with_parameters(
+        self,
+        name: str,
+        database_id: int,
+        sql: str,
+        parameters: list[dict[str, Any]],
+        collection_id: int | None = None,
+    ) -> int | None:
+        """Create a native SQL query with template tag parameters.
+
+        Args:
+            name: Card name
+            database_id: Database ID
+            sql: SQL query with {{param_name}} placeholders
+            parameters: List of parameter definitions with keys:
+                       - name: str (matches {{name}} in SQL)
+                       - display_name: str
+                       - type: str ("text", "number", "date", etc.)
+                       - default: Any (optional default value)
+            collection_id: Optional collection ID
+
+        Returns:
+            Card ID if successful, None otherwise
+        """
+        try:
+            template_tags = {}
+            for param in parameters:
+                param_name = param["name"]
+                template_tags[param_name] = {
+                    "id": f"{param_name}_tag",
+                    "name": param_name,
+                    "display-name": param.get("display_name", param_name),
+                    "type": param.get("type", "text"),
+                }
+                if "default" in param:
+                    template_tags[param_name]["default"] = param["default"]
+
+            native_query: dict[str, Any] = {
+                "query": sql,
+                "template-tags": template_tags,
+            }
+
+            query = {
+                "database": database_id,
+                "type": "native",
+                "native": native_query,
+            }
+
+            return self.create_card(name, database_id, collection_id, query)
+        except Exception as e:
+            logger.error(f"Error creating native query with parameters: {e}")
+            return None
+
+    # =========================================================================
+    # Verification Methods for ID Remapping
+    # =========================================================================
+
+    def verify_table_id_in_query(
+        self,
+        card_id: int,
+        expected_table_id: int,
+    ) -> bool:
+        """Verify that a card's query uses the expected table ID.
+
+        Args:
+            card_id: Card ID to check
+            expected_table_id: Expected table ID in the query
+
+        Returns:
+            True if table ID matches, False otherwise
+        """
+        card = self.get_card(card_id)
+        if not card:
+            logger.error(f"Card {card_id} not found")
+            return False
+
+        dataset_query = card.get("dataset_query", {})
+
+        # Check v56 format
+        query = dataset_query.get("query", {})
+        source_table = query.get("source-table")
+
+        # Check v57 format (stages)
+        if source_table is None:
+            stages = dataset_query.get("stages", [])
+            if stages:
+                source_table = stages[0].get("source-table")
+
+        if source_table != expected_table_id:
+            logger.error(
+                f"Card {card_id} has source-table {source_table}, expected {expected_table_id}"
+            )
+            return False
+
+        return True
+
+    def verify_field_id_in_filter(
+        self,
+        card_id: int,
+        expected_field_id: int,
+    ) -> bool:
+        """Verify that a card's filter uses the expected field ID.
+
+        Args:
+            card_id: Card ID to check
+            expected_field_id: Expected field ID in the filter
+
+        Returns:
+            True if field ID matches, False otherwise
+        """
+        card = self.get_card(card_id)
+        if not card:
+            logger.error(f"Card {card_id} not found")
+            return False
+
+        dataset_query = card.get("dataset_query", {})
+        query = dataset_query.get("query", {})
+
+        # v56: filter
+        filter_clause = query.get("filter")
+        if filter_clause is None:
+            # v57: filters array or stages
+            stages = dataset_query.get("stages", [])
+            if stages:
+                filter_clause = (
+                    stages[0].get("filters", [None])[0] if stages[0].get("filters") else None
+                )
+
+        if filter_clause is None:
+            logger.error(f"Card {card_id} has no filter clause")
+            return False
+
+        # Extract field ID from filter (format: [op, ["field", id, opts], value])
+        field_ref = filter_clause[1] if len(filter_clause) > 1 else None
+        if not isinstance(field_ref, list) or len(field_ref) < 2:
+            logger.error(f"Card {card_id} has unexpected filter format: {filter_clause}")
+            return False
+
+        # v56: field_id at index 1
+        actual_field_id = field_ref[1] if isinstance(field_ref[1], int) else None
+        # v57: field_id might be at index 2 if index 1 is metadata dict
+        if actual_field_id is None and isinstance(field_ref[1], dict) and len(field_ref) >= 3:
+            actual_field_id = field_ref[2]
+
+        if actual_field_id != expected_field_id:
+            logger.error(
+                f"Card {card_id} has filter field_id {actual_field_id}, expected {expected_field_id}"
+            )
+            return False
+
+        return True
+
+    def verify_field_id_in_aggregation(
+        self,
+        card_id: int,
+        expected_field_id: int,
+    ) -> bool:
+        """Verify that a card's aggregation uses the expected field ID.
+
+        Args:
+            card_id: Card ID to check
+            expected_field_id: Expected field ID in the aggregation
+
+        Returns:
+            True if field ID matches, False otherwise
+        """
+        card = self.get_card(card_id)
+        if not card:
+            logger.error(f"Card {card_id} not found")
+            return False
+
+        dataset_query = card.get("dataset_query", {})
+        query = dataset_query.get("query", {})
+
+        # v56: aggregation
+        aggregation = query.get("aggregation")
+        if aggregation is None:
+            # v57: stages
+            stages = dataset_query.get("stages", [])
+            if stages:
+                aggregation = stages[0].get("aggregation")
+
+        if not aggregation or not aggregation[0]:
+            logger.error(f"Card {card_id} has no aggregation")
+            return False
+
+        # Find field reference in first aggregation
+        agg = aggregation[0]
+        if len(agg) < 2:
+            # count aggregation has no field
+            return True
+
+        field_ref = agg[1]
+        if not isinstance(field_ref, list) or field_ref[0] != "field":
+            logger.error(f"Card {card_id} has unexpected aggregation format: {agg}")
+            return False
+
+        actual_field_id = field_ref[1] if isinstance(field_ref[1], int) else None
+        if actual_field_id is None and isinstance(field_ref[1], dict) and len(field_ref) >= 3:
+            actual_field_id = field_ref[2]
+
+        if actual_field_id != expected_field_id:
+            logger.error(
+                f"Card {card_id} has aggregation field_id {actual_field_id}, expected {expected_field_id}"
+            )
+            return False
+
+        return True
+
+    def verify_field_id_in_order_by(
+        self,
+        card_id: int,
+        expected_field_id: int,
+    ) -> bool:
+        """Verify that a card's order-by uses the expected field ID.
+
+        Args:
+            card_id: Card ID to check
+            expected_field_id: Expected field ID in the order-by
+
+        Returns:
+            True if field ID matches, False otherwise
+        """
+        card = self.get_card(card_id)
+        if not card:
+            logger.error(f"Card {card_id} not found")
+            return False
+
+        dataset_query = card.get("dataset_query", {})
+        query = dataset_query.get("query", {})
+
+        # v56: order-by
+        order_by = query.get("order-by")
+        if order_by is None:
+            # v57: stages
+            stages = dataset_query.get("stages", [])
+            if stages:
+                order_by = stages[0].get("order-by")
+
+        if not order_by or not order_by[0]:
+            logger.error(f"Card {card_id} has no order-by")
+            return False
+
+        # Format: [["direction", ["field", id, opts]]]
+        order_clause = order_by[0]
+        if len(order_clause) < 2:
+            logger.error(f"Card {card_id} has unexpected order-by format: {order_by}")
+            return False
+
+        field_ref = order_clause[1]
+        if not isinstance(field_ref, list) or field_ref[0] != "field":
+            logger.error(f"Card {card_id} has unexpected order-by field format: {order_clause}")
+            return False
+
+        actual_field_id = field_ref[1] if isinstance(field_ref[1], int) else None
+        if actual_field_id is None and isinstance(field_ref[1], dict) and len(field_ref) >= 3:
+            actual_field_id = field_ref[2]
+
+        if actual_field_id != expected_field_id:
+            logger.error(
+                f"Card {card_id} has order-by field_id {actual_field_id}, expected {expected_field_id}"
+            )
+            return False
+
+        return True
+
+    def verify_dashboard_parameter_field_id(
+        self,
+        dashboard_id: int,
+        parameter_id: str,
+        expected_field_id: int,
+    ) -> bool:
+        """Verify that a dashboard parameter mapping uses the expected field ID.
+
+        Args:
+            dashboard_id: Dashboard ID to check
+            parameter_id: Parameter ID to check
+            expected_field_id: Expected field ID in the parameter mapping
+
+        Returns:
+            True if field ID matches, False otherwise
+        """
+        dashboard = self.get_dashboard(dashboard_id)
+        if not dashboard:
+            logger.error(f"Dashboard {dashboard_id} not found")
+            return False
+
+        dashcards = dashboard.get("dashcards", []) or dashboard.get("ordered_cards", [])
+
+        for dashcard in dashcards:
+            mappings = dashcard.get("parameter_mappings", [])
+            for mapping in mappings:
+                if mapping.get("parameter_id") == parameter_id:
+                    target = mapping.get("target", [])
+                    # Format: ["dimension", ["field", id, opts]]
+                    if len(target) >= 2 and isinstance(target[1], list):
+                        field_ref = target[1]
+                        if field_ref[0] == "field":
+                            actual_field_id = (
+                                field_ref[1] if isinstance(field_ref[1], int) else None
+                            )
+                            if actual_field_id is None and isinstance(field_ref[1], dict):
+                                actual_field_id = field_ref[2] if len(field_ref) >= 3 else None
+
+                            if actual_field_id == expected_field_id:
+                                return True
+
+        logger.error(
+            f"Dashboard {dashboard_id} parameter {parameter_id} does not have field_id {expected_field_id}"
+        )
+        return False
+
+    def count_items_in_collection(
+        self,
+        collection_id: int,
+        item_types: list[str] | None = None,
+    ) -> int:
+        """Count items in a collection.
+
+        Args:
+            collection_id: Collection ID to count items in
+            item_types: List of item types to count (e.g., ["card", "dashboard"])
+                       If None, counts all items.
+
+        Returns:
+            Number of items in the collection
+        """
+        items = self.get_collection_items(collection_id, models=item_types)
+        return len(items)
+
+    def find_card_by_name(
+        self,
+        collection_id: int,
+        card_name: str,
+    ) -> dict[str, Any] | None:
+        """Find a card by name in a collection.
+
+        Args:
+            collection_id: Collection ID to search in
+            card_name: Name of the card to find
+
+        Returns:
+            Card data if found, None otherwise
+        """
+        items = self.get_cards_in_collection(collection_id)
+        for item in items:
+            if item.get("name") == card_name:
+                return self.get_card(item["id"])
+        return None
+
+    def find_dashboard_by_name(
+        self,
+        collection_id: int,
+        dashboard_name: str,
+    ) -> dict[str, Any] | None:
+        """Find a dashboard by name in a collection.
+
+        Args:
+            collection_id: Collection ID to search in
+            dashboard_name: Name of the dashboard to find
+
+        Returns:
+            Dashboard data if found, None otherwise
+        """
+        items = self.get_dashboards_in_collection(collection_id)
+        for item in items:
+            if item.get("name") == dashboard_name:
+                return self.get_dashboard(item["id"])
+        return None

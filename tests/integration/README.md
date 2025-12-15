@@ -17,6 +17,28 @@ The integration tests use Docker Compose to spin up:
 - Python 3.10+ with all dependencies installed
 - At least 4GB of available RAM for Docker containers
 
+## Metabase Version Support
+
+The integration tests support both Metabase v56 and v57. The version determines which Docker Compose file and query format is used.
+
+| Version | Docker Compose File | Metabase Image | Query Format |
+|---------|---------------------|----------------|--------------|
+| `v56`   | `docker-compose.test.yml` | `metabase/metabase:v0.56.1` | MBQL 4 |
+| `v57`   | `docker-compose.test.v57.yml` | `metabase/metabase:v0.57.2` | MBQL 5 (stages) |
+
+### Running Tests with Different Versions
+
+```bash
+# Run with v56 (default)
+make test-integration
+
+# Run with v57
+MB_METABASE_VERSION=v57 make test-integration
+
+# Or directly with pytest
+MB_METABASE_VERSION=v57 pytest tests/integration/ -v -s
+```
+
 ## Running Integration Tests
 
 ### Quick Start
@@ -60,6 +82,7 @@ make test-integration
 ### Test Files
 
 - `test_e2e_export_import.py` - Main end-to-end test suite
+- `test_comprehensive_e2e.py` - Comprehensive E2E tests covering all supported features
 - `test_helpers.py` - Helper utilities for setting up Metabase instances
 - `fixtures/init-sample-data.sql` - SQL script to initialize sample data
 
@@ -251,6 +274,36 @@ docker-compose -f docker-compose.test.yml down -v
 2. Metabase startup time is slow (2-3 minutes)
 3. Tests modify Docker containers (not suitable for parallel execution)
 4. Some tests depend on previous test state (use module-scoped fixtures)
+
+## Comprehensive E2E Tests
+
+The `test_comprehensive_e2e.py` file contains additional comprehensive tests covering:
+
+### Test Classes
+
+| Class | Description | Test Count |
+|-------|-------------|------------|
+| `TestCollectionFeatures` | Deep nesting, special characters, empty collections | 3 |
+| `TestCardFeatures` | JOINs, aggregations, expressions, template tags, visualizations, archived | 7 |
+| `TestModelFeatures` | Multiple cards from model, dependency chains | 2 |
+| `TestDashboardFeatures` | Tabs, text cards, linked filters | 3 |
+| `TestIDRemapping` | Table and field ID remapping in all query contexts | 3 |
+| `TestConflictResolution` | Skip, rename strategies | 2 |
+| `TestDryRun` | Dry-run mode verification | 1 |
+| `TestEdgeCases` | Long names, Unicode, special characters | 3 |
+
+### Running Comprehensive Tests
+
+```bash
+# Run all comprehensive tests
+pytest tests/integration/test_comprehensive_e2e.py -v -s
+
+# Run specific test class
+pytest tests/integration/test_comprehensive_e2e.py::TestIDRemapping -v -s
+
+# Run with v57 Metabase
+MB_METABASE_VERSION=v57 pytest tests/integration/test_comprehensive_e2e.py -v -s
+```
 
 ## Future Improvements
 

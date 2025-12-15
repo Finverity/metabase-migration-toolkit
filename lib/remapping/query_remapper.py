@@ -759,7 +759,10 @@ class QueryRemapper:
     def _remap_tag_name(self, tag_name: str, source_card_id: int, target_card_id: int) -> str:
         """Remaps a template tag name by replacing the old card ID with the new one.
 
-        Tag names follow the pattern: "123-model-name" where 123 is the card ID.
+        Tag names follow these patterns:
+        - v56 format: "123-model-name" where 123 is the card ID
+        - v57 format: "#123-model-name" where #123 is the card ID with hash prefix
+        - display-name format: "#123 Model Name" where #123 is followed by space
 
         Args:
             tag_name: The original tag name.
@@ -769,8 +772,13 @@ class QueryRemapper:
         Returns:
             The tag name with the card ID replaced.
         """
-        # Pattern matches tag names starting with the card ID followed by a hyphen
-        pattern = rf"^{source_card_id}-"
-        if re.match(pattern, tag_name):
-            return re.sub(pattern, f"{target_card_id}-", tag_name)
+        # Pattern matches tag names with optional # prefix, followed by card ID and separator
+        # Group 1 captures the optional # prefix to preserve it in replacement
+        # Group 2 captures the separator (hyphen or space) to preserve it in replacement
+        pattern = rf"^(#?){source_card_id}([-\s])"
+        match = re.match(pattern, tag_name)
+        if match:
+            prefix = match.group(1)  # Either "#" or ""
+            separator = match.group(2)  # Either "-" or " "
+            return re.sub(pattern, f"{prefix}{target_card_id}{separator}", tag_name)
         return tag_name

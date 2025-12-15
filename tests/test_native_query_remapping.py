@@ -595,3 +595,112 @@ class TestMBQLQueryRemappingV57:
 
         assert success
         assert result["dataset_query"]["stages"][0]["joins"][0]["source-table"] == "card__500"
+
+
+class TestV57TemplateTagHashPrefix:
+    """Tests for v57 template tags with # prefix in key names.
+
+    In v57, template tag keys can have a # prefix like "#50-model-name"
+    instead of just "50-model-name". This tests that remapping handles both formats.
+    """
+
+    @pytest.fixture
+    def id_mapper(self):
+        """Create an ID mapper with card mappings."""
+        return create_test_id_mapper(
+            db_mapping={1: 100},
+            card_mapping={50: 406},  # Real-world example mapping
+        )
+
+    @pytest.fixture
+    def remapper(self, id_mapper):
+        """Create a query remapper."""
+        return QueryRemapper(id_mapper)
+
+    def test_remap_tag_name_with_hash_prefix(self, remapper):
+        """Test that _remap_tag_name handles # prefix in tag names."""
+        # v57 format with # prefix
+        result = remapper._remap_tag_name("#50-filtered-xxxx-server-dataset", 50, 406)
+        assert result == "#406-filtered-xxxx-server-dataset"
+
+        # v56 format without # prefix still works
+        result = remapper._remap_tag_name("50-filtered-xxxx-server-dataset", 50, 406)
+        assert result == "406-filtered-xxxx-server-dataset"
+
+    def test_remap_template_tags_with_hash_prefix_key(self, remapper):
+        """Test remapping template tags where the key has # prefix."""
+        template_tags = {
+            "#50-filtered-xxxx-server-dataset": {
+                "type": "card",
+                "card-id": 50,
+                "name": "#50-filtered-xxxx-server-dataset",
+                "display-name": "#50 Filtered XXXX Server Dataset",
+                "id": "896131a3-6d4f-4399-83e8-7833dae83233",
+            }
+        }
+        result = remapper._remap_template_tags(template_tags)
+
+        # Key should be remapped with # preserved
+        assert "#406-filtered-xxxx-server-dataset" in result
+        assert "#50-filtered-xxxx-server-dataset" not in result
+
+        tag_data = result["#406-filtered-xxxx-server-dataset"]
+
+        # card-id should be remapped
+        assert tag_data["card-id"] == 406
+
+        # name should be remapped with # prefix preserved
+        assert tag_data["name"] == "#406-filtered-xxxx-server-dataset"
+
+        # display-name should be remapped with # prefix preserved
+        assert tag_data["display-name"] == "#406 Filtered XXXX Server Dataset"
+
+        # id should be preserved
+        assert tag_data["id"] == "896131a3-6d4f-4399-83e8-7833dae83233"
+
+    def test_remap_full_v57_native_query_with_hash_prefix(self, remapper):
+        """Test full v57 native query with # prefix template tag key."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM {{#50-filtered-xxxx-server-dataset}}",
+                        "template-tags": {
+                            "#50-filtered-xxxx-server-dataset": {
+                                "type": "card",
+                                "card-id": 50,
+                                "name": "#50-filtered-xxxx-server-dataset",
+                                "display-name": "#50 Filtered XXXX Server Dataset",
+                                "id": "896131a3-6d4f-4399-83e8-7833dae83233",
+                            }
+                        },
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+
+        # Database remapped
+        assert result["database_id"] == 100
+        assert result["dataset_query"]["database"] == 100
+
+        # SQL remapped
+        stage = result["dataset_query"]["stages"][0]
+        assert "{{#406-filtered-xxxx-server-dataset}}" in stage["native"]
+        assert "{{#50-" not in stage["native"]
+
+        # Template tag key remapped with # prefix preserved
+        assert "#406-filtered-xxxx-server-dataset" in stage["template-tags"]
+        assert "#50-filtered-xxxx-server-dataset" not in stage["template-tags"]
+
+        tag_data = stage["template-tags"]["#406-filtered-xxxx-server-dataset"]
+        assert tag_data["card-id"] == 406
+        assert tag_data["name"] == "#406-filtered-xxxx-server-dataset"
+        assert tag_data["display-name"] == "#406 Filtered XXXX Server Dataset"
