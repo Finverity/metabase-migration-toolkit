@@ -1050,7 +1050,9 @@ class TestModelFeatures:
                     )
                 else:
                     # Other errors might be acceptable (e.g., query timeout, data issues)
-                    logger.warning(f"Card execution returned {response.status_code}: {error_msg[:200]}")
+                    logger.warning(
+                        f"Card execution returned {response.status_code}: {error_msg[:200]}"
+                    )
         except Exception as e:
             logger.warning(f"Could not execute card: {e}")
 
