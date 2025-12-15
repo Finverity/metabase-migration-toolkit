@@ -6,6 +6,9 @@ Centralizes magic strings and values to improve maintainability.
 from enum import Enum
 from typing import Literal
 
+__all__ = [
+    "SUPPORTED_METABASE_VERSIONS",
+]
 # =============================================================================
 # Metabase Version Support
 # =============================================================================
