@@ -304,6 +304,7 @@ MB_METABASE_VERSION=v56
 ```
 
 **Version compatibility:**
+
 - `v56`: Metabase v0.56.x (MBQL 4 format)
 - `v57`: Metabase v0.57.x (MBQL 5 format with stages)
 

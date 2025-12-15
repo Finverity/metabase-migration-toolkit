@@ -19,12 +19,13 @@ The integration tests use Docker Compose to spin up:
 
 ## Metabase Version Support
 
-The integration tests support both Metabase v56 and v57. The version determines which Docker Compose file and query format is used.
+The integration tests support both Metabase v56 and v57. The version determines which Docker Compose file and query
+format is used.
 
-| Version | Docker Compose File | Metabase Image | Query Format |
-|---------|---------------------|----------------|--------------|
-| `v56`   | `docker-compose.test.yml` | `metabase/metabase:v0.56.1` | MBQL 4 |
-| `v57`   | `docker-compose.test.v57.yml` | `metabase/metabase:v0.57.2` | MBQL 5 (stages) |
+| Version | Docker Compose File           | Metabase Image                  | Query Format     |
+|---------|-------------------------------|---------------------------------|------------------|
+| `v56`   | `docker-compose.test.yml`     | `metabase/metabase:v0.56.1`     | MBQL 4           |
+| `v57`   | `docker-compose.test.v57.yml` | `metabase/metabase:v0.57.2`     | MBQL 5 (stages)  |
 
 ### Running Tests with Different Versions
 
@@ -107,7 +108,8 @@ make test-integration
 8. **test_conflict_strategy_skip** - Tests conflict handling
 9. **test_different_database_ids** - Tests database ID mapping
 10. **test_independent_instances** - Tests instance independence
-11. **test_table_id_remapping** - Tests that table IDs are correctly remapped (when same table name exists in different databases)
+11. **test_table_id_remapping** - Tests that table IDs are correctly remapped (when same table name exists in
+    different databases)
 12. **test_field_id_remapping** - Tests that field IDs in filters are correctly remapped
 
 ## Accessing Metabase Instances
@@ -281,16 +283,16 @@ The `test_comprehensive_e2e.py` file contains additional comprehensive tests cov
 
 ### Test Classes
 
-| Class | Description | Test Count |
-|-------|-------------|------------|
-| `TestCollectionFeatures` | Deep nesting, special characters, empty collections | 3 |
-| `TestCardFeatures` | JOINs, aggregations, expressions, template tags, visualizations, archived | 7 |
-| `TestModelFeatures` | Multiple cards from model, dependency chains | 2 |
-| `TestDashboardFeatures` | Tabs, text cards, linked filters | 3 |
-| `TestIDRemapping` | Table and field ID remapping in all query contexts | 3 |
-| `TestConflictResolution` | Skip, rename strategies | 2 |
-| `TestDryRun` | Dry-run mode verification | 1 |
-| `TestEdgeCases` | Long names, Unicode, special characters | 3 |
+| Class                    | Description                                                              | Test Count |
+|--------------------------|--------------------------------------------------------------------------|------------|
+| `TestCollectionFeatures` | Deep nesting, special characters, empty collections                      | 3          |
+| `TestCardFeatures`       | JOINs, aggregations, expressions, template tags, visualizations, archived| 7          |
+| `TestModelFeatures`      | Multiple cards from model, dependency chains                             | 2          |
+| `TestDashboardFeatures`  | Tabs, text cards, linked filters                                         | 3          |
+| `TestIDRemapping`        | Table and field ID remapping in all query contexts                       | 3          |
+| `TestConflictResolution` | Skip, rename strategies                                                  | 2          |
+| `TestDryRun`             | Dry-run mode verification                                                | 1          |
+| `TestEdgeCases`          | Long names, Unicode, special characters                                  | 3          |
 
 ### Running Comprehensive Tests
 

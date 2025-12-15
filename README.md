@@ -1,7 +1,8 @@
 # Metabase Migration Toolkit
 
-[![Tests](https://github.com/YOUR_USERNAME/metabase-migration-toolkit/actions/workflows/tests.yml/badge.svg)](https://github.com/YOUR_USERNAME/metabase-migration-toolkit/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/YOUR_USERNAME/metabase-migration-toolkit/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_USERNAME/metabase-migration-toolkit)
+[![Tests](https://github.com/Finverity/metabase-migration-toolkit/actions/workflows/tests.yml/badge.svg)](https://github.com/Finverity/metabase-migration-toolkit/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/Finverity/metabase-migration-toolkit/branch/main/graph/badge.svg?token=YOUR_CODECOV_TOKEN)](https://codecov.io/gh/Finverity/metabase-migration-toolkit)
+[![Coverage Status](https://img.shields.io/codecov/c/github/Finverity/metabase-migration-toolkit/main.svg)](https://codecov.io/gh/Finverity/metabase-migration-toolkit)
 [![PyPI version](https://badge.fury.io/py/metabase-migration-toolkit.svg)](https://badge.fury.io/py/metabase-migration-toolkit)
 [![Python Versions](https://img.shields.io/pypi/pyversions/metabase-migration-toolkit.svg)](https://pypi.org/project/metabase-migration-toolkit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -39,19 +40,21 @@ production use.
 
 The toolkit supports the following Metabase versions:
 
-| Version | Metabase Release | Query Format | Status |
-|---------|------------------|--------------|--------|
-| `v56`   | v0.56.x          | MBQL 4       | Default, fully supported |
-| `v57`   | v0.57.x          | MBQL 5 (stages) | Fully supported |
+| Version | Metabase Release | Query Format        | Status                   |
+|---------|------------------|---------------------|--------------------------|
+| `v56`   | v0.56.x          | MBQL 4              | Default, fully supported |
+| `v57`   | v0.57.x          | MBQL 5 (stages)     | Fully supported          |
 
 ### Key Differences Between Versions
 
 **v56 (MBQL 4):**
+
 - Legacy query format with `:type` field
 - Native queries use `:native.query` structure
 - Card references: `source-table: "card__123"`
 
 **v57 (MBQL 5):**
+
 - Modern query format with `:lib/type` field
 - Uses `:stages` array structure for queries
 - Card references: `source-card: 123` (integer)
@@ -59,7 +62,8 @@ The toolkit supports the following Metabase versions:
 
 ### Version Compatibility
 
-**Important:** Source and target Metabase instances must be the same version. Cross-version migration (e.g., v56 to v57) is not supported.
+**Important:** Source and target Metabase instances must be the same version. Cross-version migration (e.g., v56 to
+v57) is not supported.
 
 ### Specifying Version
 
