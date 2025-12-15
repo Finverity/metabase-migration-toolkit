@@ -70,7 +70,7 @@ class TestSetupLoggingNameOrLevel:
         root_logger = logging.getLogger()
         root_logger.handlers.clear()
 
-        _logger = setup_logging("INFO")
+        _ = setup_logging("INFO")
 
         # Should have created a handler on root logger
         assert len(root_logger.handlers) > 0
