@@ -135,34 +135,34 @@ jobs:
     needs: [test, lint]
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+    - name: Checkout code
+      uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-          cache: 'pip'
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+        cache: 'pip'
 
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
 
-      - name: Build package
-        run: |
-          python -m build
+    - name: Build package
+      run: |
+        python -m build
 
-      - name: Check package with twine
-        run: |
-          twine check dist/*
+    - name: Check package with twine
+      run: |
+        twine check dist/*
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
-        with:
-          name: dist-packages
-          path: dist/
-          retention-days: 7
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v6
+      with:
+        name: dist-packages
+        path: dist/
+        retention-days: 7
 
   test-install:
     name: Test Installation
@@ -175,29 +175,29 @@ jobs:
         python-version: ["3.10", "3.11"]
 
     steps:
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v6
-        with:
-          name: dist-packages
-          path: dist/
+    - name: Download build artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: dist-packages
+        path: dist/
 
-      - name: Install package from wheel
-        shell: bash
-        run: |
-          pip install dist/*.whl
+    - name: Install package from wheel
+      shell: bash
+      run: |
+        pip install dist/*.whl
 
-      - name: Test CLI commands exist
-        shell: bash
-        run: |
-          metabase-export --help
-          metabase-import --help
+    - name: Test CLI commands exist
+      shell: bash
+      run: |
+        metabase-export --help
+        metabase-import --help
 
-      - name: Test package import
-        shell: bash
-        run: |
-          python -c "from lib import MetabaseClient, ExportConfig, ImportConfig; print('Import successful')"
+    - name: Test package import
+      shell: bash
+      run: |
+        python -c "from lib import MetabaseClient, ExportConfig, ImportConfig; print('Import successful')"
