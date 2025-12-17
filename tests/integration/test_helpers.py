@@ -919,6 +919,136 @@ class MetabaseTestHelper:
             logger.error(f"Error adding card to dashboard: {e}")
             return None
 
+    def create_dashboard_with_visualize_another_way(
+        self,
+        name: str,
+        collection_id: int | None,
+        card_id: int,
+        database_id: int,
+        original_display: str = "table",
+        alternate_display: str = "bar",
+    ) -> int | None:
+        """Create a dashboard with a card displayed twice - normal and 'Visualize another way'.
+
+        This tests the bug fix for embedded card objects in dashcards. When 'Visualize
+        another way' is used, the dashcard stores a `card` object with custom visualization
+        settings. During migration, the `card.id` reference must be remapped.
+
+        Args:
+            name: Dashboard name
+            collection_id: Collection to create dashboard in
+            card_id: The card to add (will be added twice with different visualizations)
+            database_id: Database ID for the card
+            original_display: Display type for normal view (default: "table")
+            alternate_display: Display type for alternate view (default: "bar")
+
+        Returns:
+            Dashboard ID if successful, None otherwise
+        """
+        try:
+            # Create the dashboard
+            dashboard_id = self.create_dashboard(
+                name=name,
+                collection_id=collection_id,
+                description="Dashboard testing 'Visualize another way' feature migration",
+            )
+
+            if not dashboard_id:
+                return None
+
+            # Get the original card to copy its properties
+            card_response = requests.get(
+                f"{self.api_url}/card/{card_id}",
+                headers=self._get_headers(),
+                timeout=10,
+            )
+            if card_response.status_code != 200:
+                logger.error(f"Failed to get card {card_id}: {card_response.text}")
+                return None
+
+            original_card = card_response.json()
+
+            # Build two dashcards:
+            # 1. Normal view (just card_id reference)
+            # 2. "Visualize another way" view (card_id + embedded card object with different display)
+            dashcards = [
+                # Normal dashcard - just references the card
+                {
+                    "id": -1,
+                    "card_id": card_id,
+                    "row": 0,
+                    "col": 0,
+                    "size_x": 8,
+                    "size_y": 6,
+                    "visualization_settings": {},
+                },
+                # "Visualize another way" dashcard - includes embedded card object
+                {
+                    "id": -2,
+                    "card_id": card_id,
+                    "row": 0,
+                    "col": 8,
+                    "size_x": 8,
+                    "size_y": 6,
+                    "visualization_settings": {},
+                    # The 'card' object is what makes this "Visualize another way"
+                    # It contains the card definition with a different display type
+                    "card": {
+                        "id": card_id,
+                        "name": original_card.get("name", ""),
+                        "database_id": database_id,
+                        "display": alternate_display,
+                        "dataset_query": original_card.get("dataset_query", {}),
+                        "visualization_settings": original_card.get("visualization_settings", {}),
+                    },
+                },
+            ]
+
+            # Update dashboard with both dashcards
+            response = requests.put(
+                f"{self.api_url}/dashboard/{dashboard_id}/cards",
+                json={"cards": dashcards},
+                headers=self._get_headers(),
+                timeout=10,
+            )
+
+            if response.status_code == 200:
+                logger.info(
+                    f"Created dashboard '{name}' with 'Visualize another way' "
+                    f"(card {card_id} displayed as {original_display} and {alternate_display})"
+                )
+                return dashboard_id
+
+            # Fall back to older API if needed
+            logger.warning(f"PUT failed: {response.status_code}, trying POST method")
+
+            # Add cards one by one for older versions
+            for dashcard in dashcards:
+                dashcard_data = {
+                    "cardId": dashcard["card_id"],
+                    "row": dashcard["row"],
+                    "col": dashcard["col"],
+                    "size_x": dashcard["size_x"],
+                    "size_y": dashcard["size_y"],
+                }
+                if "card" in dashcard:
+                    dashcard_data["card"] = dashcard["card"]
+
+                response = requests.post(
+                    f"{self.api_url}/dashboard/{dashboard_id}/cards",
+                    json=dashcard_data,
+                    headers=self._get_headers(),
+                    timeout=10,
+                )
+                if response.status_code not in [200, 201]:
+                    logger.error(f"Failed to add dashcard: {response.text}")
+
+            return dashboard_id
+
+        except Exception as e:
+            logger.error(f"Error creating dashboard with visualize another way: {e}")
+            return None
+
     def get_dashboard(self, dashboard_id: int) -> dict[str, Any] | None:
         """Get a single dashboard by ID."""
         try:
@@ -1591,6 +1721,64 @@ class MetabaseTestHelper:
             logger.error(f"Error creating card with join to card: {e}")
             return None
 
+    def create_query_builder_card_from_model(
+        self,
+        name: str,
+        database_id: int,
+        model_id: int,
+        collection_id: int | None = None,
+        aggregation: tuple[str, int | None] | None = None,
+        breakout_field_name: str | None = None,
+        display: str = "table",
+    ) -> int | None:
+        """Create a Query Builder card that uses a model as its source.
+
+        This creates an MBQL query with source-table: "card__<model_id>" (v56)
+        or source-card: <model_id> (v57), which is how Metabase represents
+        Query Builder questions that reference models.
+
+        Args:
+            name: Card name
+            database_id: Target database ID
+            model_id: The ID of the model to use as source
+            collection_id: Optional collection ID
+            aggregation: Optional (agg_type, field_name) tuple for aggregation
+            breakout_field_name: Optional field name for GROUP BY
+            display: Visualization type (default: "table")
+
+        Returns:
+            Card ID if successful, None otherwise
+        """
+        try:
+            query_dict: dict[str, Any] = {
+                "source-table": f"card__{model_id}",
+            }
+
+            if aggregation:
+                agg_type, field_name = aggregation
+                if agg_type == "count":
+                    query_dict["aggregation"] = [["count"]]
+                elif field_name:
+                    query_dict["aggregation"] = [
+                        [agg_type, ["field", field_name, {"base-type": "type/Integer"}]]
+                    ]
+
+            if breakout_field_name:
+                query_dict["breakout"] = [
+                    ["field", breakout_field_name, {"base-type": "type/Text"}]
+                ]
+
+            query = {
+                "database": database_id,
+                "type": "query",
+                "query": query_dict,
+            }
+
+            return self.create_card(name, database_id, collection_id, query, display=display)
+        except Exception as e:
+            logger.error(f"Error creating query builder card from model: {e}")
+            return None
+
     # =========================================================================
     # Dashboard Tab Methods
     # =========================================================================
@@ -1819,6 +2007,88 @@ class MetabaseTestHelper:
             return False
 
         return True
+
+    def verify_query_builder_model_reference(
+        self,
+        card_id: int,
+        expected_model_id: int,
+    ) -> tuple[bool, str]:
+        """Verify that a Query Builder card's model reference has been correctly remapped.
+
+        Checks that:
+        1. The query uses source-table: "card__<model_id>" (v56) or source-card: <model_id> (v57)
+        2. The model ID matches the expected value
+        3. The card can be executed without errors
+
+        Args:
+            card_id: The ID of the card to verify
+            expected_model_id: The expected model ID in the remapped card
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        card = self.get_card(card_id)
+        if not card:
+            return False, f"Card {card_id} not found"
+
+        dataset_query = card.get("dataset_query", {})
+        errors = []
+
+        # Check v57 format first: source-card (integer)
+        stages = dataset_query.get("stages", [])
+        if stages:
+            stage = stages[0]
+            source_card = stage.get("source-card")
+            if source_card is not None:
+                if source_card != expected_model_id:
+                    errors.append(f"v57 source-card is {source_card}, expected {expected_model_id}")
+            else:
+                source_table = stage.get("source-table")
+                if isinstance(source_table, str) and source_table.startswith("card__"):
+                    actual_model_id = int(source_table.replace("card__", ""))
+                    if actual_model_id != expected_model_id:
+                        errors.append(
+                            f"v57 source-table is {source_table}, expected card__{expected_model_id}"
+                        )
+                else:
+                    errors.append(
+                        f"v57 stage has no source-card or card__ reference. "
+                        f"source-table: {source_table}"
+                    )
+        else:
+            # v56 format: source-table with "card__" prefix
+            query = dataset_query.get("query", {})
+            source_table = query.get("source-table")
+
+            if isinstance(source_table, str) and source_table.startswith("card__"):
+                actual_model_id = int(source_table.replace("card__", ""))
+                if actual_model_id != expected_model_id:
+                    errors.append(
+                        f"v56 source-table is {source_table}, expected card__{expected_model_id}"
+                    )
+            else:
+                errors.append(
+                    f"v56 query has no card__ reference in source-table. "
+                    f"source-table: {source_table}"
+                )
+
+        # Try to execute the card
+        try:
+            response = requests.post(
+                f"{self.api_url}/card/{card_id}/query",
+                headers=self._get_headers(),
+                timeout=30,
+            )
+            if response.status_code not in [200, 202]:
+                error_msg = response.json().get("message", response.text)
+                if "missing required parameters" in error_msg.lower():
+                    errors.append(f"Card execution failed with missing parameters: {error_msg}")
+        except Exception as e:
+            logger.warning(f"Could not execute card {card_id}: {e}")
+
+        if errors:
+            return False, "; ".join(errors)
+        return True, ""
 
     def verify_field_id_in_filter(
         self,

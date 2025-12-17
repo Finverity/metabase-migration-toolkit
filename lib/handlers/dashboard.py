@@ -108,6 +108,9 @@ class DashboardHandler(BaseHandler):
                 dashboard_name,
             )
 
+            # Store dashboard ID mapping for click_behavior remapping
+            self.id_mapper.set_dashboard_mapping(dash.id, updated_dash["id"])
+
             # Add to collection cache to keep it up-to-date for conflict detection
             if action_taken == "created":
                 self.context.add_to_collection_cache(
@@ -239,9 +242,16 @@ class DashboardHandler(BaseHandler):
         # Set unique negative ID
         clean_dashcard["id"] = temp_id
 
-        # Copy visualization_settings
+        # Get source database ID for field remapping
+        source_db_id = self._get_dashcard_database_id(dashcard)
+
+        # Remap visualization_settings (card IDs, dashboard IDs, field IDs)
         if "visualization_settings" in dashcard:
-            clean_dashcard["visualization_settings"] = dashcard["visualization_settings"]
+            clean_dashcard["visualization_settings"] = (
+                self.query_remapper.remap_dashcard_visualization_settings(
+                    dashcard["visualization_settings"], source_db_id
+                )
+            )
 
         # Remap parameter_mappings
         if dashcard.get("parameter_mappings"):
@@ -266,15 +276,113 @@ class DashboardHandler(BaseHandler):
                 logger.warning(f"Skipping dashcard with unmapped card_id: {source_card_id}")
                 return None
 
-        # Remove excluded fields
+        # Handle embedded card object (used by "Visualize another way" feature)
+        # The card field contains visualization overrides and needs ID remapping
+        if dashcard.get("card"):
+            remapped_card = self._remap_embedded_card(dashcard["card"], source_db_id)
+            if remapped_card:
+                clean_dashcard["card"] = remapped_card
+
+        # Remove excluded fields (but NOT 'card' since we handle it explicitly above)
         for field in DASHCARD_EXCLUDED_FIELDS:
+            # Skip 'card' - we handle it specially for "Visualize another way"
+            if field == "card":
+                continue
             if field in clean_dashcard:
                 del clean_dashcard[field]
 
         return clean_dashcard
 
+    def _remap_embedded_card(
+        self, card: dict[str, Any], source_db_id: int | None
+    ) -> dict[str, Any] | None:
+        """Remaps IDs in an embedded card object (for 'Visualize another way').
+
+        When a dashcard uses 'Visualize another way', it stores an embedded card
+        object with custom visualization settings. This card object contains
+        references to the original card ID, database ID, and potentially field IDs
+        that need to be remapped.
+
+        Args:
+            card: The embedded card object from the dashcard.
+            source_db_id: The source database ID for field lookups.
+
+        Returns:
+            The remapped card object, or None if remapping fails.
+        """
+        import copy
+
+        remapped_card = copy.deepcopy(card)
+
+        # Remap card.id (reference to the source card)
+        source_card_id = card.get("id")
+        if source_card_id and isinstance(source_card_id, int):
+            target_card_id = self.id_mapper.resolve_card_id(source_card_id)
+            if target_card_id:
+                remapped_card["id"] = target_card_id
+                logger.debug(f"Remapped embedded card.id from {source_card_id} to {target_card_id}")
+            else:
+                logger.warning(
+                    f"No mapping found for embedded card.id {source_card_id}. " f"Keeping original."
+                )
+
+        # Remap database_id if present
+        if "database_id" in card and card["database_id"]:
+            target_db_id = self.id_mapper.resolve_db_id(card["database_id"])
+            if target_db_id:
+                remapped_card["database_id"] = target_db_id
+                logger.debug(
+                    f"Remapped embedded card.database_id from {card['database_id']} "
+                    f"to {target_db_id}"
+                )
+
+        # Remap dataset_query if present (for query-based visualizations)
+        # Use remap_card_data to handle full card remapping including query
+        if "dataset_query" in card and card["dataset_query"]:
+            try:
+                # Create a minimal card structure for remapping
+                card_for_remap = {
+                    "database_id": card.get("database_id"),
+                    "dataset_query": card["dataset_query"],
+                }
+                remapped_data, success = self.query_remapper.remap_card_data(card_for_remap)
+                if success:
+                    remapped_card["dataset_query"] = remapped_data["dataset_query"]
+            except Exception as e:
+                logger.warning(f"Failed to remap embedded card dataset_query: {e}")
+
+        # Remap visualization_settings if present
+        if "visualization_settings" in card and card["visualization_settings"]:
+            remapped_card["visualization_settings"] = (
+                self.query_remapper.remap_dashcard_visualization_settings(
+                    card["visualization_settings"], source_db_id
+                )
+            )
+
+        # Remove immutable fields that shouldn't be sent on import
+        immutable_fields = [
+            "creator_id",
+            "creator",
+            "created_at",
+            "updated_at",
+            "made_public_by_id",
+            "public_uuid",
+            "moderation_reviews",
+            "can_write",
+            "entity_id",
+        ]
+        for field in immutable_fields:
+            remapped_card.pop(field, None)
+
+        return remapped_card
+
     def _get_dashcard_database_id(self, dashcard: dict[str, Any]) -> int | None:
         """Gets the database ID for a dashcard's card.
+
+        Tries to get the database ID from:
+        1. The manifest cards lookup using card_id
+        2. The embedded card object (for 'Visualize another way' dashcards)
+        3. The embedded card's dataset_query.database
 
         Args:
             dashcard: The dashcard.
@@ -282,13 +390,33 @@ class DashboardHandler(BaseHandler):
         Returns:
             The database ID or None.
         """
+        # First try to get from card_id via manifest
         source_card_id = dashcard.get("card_id")
-        if not source_card_id:
-            return None
+        if source_card_id:
+            for card in self.context.manifest.cards:
+                if card.id == source_card_id:
+                    return card.database_id
 
-        for card in self.context.manifest.cards:
-            if card.id == source_card_id:
-                return card.database_id
+        # Fall back to embedded card object (for "Visualize another way")
+        embedded_card = dashcard.get("card")
+        if embedded_card:
+            # Try database_id field
+            db_id = embedded_card.get("database_id")
+            if db_id and isinstance(db_id, int):
+                return int(db_id)
+            # Try dataset_query.database
+            dataset_query = embedded_card.get("dataset_query")
+            if dataset_query:
+                query_db = dataset_query.get("database")
+                if query_db and isinstance(query_db, int):
+                    return int(query_db)
+            # Try to lookup by embedded card.id in manifest
+            embedded_card_id = embedded_card.get("id")
+            if embedded_card_id:
+                for card in self.context.manifest.cards:
+                    if card.id == embedded_card_id:
+                        return card.database_id
+
         return None
 
     def _remap_series(self, series: list[Any]) -> list[dict[str, int]]:

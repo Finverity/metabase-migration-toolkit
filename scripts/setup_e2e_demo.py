@@ -17,10 +17,10 @@ import sys
 import time
 from pathlib import Path
 
-from tests.integration.test_helpers import MetabaseTestHelper
-
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tests.integration.test_helpers import MetabaseTestHelper  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -253,6 +253,22 @@ ORDER BY month DESC
             f"references model #{active_users_model}"
         )
 
+    # Query Builder card that references the model (key test case for MBQL card references!)
+    if active_users_model:
+        query_builder_model_card = helper.create_query_builder_card_from_model(
+            name="Query Builder Card From Model",
+            database_id=db_id,
+            model_id=active_users_model,
+            collection_id=main_collection,
+            aggregation=("count", None),
+            display="scalar",
+        )
+        created["cards"].append(query_builder_model_card)
+        logger.info(
+            f"  Created 'Query Builder Card From Model' (id={query_builder_model_card}) - "
+            f"MBQL query referencing model #{active_users_model}"
+        )
+
     # Card with join
     join_card = helper.create_card_with_join(
         name="Orders with Users",
@@ -290,6 +306,28 @@ ORDER BY month DESC
         )
         created["dashboards"].append(filter_dashboard)
         logger.info(f"  Created 'User Analytics Dashboard' (id={filter_dashboard})")
+
+    # Dashboard with "Visualize another way" (key test case for embedded card migration!)
+    # This tests the bug fix where the same card is displayed twice on a dashboard:
+    # - Once in default view (table)
+    # - Once with "Visualize another way" (bar chart)
+    if products_by_category:
+        visualize_another_way_dashboard = helper.create_dashboard_with_visualize_another_way(
+            name="Visualize Another Way Test",
+            collection_id=main_collection,
+            card_id=products_by_category,
+            database_id=db_id,
+            original_display="bar",  # Original card is already a bar chart
+            alternate_display="pie",  # Show as pie chart for the alternate view
+        )
+        if visualize_another_way_dashboard:
+            created["dashboards"].append(visualize_another_way_dashboard)
+            logger.info(
+                f"  Created 'Visualize Another Way Test' (id={visualize_another_way_dashboard}) - "
+                f"card #{products_by_category} displayed as both 'bar' and 'pie'"
+            )
+        else:
+            logger.warning("  Failed to create 'Visualize Another Way Test' dashboard")
 
     return created
 
