@@ -103,6 +103,20 @@ class QueryRemapper:
 
         # Remap visualization_settings
         if "visualization_settings" in data:
+            vis_settings = data["visualization_settings"]
+            # Remap columnValuesMapping if present
+            if isinstance(vis_settings, dict):
+              if "visualization" in vis_settings and isinstance(vis_settings["visualization"], dict):
+                  viz_config = vis_settings["visualization"]
+                  if "columnValuesMapping" in viz_config:
+                      viz_config["columnValuesMapping"] = self._remap_column_values_mapping(
+                          viz_config["columnValuesMapping"]
+                      )
+            # Also check at top level (some versions store it there)
+            if "columnValuesMapping" in vis_settings:
+                vis_settings["columnValuesMapping"] = self._remap_column_values_mapping(
+                    vis_settings["columnValuesMapping"]
+                )
             data["visualization_settings"] = self.remap_field_ids_recursively(
                 data["visualization_settings"], source_db_id
             )
@@ -562,7 +576,62 @@ class QueryRemapper:
             remapped_mappings.append(clean_mapping)
 
         return remapped_mappings
+    ##ERRIXOM=========================================================================
+    def _remap_column_values_mapping(
+      self, column_mapping: dict[str, Any]
+  ) -> dict[str, Any]:
+      """Remaps card references in columnValuesMapping within visualization settings.
 
+      Handles the format: {"COLUMN_X": [{"sourceId": "card:123", ...}]}
+
+      Args:
+          column_mapping: The columnValuesMapping dictionary.
+
+      Returns:
+          The remapped columnValuesMapping dictionary.
+      """
+      if not isinstance(column_mapping, dict):
+          return column_mapping
+      remapped_mapping = {}
+
+      for column_name, column_data in column_mapping.items():
+          if not isinstance(column_data, list):
+              remapped_mapping[column_name] = column_data
+              continue
+
+          remapped_column_data = []
+          for item in column_data:
+              if not isinstance(item, dict):
+                  remapped_column_data.append(item)
+                  continue
+
+              item_copy = item.copy()
+
+              # Check for sourceId with card reference
+              source_id = item_copy.get("sourceId")
+              if isinstance(source_id, str) and source_id.startswith("card:"):
+                  try:
+                      source_card_id = int(source_id.replace("card:", ""))
+                      target_card_id = self.id_mapper.resolve_card_id(source_card_id)
+                      if target_card_id:
+                          item_copy["sourceId"] = f"card:{target_card_id}"
+                          logger.debug(
+                              f"Remapped columnValuesMapping sourceId from "
+                              f"card:{source_card_id} to card:{target_card_id}"
+                          )
+                      else:
+                          logger.warning(
+                              f"No card mapping found for sourceId card:{source_card_id}. "
+                              f"Keeping original reference."
+                          )
+                  except ValueError:
+                      logger.warning(f"Invalid sourceId format: {source_id}")
+
+              remapped_column_data.append(item_copy)
+
+          remapped_mapping[column_name] = remapped_column_data
+
+      return remapped_mapping  
     # =========================================================================
     # Native Query Card Reference Remapping
     # =========================================================================

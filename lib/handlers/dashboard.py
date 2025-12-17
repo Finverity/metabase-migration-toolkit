@@ -241,7 +241,25 @@ class DashboardHandler(BaseHandler):
 
         # Copy visualization_settings
         if "visualization_settings" in dashcard:
-            clean_dashcard["visualization_settings"] = dashcard["visualization_settings"]
+          vis_settings = dashcard["visualization_settings"]
+
+          # Remap columnValuesMapping if present
+          if isinstance(vis_settings, dict):
+              # Check nested visualization.columnValuesMapping
+              if "visualization" in vis_settings and isinstance(vis_settings["visualization"], dict):
+                  viz_config = vis_settings["visualization"]
+                  if "columnValuesMapping" in viz_config:
+                      viz_config["columnValuesMapping"] = self.query_remapper._remap_column_values_mapping(
+                          viz_config["columnValuesMapping"]
+                      )
+
+              # Check top-level columnValuesMapping
+              if "columnValuesMapping" in vis_settings:
+                  vis_settings["columnValuesMapping"] = self.query_remapper._remap_column_values_mapping(
+                      vis_settings["columnValuesMapping"]
+                  )
+
+          clean_dashcard["visualization_settings"] = vis_settings
 
         # Remap parameter_mappings
         if dashcard.get("parameter_mappings"):
