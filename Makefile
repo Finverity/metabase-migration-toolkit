@@ -148,7 +148,7 @@ demo-migrate: demo-export demo-import ## Run full export then import (v57)
 	@echo "  Target: http://localhost:3003"
 	@echo "  Credentials: admin@example.com / Admin123!"
 
-demo-verify: ## Verify migration results (model reference remapping)
+demo-verify: ## Verify migration results (models, tabs, embedded cards)
 	@echo "Verifying migration results..."
 	$(PYTHON) scripts/verify_e2e_demo.py
 
@@ -162,12 +162,15 @@ demo: demo-setup demo-migrate demo-verify ## Full E2E demo: start services, setu
 	@echo "Target Metabase: http://localhost:3003"
 	@echo "Credentials: admin@example.com / Admin123!"
 	@echo ""
-	@echo "Key items to verify:"
-	@echo "  - Collections migrated with hierarchy"
-	@echo "  - Cards/Questions with correct field mappings"
-	@echo "  - Models migrated"
-	@echo "  - SQL cards referencing models (ID remapping)"
-	@echo "  - Dashboards with filters"
+	@echo "Key items verified:"
+	@echo "  ✓ Collections migrated with hierarchy"
+	@echo "  ✓ Cards/Questions with correct field mappings"
+	@echo "  ✓ Models migrated"
+	@echo "  ✓ SQL cards referencing models (ID remapping)"
+	@echo "  ✓ Query Builder cards from models (source-table remapping)"
+	@echo "  ✓ Dashboards with filters"
+	@echo "  ✓ Dashboard tabs (tabs array + dashboard_tab_id remapping)"
+	@echo "  ✓ 'Visualize another way' embedded cards (card.id remapping)"
 	@echo ""
 	@echo "Containers are still running. Stop with: make demo-down"
 

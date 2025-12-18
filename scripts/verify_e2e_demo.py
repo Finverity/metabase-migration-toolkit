@@ -321,6 +321,101 @@ def verify_visualize_another_way_dashboard(
     return len(errors) == 0, errors
 
 
+def verify_tabbed_dashboard(
+    helper: MetabaseTestHelper,
+    dashboard: dict,
+) -> tuple[bool, list[str]]:
+    """Verify that a tabbed dashboard was migrated correctly.
+
+    This tests the bug fix for dashboard tabs not being migrated. Before the fix:
+    - tabs array was being stripped during import
+    - dashboard_tab_id was in DASHCARD_EXCLUDED_FIELDS, so cards lost their tab assignment
+
+    Args:
+        helper: MetabaseTestHelper instance
+        dashboard: The dashboard data
+
+    Returns:
+        Tuple of (success, list of errors)
+    """
+    errors = []
+    dashboard_id = dashboard.get("id")
+    tabs = dashboard.get("tabs", [])
+    dashcards = dashboard.get("dashcards", [])
+
+    logger.info(f"\n  Dashboard ID: {dashboard_id}")
+    logger.info(f"  Number of tabs: {len(tabs)}")
+    logger.info(f"  Number of dashcards: {len(dashcards)}")
+
+    # Check 1: Dashboard should have tabs
+    if not tabs:
+        errors.append("Dashboard has no tabs - tabs were not migrated!")
+        logger.error("  ✗ No tabs found - tab migration failed!")
+        return False, errors
+    else:
+        logger.info("  ✓ Dashboard has tabs")
+
+    # Check 2: Verify tab structure
+    for tab in tabs:
+        tab_id = tab.get("id")
+        tab_name = tab.get("name")
+        logger.info(f"    Tab ID: {tab_id}, Name: {tab_name}")
+
+        if tab_id is None:
+            errors.append(f"Tab '{tab_name}' has no ID")
+        if not tab_name:
+            errors.append(f"Tab {tab_id} has no name")
+
+    # Check 3: Verify dashcards have dashboard_tab_id
+    cards_with_tab = [dc for dc in dashcards if dc.get("dashboard_tab_id") is not None]
+    cards_without_tab = [dc for dc in dashcards if dc.get("dashboard_tab_id") is None]
+
+    logger.info(f"\n  Dashcards with tab assignment: {len(cards_with_tab)}")
+    logger.info(f"  Dashcards without tab assignment: {len(cards_without_tab)}")
+
+    if not cards_with_tab:
+        errors.append("No dashcards have dashboard_tab_id - tab ID remapping failed!")
+        logger.error("  ✗ No dashcards have tab assignments!")
+    else:
+        logger.info("  ✓ Dashcards have tab assignments")
+
+    # Check 4: Verify dashboard_tab_id values match existing tab IDs
+    tab_ids = {tab.get("id") for tab in tabs}
+    for dashcard in cards_with_tab:
+        dashcard_id = dashcard.get("id")
+        dashcard_tab_id = dashcard.get("dashboard_tab_id")
+        card_id = dashcard.get("card_id")
+
+        if dashcard_tab_id not in tab_ids:
+            errors.append(
+                f"Dashcard {dashcard_id} (card_id={card_id}) has invalid "
+                f"dashboard_tab_id={dashcard_tab_id} (valid tabs: {tab_ids})"
+            )
+            logger.error(f"  ✗ Dashcard {dashcard_id} has invalid tab ID: {dashcard_tab_id}")
+        else:
+            logger.info(
+                f"  ✓ Dashcard {dashcard_id} (card_id={card_id}) assigned to tab {dashcard_tab_id}"
+            )
+
+    # Check 5: Try to load the dashboard to see if it renders correctly
+    logger.info("\n  Attempting to load dashboard...")
+    try:
+        response = requests.get(
+            f"{helper.api_url}/dashboard/{dashboard_id}",
+            headers=helper._get_headers(),
+            timeout=10,
+        )
+        if response.status_code == 200:
+            logger.info("  ✓ Dashboard loads successfully")
+        else:
+            errors.append(f"Dashboard failed to load: {response.status_code}")
+            logger.error(f"  ✗ Dashboard load failed: {response.status_code}")
+    except Exception as e:
+        logger.warning(f"  ⚠ Could not load dashboard: {e}")
+
+    return len(errors) == 0, errors
+
+
 def main() -> int:
     """Main entry point."""
     logger.info("=" * 60)
@@ -415,9 +510,35 @@ def main() -> int:
             for error in vaw_errors:
                 logger.error(f"  ✗ {error}")
 
+    # Verify tabbed dashboard
+    logger.info("\n" + "-" * 60)
+    logger.info("Looking for migrated dashboard 'Tabbed Dashboard Test'...")
+    tabbed_dashboard = find_dashboard_by_name(target, "Tabbed Dashboard Test")
+    tabbed_success = True
+    tabbed_errors: list[str] = []
+
+    if not tabbed_dashboard:
+        logger.warning("Dashboard 'Tabbed Dashboard Test' not found in target!")
+        logger.warning("  This dashboard may not have been created in the source instance.")
+    else:
+        logger.info(f"  Found dashboard with ID: {tabbed_dashboard.get('id')}")
+
+        # Verify tabbed dashboard migration
+        logger.info("\n" + "-" * 60)
+        logger.info("VERIFYING TABBED DASHBOARD MIGRATION")
+        logger.info("-" * 60)
+
+        tabbed_success, tabbed_errors = verify_tabbed_dashboard(target, tabbed_dashboard)
+
+        if tabbed_success:
+            logger.info("  ✓ Tabbed dashboard verification passed!")
+        else:
+            for error in tabbed_errors:
+                logger.error(f"  ✗ {error}")
+
     # Combine results
-    all_errors = sql_errors + qb_errors + vaw_errors
-    success = sql_success and qb_success and vaw_success
+    all_errors = sql_errors + qb_errors + vaw_errors + tabbed_errors
+    success = sql_success and qb_success and vaw_success and tabbed_success
 
     # Summary
     logger.info("\n" + "=" * 60)
@@ -436,6 +557,8 @@ All checks passed:
   ✓ Query Builder card: source-table/source-card references correct model ID
   ✓ Visualize another way: Embedded card.id correctly remapped
   ✓ Visualize another way: Cards accessible without 404 errors
+  ✓ Tabbed dashboard: Tabs correctly created on target
+  ✓ Tabbed dashboard: dashboard_tab_id correctly remapped for dashcards
 
 The model reference remapping is working correctly for all card types!
 """
@@ -458,6 +581,8 @@ Check lib/remapping/query_remapper.py for issues with:
   - _remap_card_reference() (for Query Builder cards)
 Check lib/handlers/dashboard.py for issues with:
   - _remap_embedded_card() (for 'Visualize another way' cards)
+  - _create_tabs_and_get_mapping() (for tabbed dashboards)
+  - _prepare_single_dashcard() (for dashboard_tab_id remapping)
 """
         )
         return 1

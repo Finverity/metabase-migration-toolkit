@@ -52,9 +52,6 @@ class DashboardHandler(BaseHandler):
             target_collection_id = self.id_mapper.resolve_collection_id(dash.collection_id)
             dash_data["collection_id"] = target_collection_id
 
-            # Prepare dashcards
-            dashcards_to_import = self._prepare_dashcards(dash_data.get("dashcards", []))
-
             # Clean and remap parameters
             payload = clean_for_create(dash_data)
             remapped_parameters = self.query_remapper.remap_dashboard_parameters(
@@ -91,9 +88,19 @@ class DashboardHandler(BaseHandler):
                 dashboard_id = new_dash["id"]
                 logger.debug(f"Created dashboard '{dashboard_name}' (ID: {dashboard_id})")
 
-            # Update with dashcards and settings
+            # Handle tabs: In v57, tabs must be created together with dashcards
+            # Build tabs with negative IDs and create a mapping for dashcard tab remapping
+            source_tabs = dash_data.get("tabs", [])
+            tabs_to_create, tab_mapping = self._prepare_tabs_for_import(source_tabs)
+
+            # Prepare dashcards with tab ID remapping
+            dashcards_to_import = self._prepare_dashcards(
+                dash_data.get("dashcards", []), tab_mapping
+            )
+
+            # Update with tabs and dashcards together (required for v57)
             update_payload = self._build_update_payload(
-                dashboard_name, payload, remapped_parameters, dashcards_to_import
+                dashboard_name, payload, remapped_parameters, dashcards_to_import, tabs_to_create
             )
             updated_dash = self.client.update_dashboard(dashboard_id, update_payload)
 
@@ -200,11 +207,65 @@ class DashboardHandler(BaseHandler):
                 return new_name
             counter += 1
 
-    def _prepare_dashcards(self, dashcards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _prepare_tabs_for_import(
+        self,
+        source_tabs: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], dict[int, int]]:
+        """Prepares tabs for import with negative IDs and builds the tab mapping.
+
+        In Metabase v57, tabs must be created together with dashcards in a single
+        PUT request. This method prepares tabs with negative IDs that Metabase will
+        replace with real IDs, and builds a mapping from source tab IDs to these
+        negative IDs for use in dashcard tab_id remapping.
+
+        Args:
+            source_tabs: List of source tab definitions.
+
+        Returns:
+            Tuple of (tabs_to_create, tab_mapping):
+            - tabs_to_create: List of tabs with negative IDs for the PUT request
+            - tab_mapping: Mapping of source_tab_id -> negative_temp_tab_id
+        """
+        tabs_to_create: list[dict[str, Any]] = []
+        tab_mapping: dict[int, int] = {}
+
+        if not source_tabs:
+            return tabs_to_create, tab_mapping
+
+        # Build tabs with negative IDs (Metabase will assign real IDs)
+        for idx, tab in enumerate(source_tabs):
+            source_tab_id = tab.get("id")
+            temp_tab_id = -(idx + 1)  # Negative IDs: -1, -2, -3, ...
+
+            tabs_to_create.append(
+                {
+                    "id": temp_tab_id,
+                    "name": tab.get("name", "Tab"),
+                    "position": tab.get("position", idx),
+                }
+            )
+
+            # Map source tab ID to the temporary negative ID
+            if source_tab_id is not None:
+                tab_mapping[source_tab_id] = temp_tab_id
+                logger.debug(
+                    f"Tab '{tab.get('name')}': source_id={source_tab_id} -> temp_id={temp_tab_id}"
+                )
+
+        logger.debug(f"Prepared {len(tabs_to_create)} tabs for import")
+
+        return tabs_to_create, tab_mapping
+
+    def _prepare_dashcards(
+        self,
+        dashcards: list[dict[str, Any]],
+        tab_mapping: dict[int, int] | None = None,
+    ) -> list[dict[str, Any]]:
         """Prepares dashcards for import by remapping IDs.
 
         Args:
             dashcards: The source dashcards.
+            tab_mapping: Optional mapping of source_tab_id -> target_tab_id.
 
         Returns:
             List of prepared dashcards.
@@ -213,7 +274,7 @@ class DashboardHandler(BaseHandler):
         next_temp_id = -1
 
         for dashcard in dashcards:
-            clean_dashcard = self._prepare_single_dashcard(dashcard, next_temp_id)
+            clean_dashcard = self._prepare_single_dashcard(dashcard, next_temp_id, tab_mapping)
             if clean_dashcard is not None:
                 prepared_dashcards.append(clean_dashcard)
                 next_temp_id -= 1
@@ -221,13 +282,17 @@ class DashboardHandler(BaseHandler):
         return prepared_dashcards
 
     def _prepare_single_dashcard(
-        self, dashcard: dict[str, Any], temp_id: int
+        self,
+        dashcard: dict[str, Any],
+        temp_id: int,
+        tab_mapping: dict[int, int] | None = None,
     ) -> dict[str, Any] | None:
         """Prepares a single dashcard for import.
 
         Args:
             dashcard: The source dashcard.
             temp_id: The temporary ID to assign.
+            tab_mapping: Optional mapping of source_tab_id -> target_tab_id.
 
         Returns:
             The prepared dashcard or None if skipped.
@@ -241,6 +306,22 @@ class DashboardHandler(BaseHandler):
 
         # Set unique negative ID
         clean_dashcard["id"] = temp_id
+
+        # Remap dashboard_tab_id if present and we have a tab mapping
+        source_tab_id = dashcard.get("dashboard_tab_id")
+        if source_tab_id is not None:
+            if tab_mapping and source_tab_id in tab_mapping:
+                clean_dashcard["dashboard_tab_id"] = tab_mapping[source_tab_id]
+                logger.debug(
+                    f"Remapped dashboard_tab_id: {source_tab_id} -> "
+                    f"{tab_mapping[source_tab_id]}"
+                )
+            else:
+                # Keep original tab ID - may work if tabs were already created
+                # with matching IDs, or will be null for single-tab dashboards
+                if tab_mapping:
+                    logger.warning(f"No tab mapping found for dashboard_tab_id {source_tab_id}")
+                clean_dashcard["dashboard_tab_id"] = source_tab_id
 
         # Get source database ID for field remapping
         source_db_id = self._get_dashcard_database_id(dashcard)
@@ -445,6 +526,7 @@ class DashboardHandler(BaseHandler):
         payload: dict[str, Any],
         parameters: list[dict[str, Any]],
         dashcards: list[dict[str, Any]],
+        tabs: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Builds the dashboard update payload.
 
@@ -453,6 +535,7 @@ class DashboardHandler(BaseHandler):
             payload: The original payload.
             parameters: Remapped parameters.
             dashcards: Prepared dashcards.
+            tabs: Tabs to create (with negative IDs for v57).
 
         Returns:
             The update payload.
@@ -469,6 +552,11 @@ class DashboardHandler(BaseHandler):
             update_payload["width"] = payload["width"]
         if "auto_apply_filters" in payload:
             update_payload["auto_apply_filters"] = payload["auto_apply_filters"]
+
+        # Add tabs if any (must be sent together with dashcards in v57)
+        if tabs:
+            update_payload["tabs"] = tabs
+            logger.debug(f"Including {len(tabs)} tabs in dashboard update")
 
         # Add dashcards if any
         if dashcards:

@@ -768,6 +768,142 @@ class TestGetDashcardDatabaseIdWithEmbeddedCard:
         assert result == 15  # From manifest
 
 
+class TestPrepareTabsForImport:
+    """Tests for _prepare_tabs_for_import (dashboard tab migration)."""
+
+    def test_prepare_tabs_empty(self, import_context):
+        """Test with no tabs returns empty lists."""
+        handler = DashboardHandler(import_context)
+        tabs_to_create, tab_mapping = handler._prepare_tabs_for_import([])
+        assert tabs_to_create == []
+        assert tab_mapping == {}
+
+    def test_prepare_tabs_success(self, import_context):
+        """Test successful tab preparation with negative IDs and mapping."""
+        handler = DashboardHandler(import_context)
+        source_tabs = [
+            {"id": 8, "name": "Home", "position": 0},
+            {"id": 9, "name": "Analytics", "position": 1},
+        ]
+
+        tabs_to_create, tab_mapping = handler._prepare_tabs_for_import(source_tabs)
+
+        # Should create tabs with negative IDs
+        assert len(tabs_to_create) == 2
+        assert tabs_to_create[0] == {"id": -1, "name": "Home", "position": 0}
+        assert tabs_to_create[1] == {"id": -2, "name": "Analytics", "position": 1}
+
+        # Should map source tab IDs to negative temp IDs
+        assert tab_mapping == {8: -1, 9: -2}
+
+    def test_prepare_tabs_preserves_position(self, import_context):
+        """Test that tab positions are preserved during preparation."""
+        handler = DashboardHandler(import_context)
+        # Tabs in non-sequential order
+        source_tabs = [
+            {"id": 20, "name": "Second", "position": 1},
+            {"id": 10, "name": "First", "position": 0},
+        ]
+
+        tabs_to_create, tab_mapping = handler._prepare_tabs_for_import(source_tabs)
+
+        # Positions should be preserved
+        assert tabs_to_create[0]["position"] == 1  # Second tab
+        assert tabs_to_create[1]["position"] == 0  # First tab
+        # Mapping should be based on order in source_tabs
+        assert tab_mapping == {20: -1, 10: -2}
+
+
+class TestPrepareDashcardsWithTabs:
+    """Tests for _prepare_single_dashcard with tab ID remapping."""
+
+    def test_remap_dashboard_tab_id(self, import_context, mock_id_mapper):
+        """Test that dashboard_tab_id is remapped correctly."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "dashboard_tab_id": 8,
+        }
+        tab_mapping = {8: 100, 9: 101}
+
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1, tab_mapping=tab_mapping)
+
+        assert result is not None
+        assert result["dashboard_tab_id"] == 100  # Remapped from 8 to 100
+
+    def test_remap_dashboard_tab_id_no_mapping(self, import_context, mock_id_mapper):
+        """Test dashboard_tab_id when tab mapping doesn't contain the ID."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "dashboard_tab_id": 8,
+        }
+        tab_mapping = {99: 100}  # Doesn't contain source tab ID 8
+
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1, tab_mapping=tab_mapping)
+
+        assert result is not None
+        # Should keep original tab ID when mapping not found
+        assert result["dashboard_tab_id"] == 8
+
+    def test_dashboard_tab_id_null(self, import_context, mock_id_mapper):
+        """Test dashcard with null dashboard_tab_id."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "dashboard_tab_id": None,
+        }
+
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1, tab_mapping={8: 100})
+
+        assert result is not None
+        # dashboard_tab_id should not be in result when source is None
+        assert "dashboard_tab_id" not in result
+
+    def test_dashboard_tab_id_no_tab_mapping(self, import_context, mock_id_mapper):
+        """Test dashcard with dashboard_tab_id but no tab mapping provided."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "dashboard_tab_id": 8,
+        }
+
+        # No tab_mapping provided (None)
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1, tab_mapping=None)
+
+        assert result is not None
+        # Should keep original tab ID when no mapping
+        assert result["dashboard_tab_id"] == 8
+
+
 class TestBuildUpdatePayload:
     """Tests for building dashboard update payload."""
 

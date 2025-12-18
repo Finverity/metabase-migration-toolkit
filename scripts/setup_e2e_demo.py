@@ -329,6 +329,28 @@ ORDER BY month DESC
         else:
             logger.warning("  Failed to create 'Visualize Another Way Test' dashboard")
 
+    # Dashboard with tabs (key test case for tab migration!)
+    # This tests the bug fix where dashboard tabs and dashboard_tab_id were not migrated
+    valid_cards = [c for c in [all_users_card, products_by_category, native_card] if c]
+    if len(valid_cards) >= 2:
+        tabbed_dashboard = helper.create_dashboard_with_tabs(
+            name="Tabbed Dashboard Test",
+            collection_id=main_collection,
+            tab_names=["Overview", "Analytics"],
+            card_ids_per_tab=[
+                [valid_cards[0]],  # First tab: users card
+                valid_cards[1:],  # Second tab: remaining cards
+            ],
+        )
+        if tabbed_dashboard:
+            created["dashboards"].append(tabbed_dashboard)
+            logger.info(
+                f"  Created 'Tabbed Dashboard Test' (id={tabbed_dashboard}) - "
+                f"2 tabs with cards distributed across them"
+            )
+        else:
+            logger.warning("  Failed to create 'Tabbed Dashboard Test' dashboard")
+
     return created
 
 

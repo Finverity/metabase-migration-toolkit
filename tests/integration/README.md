@@ -288,7 +288,7 @@ The `test_comprehensive_e2e.py` file contains additional comprehensive tests cov
 | `TestCollectionFeatures` | Deep nesting, special characters, empty collections                      | 3          |
 | `TestCardFeatures`       | JOINs, aggregations, expressions, template tags, visualizations, archived| 7          |
 | `TestModelFeatures`      | Multiple cards from model, dependency chains                             | 2          |
-| `TestDashboardFeatures`  | Tabs, text cards, linked filters                                         | 3          |
+| `TestDashboardFeatures`  | Tabs with ID remapping, text cards, linked filters, embedded cards       | 3          |
 | `TestIDRemapping`        | Table and field ID remapping in all query contexts                       | 3          |
 | `TestConflictResolution` | Skip, rename strategies                                                  | 2          |
 | `TestDryRun`             | Dry-run mode verification                                                | 1          |

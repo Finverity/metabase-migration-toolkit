@@ -1792,6 +1792,9 @@ class MetabaseTestHelper:
     ) -> int | None:
         """Create a dashboard with multiple tabs.
 
+        In Metabase v57, tabs must be created along with dashcards in a single
+        PUT request to the dashboard endpoint. Sending tabs alone doesn't work.
+
         Args:
             name: Dashboard name
             collection_id: Collection to place the dashboard in
@@ -1811,20 +1814,40 @@ class MetabaseTestHelper:
             if not dashboard_id:
                 return None
 
-            # Metabase creates tabs via PUT request with tabs array
-            tabs = []
+            # Build tabs with negative IDs (Metabase will assign real IDs)
+            tabs_to_create = []
             for idx, tab_name in enumerate(tab_names):
-                tabs.append(
+                tabs_to_create.append(
                     {
-                        "id": idx + 1,  # Tab IDs are 1-indexed
+                        "id": -(idx + 1),  # Negative IDs for new tabs
                         "name": tab_name,
+                        "position": idx,
                     }
                 )
 
-            # Update dashboard with tabs
+            # Build dashcards referencing the temporary tab IDs
+            all_dashcards = []
+            dashcard_id = -1
+            for tab_idx, card_ids in enumerate(card_ids_per_tab):
+                temp_tab_id = -(tab_idx + 1)  # Same negative ID as the tab
+                for card_idx, card_id in enumerate(card_ids):
+                    all_dashcards.append(
+                        {
+                            "id": dashcard_id,  # Negative ID for new dashcard
+                            "card_id": card_id,
+                            "row": card_idx * 4,
+                            "col": 0,
+                            "size_x": 8,
+                            "size_y": 4,
+                            "dashboard_tab_id": temp_tab_id,
+                        }
+                    )
+                    dashcard_id -= 1
+
+            # In v57, tabs and dashcards must be sent together in one PUT request
             response = requests.put(
                 f"{self.api_url}/dashboard/{dashboard_id}",
-                json={"tabs": tabs},
+                json={"tabs": tabs_to_create, "dashcards": all_dashcards},
                 headers=self._get_headers(),
                 timeout=10,
             )
@@ -1833,25 +1856,11 @@ class MetabaseTestHelper:
                 logger.error(f"Failed to add tabs to dashboard: {response.text}")
                 return dashboard_id
 
-            # Add cards to each tab
-            for tab_idx, card_ids in enumerate(card_ids_per_tab):
-                tab_id = tab_idx + 1
-                for card_idx, card_id in enumerate(card_ids):
-                    dashcard_data = {
-                        "cardId": card_id,
-                        "row": card_idx * 4,
-                        "col": 0,
-                        "size_x": 8,
-                        "size_y": 4,
-                        "dashboard_tab_id": tab_id,
-                    }
+            updated_dashboard = response.json()
+            actual_tabs = updated_dashboard.get("tabs", [])
+            actual_dashcards = updated_dashboard.get("dashcards", [])
 
-                    requests.post(
-                        f"{self.api_url}/dashboard/{dashboard_id}/cards",
-                        json=dashcard_data,
-                        headers=self._get_headers(),
-                        timeout=10,
-                    )
+            logger.info(f"Created {len(actual_tabs)} tabs and {len(actual_dashcards)} dashcards")
 
             return dashboard_id
 
