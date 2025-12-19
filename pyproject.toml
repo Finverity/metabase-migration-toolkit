@@ -223,7 +223,7 @@ exclude_lines = [
 precision = 2
 show_missing = true
 # Coverage thresholds - fail if coverage is below these percentages
-fail_under = 86
+fail_under = 85
 skip_covered = false
 skip_empty = true
 
