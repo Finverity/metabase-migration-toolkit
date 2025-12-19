@@ -34,6 +34,7 @@ def mock_id_mapper():
     mapper.collection_map = {}
     mapper.resolve_card_id.return_value = 999
     mapper.resolve_collection_id.return_value = 100
+    mapper.resolve_db_id.return_value = None  # Default to None, tests can override
     return mapper
 
 
@@ -43,6 +44,8 @@ def mock_query_remapper():
     remapper = Mock(spec=QueryRemapper)
     remapper.remap_dashboard_parameters.return_value = []
     remapper.remap_dashcard_parameter_mappings.return_value = []
+    remapper.remap_dashcard_visualization_settings.side_effect = lambda x, _: x
+    remapper.remap_card_data.return_value = ({}, True)  # Return (remapped_data, success)
     return remapper
 
 
@@ -535,6 +538,370 @@ class TestRemapSeries:
         result = handler._remap_series(series)
 
         assert result == []
+
+
+class TestRemapEmbeddedCard:
+    """Tests for _remap_embedded_card (Visualize another way feature)."""
+
+    def test_remap_embedded_card_remaps_card_id(self, import_context, mock_id_mapper):
+        """Test that card.id is remapped correctly."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        embedded_card = {
+            "id": 41,
+            "name": "My Question",
+            "display": "funnel",
+            "visualization_settings": {"funnel.type": "bar"},
+        }
+
+        result = handler._remap_embedded_card(embedded_card, source_db_id=1)
+
+        assert result is not None
+        assert result["id"] == 999  # Remapped from 41 to 999
+        assert result["name"] == "My Question"
+        assert result["display"] == "funnel"
+
+    def test_remap_embedded_card_remaps_database_id(self, import_context, mock_id_mapper):
+        """Test that database_id is remapped correctly."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+        mock_id_mapper.resolve_db_id.return_value = 50
+
+        handler = DashboardHandler(import_context)
+        embedded_card = {
+            "id": 41,
+            "database_id": 5,
+            "display": "table",
+        }
+
+        result = handler._remap_embedded_card(embedded_card, source_db_id=5)
+
+        assert result is not None
+        assert result["database_id"] == 50  # Remapped from 5 to 50
+
+    def test_remap_embedded_card_removes_immutable_fields(self, import_context, mock_id_mapper):
+        """Test that immutable fields are removed."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        embedded_card = {
+            "id": 41,
+            "display": "bar",
+            "creator_id": 1,
+            "creator": {"id": 1, "email": "admin@test.com"},
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-15T00:00:00Z",
+            "public_uuid": "abc123",
+            "can_write": True,
+            "entity_id": "xyz789",
+        }
+
+        result = handler._remap_embedded_card(embedded_card, source_db_id=1)
+
+        assert result is not None
+        assert "creator_id" not in result
+        assert "creator" not in result
+        assert "created_at" not in result
+        assert "updated_at" not in result
+        assert "public_uuid" not in result
+        assert "can_write" not in result
+        assert "entity_id" not in result
+
+    def test_remap_embedded_card_keeps_unmapped_card_id(self, import_context, mock_id_mapper):
+        """Test that unmapped card.id keeps original value with warning."""
+        mock_id_mapper.resolve_card_id.return_value = None
+
+        handler = DashboardHandler(import_context)
+        embedded_card = {
+            "id": 41,
+            "display": "funnel",
+        }
+
+        result = handler._remap_embedded_card(embedded_card, source_db_id=1)
+
+        # Should keep original ID when no mapping found
+        assert result is not None
+        assert result["id"] == 41
+
+    def test_remap_embedded_card_no_id_field(self, import_context):
+        """Test embedded card without id field (edge case)."""
+        handler = DashboardHandler(import_context)
+        embedded_card = {
+            "display": "scalar",
+            "visualization_settings": {"scalar.field": "count"},
+        }
+
+        result = handler._remap_embedded_card(embedded_card, source_db_id=1)
+
+        assert result is not None
+        assert "id" not in result
+        assert result["display"] == "scalar"
+
+
+class TestPrepareDashcardsWithEmbeddedCard:
+    """Tests for _prepare_single_dashcard with embedded card (Visualize another way)."""
+
+    def test_prepare_dashcard_with_embedded_card(self, import_context, mock_id_mapper):
+        """Test dashcard with embedded card is processed correctly."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "card": {
+                "id": 41,
+                "name": "My Question - Funnel View",
+                "display": "funnel",
+                "visualization_settings": {"funnel.type": "bar"},
+            },
+        }
+
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1)
+
+        assert result is not None
+        assert result["card_id"] == 999  # card_id remapped
+        assert "card" in result  # embedded card preserved
+        assert result["card"]["id"] == 999  # card.id remapped
+
+    def test_prepare_dashcard_embedded_card_without_card_id(
+        self, import_context, mock_id_mapper, mock_manifest
+    ):
+        """Test dashcard with only embedded card (no card_id) is processed.
+
+        This tests the edge case where 'Visualize another way' might store
+        card info only in the card field.
+        """
+        mock_id_mapper.resolve_card_id.return_value = 999
+        mock_manifest.cards = []  # No cards in manifest
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "card": {
+                "id": 41,
+                "database_id": 5,
+                "display": "funnel",
+            },
+        }
+
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1)
+
+        assert result is not None
+        assert "card_id" not in result  # No card_id to remap
+        assert "card" in result
+        assert result["card"]["id"] == 999  # card.id remapped
+
+
+class TestGetDashcardDatabaseIdWithEmbeddedCard:
+    """Tests for _get_dashcard_database_id with embedded card."""
+
+    def test_get_database_id_from_embedded_card_database_id(self, import_context, mock_manifest):
+        """Test getting database_id from embedded card's database_id field."""
+        mock_manifest.cards = []
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "card": {
+                "id": 41,
+                "database_id": 5,
+            }
+        }
+
+        result = handler._get_dashcard_database_id(dashcard)
+
+        assert result == 5
+
+    def test_get_database_id_from_embedded_card_dataset_query(self, import_context, mock_manifest):
+        """Test getting database_id from embedded card's dataset_query.database."""
+        mock_manifest.cards = []
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "card": {
+                "id": 41,
+                "dataset_query": {
+                    "database": 10,
+                    "type": "query",
+                },
+            }
+        }
+
+        result = handler._get_dashcard_database_id(dashcard)
+
+        assert result == 10
+
+    def test_get_database_id_from_embedded_card_manifest_lookup(
+        self, import_context, mock_manifest
+    ):
+        """Test getting database_id from manifest via embedded card.id."""
+        mock_manifest.cards = [
+            Card(
+                id=41,
+                name="Test Card",
+                file_path="cards/test.json",
+                collection_id=10,
+                database_id=15,
+                archived=False,
+                dataset=False,
+            ),
+        ]
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "card": {
+                "id": 41,
+                # No database_id or dataset_query
+            }
+        }
+
+        result = handler._get_dashcard_database_id(dashcard)
+
+        assert result == 15  # From manifest
+
+
+class TestPrepareTabsForImport:
+    """Tests for _prepare_tabs_for_import (dashboard tab migration)."""
+
+    def test_prepare_tabs_empty(self, import_context):
+        """Test with no tabs returns empty lists."""
+        handler = DashboardHandler(import_context)
+        tabs_to_create, tab_mapping = handler._prepare_tabs_for_import([])
+        assert tabs_to_create == []
+        assert tab_mapping == {}
+
+    def test_prepare_tabs_success(self, import_context):
+        """Test successful tab preparation with negative IDs and mapping."""
+        handler = DashboardHandler(import_context)
+        source_tabs = [
+            {"id": 8, "name": "Home", "position": 0},
+            {"id": 9, "name": "Analytics", "position": 1},
+        ]
+
+        tabs_to_create, tab_mapping = handler._prepare_tabs_for_import(source_tabs)
+
+        # Should create tabs with negative IDs
+        assert len(tabs_to_create) == 2
+        assert tabs_to_create[0] == {"id": -1, "name": "Home", "position": 0}
+        assert tabs_to_create[1] == {"id": -2, "name": "Analytics", "position": 1}
+
+        # Should map source tab IDs to negative temp IDs
+        assert tab_mapping == {8: -1, 9: -2}
+
+    def test_prepare_tabs_preserves_position(self, import_context):
+        """Test that tab positions are preserved during preparation."""
+        handler = DashboardHandler(import_context)
+        # Tabs in non-sequential order
+        source_tabs = [
+            {"id": 20, "name": "Second", "position": 1},
+            {"id": 10, "name": "First", "position": 0},
+        ]
+
+        tabs_to_create, tab_mapping = handler._prepare_tabs_for_import(source_tabs)
+
+        # Positions should be preserved
+        assert tabs_to_create[0]["position"] == 1  # Second tab
+        assert tabs_to_create[1]["position"] == 0  # First tab
+        # Mapping should be based on order in source_tabs
+        assert tab_mapping == {20: -1, 10: -2}
+
+
+class TestPrepareDashcardsWithTabs:
+    """Tests for _prepare_single_dashcard with tab ID remapping."""
+
+    def test_remap_dashboard_tab_id(self, import_context, mock_id_mapper):
+        """Test that dashboard_tab_id is remapped correctly."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "dashboard_tab_id": 8,
+        }
+        tab_mapping = {8: 100, 9: 101}
+
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1, tab_mapping=tab_mapping)
+
+        assert result is not None
+        assert result["dashboard_tab_id"] == 100  # Remapped from 8 to 100
+
+    def test_remap_dashboard_tab_id_no_mapping(self, import_context, mock_id_mapper):
+        """Test dashboard_tab_id when tab mapping doesn't contain the ID."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "dashboard_tab_id": 8,
+        }
+        tab_mapping = {99: 100}  # Doesn't contain source tab ID 8
+
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1, tab_mapping=tab_mapping)
+
+        assert result is not None
+        # Should keep original tab ID when mapping not found
+        assert result["dashboard_tab_id"] == 8
+
+    def test_dashboard_tab_id_null(self, import_context, mock_id_mapper):
+        """Test dashcard with null dashboard_tab_id."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "dashboard_tab_id": None,
+        }
+
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1, tab_mapping={8: 100})
+
+        assert result is not None
+        # dashboard_tab_id should not be in result when source is None
+        assert "dashboard_tab_id" not in result
+
+    def test_dashboard_tab_id_no_tab_mapping(self, import_context, mock_id_mapper):
+        """Test dashcard with dashboard_tab_id but no tab mapping provided."""
+        mock_id_mapper.resolve_card_id.return_value = 999
+
+        handler = DashboardHandler(import_context)
+        dashcard = {
+            "id": 1,
+            "card_id": 41,
+            "row": 0,
+            "col": 0,
+            "size_x": 6,
+            "size_y": 4,
+            "dashboard_tab_id": 8,
+        }
+
+        # No tab_mapping provided (None)
+        result = handler._prepare_single_dashcard(dashcard, temp_id=-1, tab_mapping=None)
+
+        assert result is not None
+        # Should keep original tab ID when no mapping
+        assert result["dashboard_tab_id"] == 8
 
 
 class TestBuildUpdatePayload:

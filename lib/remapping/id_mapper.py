@@ -35,6 +35,7 @@ class IDMapper:
         # ID mappings: source_id -> target_id
         self._collection_map: dict[int, int] = {}
         self._card_map: dict[int, int] = {}
+        self._dashboard_map: dict[int, int] = {}
         self._group_map: dict[int, int] = {}
 
         # Table and field mappings: (source_db_id, source_id) -> target_id
@@ -55,6 +56,11 @@ class IDMapper:
     def card_map(self) -> dict[int, int]:
         """Returns the card ID mapping."""
         return self._card_map
+
+    @property
+    def dashboard_map(self) -> dict[int, int]:
+        """Returns the dashboard ID mapping."""
+        return self._dashboard_map
 
     @property
     def group_map(self) -> dict[int, int]:
@@ -80,6 +86,10 @@ class IDMapper:
     def set_card_mapping(self, source_id: int, target_id: int) -> None:
         """Sets a card ID mapping."""
         self._card_map[source_id] = target_id
+
+    def set_dashboard_mapping(self, source_id: int, target_id: int) -> None:
+        """Sets a dashboard ID mapping."""
+        self._dashboard_map[source_id] = target_id
 
     def set_group_mapping(self, source_id: int, target_id: int) -> None:
         """Sets a permission group ID mapping."""
@@ -156,6 +166,17 @@ class IDMapper:
             The target card ID, or None if not mapped.
         """
         return self._card_map.get(source_card_id)
+
+    def resolve_dashboard_id(self, source_dashboard_id: int) -> int | None:
+        """Resolves a source dashboard ID to a target dashboard ID.
+
+        Args:
+            source_dashboard_id: The source dashboard ID.
+
+        Returns:
+            The target dashboard ID, or None if not mapped.
+        """
+        return self._dashboard_map.get(source_dashboard_id)
 
     # --- Build table and field mappings ---
 

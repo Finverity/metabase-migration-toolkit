@@ -782,3 +782,283 @@ class QueryRemapper:
             separator = match.group(2)  # Either "-" or " "
             return re.sub(pattern, f"{prefix}{target_card_id}{separator}", tag_name)
         return tag_name
+
+    # =========================================================================
+    # Dashcard Visualization Settings Remapping
+    # =========================================================================
+
+    def remap_dashcard_visualization_settings(
+        self,
+        viz_settings: dict[str, Any],
+        source_db_id: int | None,
+    ) -> dict[str, Any]:
+        """Remaps card and dashboard IDs in dashcard visualization_settings.
+
+        Handles:
+        - click_behavior.targetId for question/dashboard links
+        - visualization.columnValuesMapping for Visualizer dashcards (card:ID format)
+        - link.entity.id for link cards
+
+        Args:
+            viz_settings: The visualization_settings dictionary.
+            source_db_id: The source database ID for field lookups.
+
+        Returns:
+            The remapped visualization_settings dictionary.
+        """
+        if not viz_settings:
+            return viz_settings
+
+        result = copy.deepcopy(viz_settings)
+
+        # Remap click_behavior
+        if "click_behavior" in result:
+            result["click_behavior"] = self._remap_click_behavior(result["click_behavior"])
+
+        # Remap column-level click behaviors (for table visualizations)
+        # These are stored as column_settings.{column_key}.click_behavior
+        if "column_settings" in result and isinstance(result["column_settings"], dict):
+            for col_key, col_settings in result["column_settings"].items():
+                if isinstance(col_settings, dict) and "click_behavior" in col_settings:
+                    result["column_settings"][col_key]["click_behavior"] = (
+                        self._remap_click_behavior(col_settings["click_behavior"])
+                    )
+
+        # Remap Visualizer columnValuesMapping (card:ID format)
+        if "visualization" in result and isinstance(result["visualization"], dict):
+            result["visualization"] = self._remap_visualizer_definition(result["visualization"])
+
+        # Remap link card entity
+        if "link" in result and isinstance(result["link"], dict):
+            result["link"] = self._remap_link_card_settings(result["link"])
+
+        # Remap field IDs in visualization settings
+        if source_db_id:
+            result = self.remap_field_ids_recursively(result, source_db_id)
+
+        return result
+
+    def _remap_click_behavior(self, click_behavior: dict[str, Any]) -> dict[str, Any]:
+        """Remaps card and dashboard IDs in click_behavior.
+
+        Handles:
+        - type: "link", linkType: "question" -> remap targetId as card ID
+        - type: "link", linkType: "dashboard" -> remap targetId as dashboard ID
+
+        Args:
+            click_behavior: The click_behavior dictionary.
+
+        Returns:
+            The remapped click_behavior dictionary.
+        """
+        if not isinstance(click_behavior, dict):
+            return click_behavior
+
+        result = copy.deepcopy(click_behavior)
+
+        if result.get("type") == "link" and "targetId" in result:
+            link_type = result.get("linkType")
+            target_id = result["targetId"]
+
+            if link_type == "question" and isinstance(target_id, int):
+                new_target_id = self.id_mapper.resolve_card_id(target_id)
+                if new_target_id:
+                    result["targetId"] = new_target_id
+                    logger.debug(
+                        f"Remapped click_behavior targetId (question) "
+                        f"from {target_id} to {new_target_id}"
+                    )
+                else:
+                    logger.warning(
+                        f"No card mapping found for click_behavior targetId {target_id}. "
+                        f"Keeping original."
+                    )
+
+            elif link_type == "dashboard" and isinstance(target_id, int):
+                new_target_id = self.id_mapper.resolve_dashboard_id(target_id)
+                if new_target_id:
+                    result["targetId"] = new_target_id
+                    logger.debug(
+                        f"Remapped click_behavior targetId (dashboard) "
+                        f"from {target_id} to {new_target_id}"
+                    )
+                else:
+                    logger.warning(
+                        f"No dashboard mapping found for click_behavior targetId {target_id}. "
+                        f"Keeping original."
+                    )
+
+        return result
+
+    def _remap_visualizer_definition(self, visualization: dict[str, Any]) -> dict[str, Any]:
+        """Remaps card IDs in Visualizer definition.
+
+        The Visualizer stores card references in columnValuesMapping as:
+        - sourceId: "card:123" where 123 is the card ID
+
+        Args:
+            visualization: The visualization definition dictionary.
+
+        Returns:
+            The remapped visualization dictionary.
+        """
+        if not isinstance(visualization, dict):
+            return visualization
+
+        result = copy.deepcopy(visualization)
+
+        # Remap columnValuesMapping
+        column_values_mapping = result.get("columnValuesMapping")
+        if isinstance(column_values_mapping, dict):
+            result["columnValuesMapping"] = self._remap_column_values_mapping(column_values_mapping)
+
+        return result
+
+    def _remap_column_values_mapping(self, mapping: dict[str, Any]) -> dict[str, Any]:
+        """Remaps card IDs in columnValuesMapping.
+
+        The mapping contains entries like:
+        {
+            "column_name": [
+                {"sourceId": "card:123", "name": "col", "originalName": "col"}
+            ]
+        }
+
+        Args:
+            mapping: The columnValuesMapping dictionary.
+
+        Returns:
+            The remapped mapping dictionary.
+        """
+        result: dict[str, Any] = {}
+
+        for key, value in mapping.items():
+            if isinstance(value, list):
+                remapped_list: list[Any] = []
+                for item in value:
+                    if isinstance(item, dict) and "sourceId" in item:
+                        remapped_item = self._remap_visualizer_source_id(item)
+                        remapped_list.append(remapped_item)
+                    elif isinstance(item, str) and item.startswith("$_card:"):
+                        # Handle data source name references: $_card:123_name
+                        remapped_list.append(self._remap_data_source_name_ref(item))
+                    else:
+                        remapped_list.append(item)
+                result[key] = remapped_list
+            else:
+                result[key] = value
+
+        return result
+
+    def _remap_visualizer_source_id(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Remaps a single Visualizer column reference.
+
+        Args:
+            item: A column reference dict with sourceId like "card:123".
+
+        Returns:
+            The remapped column reference.
+        """
+        result = item.copy()
+        source_id = result.get("sourceId", "")
+
+        if isinstance(source_id, str) and source_id.startswith("card:"):
+            try:
+                card_id = int(source_id.replace("card:", ""))
+                new_card_id = self.id_mapper.resolve_card_id(card_id)
+                if new_card_id:
+                    result["sourceId"] = f"card:{new_card_id}"
+                    logger.debug(
+                        f"Remapped Visualizer sourceId from card:{card_id} to card:{new_card_id}"
+                    )
+                else:
+                    logger.warning(
+                        f"No card mapping found for Visualizer sourceId card:{card_id}. "
+                        f"Keeping original."
+                    )
+            except ValueError:
+                logger.warning(f"Invalid Visualizer sourceId format: {source_id}")
+
+        return result
+
+    def _remap_data_source_name_ref(self, ref: str) -> str:
+        """Remaps a Visualizer data source name reference.
+
+        Format: $_card:123_name -> $_card:456_name
+
+        Args:
+            ref: The data source name reference string.
+
+        Returns:
+            The remapped reference string.
+        """
+        # Pattern: $_card:123_name
+        pattern = r"^\$_card:(\d+)_name$"
+        match = re.match(pattern, ref)
+        if match:
+            card_id = int(match.group(1))
+            new_card_id = self.id_mapper.resolve_card_id(card_id)
+            if new_card_id:
+                new_ref = f"$_card:{new_card_id}_name"
+                logger.debug(f"Remapped data source name ref from {ref} to {new_ref}")
+                return new_ref
+            else:
+                logger.warning(
+                    f"No card mapping found for data source name ref {ref}. Keeping original."
+                )
+        return ref
+
+    def _remap_link_card_settings(self, link: dict[str, Any]) -> dict[str, Any]:
+        """Remaps entity IDs in link card settings.
+
+        Link cards can link to:
+        - Cards (model: "card" or "question")
+        - Dashboards (model: "dashboard")
+        - Other entities
+
+        Args:
+            link: The link settings dictionary.
+
+        Returns:
+            The remapped link settings.
+        """
+        if not isinstance(link, dict):
+            return link
+
+        result = copy.deepcopy(link)
+        entity = result.get("entity")
+
+        if not isinstance(entity, dict) or "restricted" in entity:
+            return result
+
+        entity_id = entity.get("id")
+        model = entity.get("model")
+
+        if not isinstance(entity_id, int):
+            return result
+
+        if model in ("card", "question", "model", "metric"):
+            new_id = self.id_mapper.resolve_card_id(entity_id)
+            if new_id:
+                result["entity"]["id"] = new_id
+                logger.debug(f"Remapped link card entity id ({model}) from {entity_id} to {new_id}")
+            else:
+                logger.warning(
+                    f"No card mapping found for link card entity id {entity_id}. "
+                    f"Keeping original."
+                )
+
+        elif model == "dashboard":
+            new_id = self.id_mapper.resolve_dashboard_id(entity_id)
+            if new_id:
+                result["entity"]["id"] = new_id
+                logger.debug(
+                    f"Remapped link card entity id (dashboard) from {entity_id} to {new_id}"
+                )
+            else:
+                logger.warning(
+                    f"No dashboard mapping found for link card entity id {entity_id}. "
+                    f"Keeping original."
+                )
+
+        return result

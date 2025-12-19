@@ -25,11 +25,15 @@ production use.
 - **Model Support:** Fully supports Metabase models (cards with `dataset=true`), preserving their model status during migration.
 - **Permissions Migration:** Export and import permission groups and access control settings.
 - **Database Remapping:** Intelligently remaps questions and cards to new database IDs on the target instance.
-- **Table & Field ID Remapping:** Automatically remaps table IDs and field IDs in card queries (NEW!).
+- **Table & Field ID Remapping:** Automatically remaps table IDs and field IDs in card queries.
   - Captures table and field metadata during export
   - Builds intelligent mappings between source and target instances
   - Remaps table IDs in card queries and filters
   - Remaps field IDs in filter expressions
+- **Dashboard Tab Support:** Fully migrates dashboard tabs with proper ID remapping.
+  - Creates tabs on target dashboard after initial creation
+  - Remaps `dashboard_tab_id` on dashcards to maintain card-tab assignments
+- **Embedded Card Support:** Handles "Visualize another way" dashcards with embedded card objects.
 - **Conflict Resolution:** Strategies for handling items that already exist on the target (`skip`, `overwrite`, `rename`).
 - **Idempotent Import:** Re-running an import with `skip` or `overwrite` produces a consistent state.
 - **Dry Run Mode:** Preview all import actions without making any changes to the target instance.

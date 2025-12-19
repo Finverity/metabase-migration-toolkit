@@ -86,6 +86,7 @@ IMMUTABLE_FIELDS = frozenset(
 )
 
 # Fields to exclude from dashcard payloads
+# Note: dashboard_tab_id is NOT excluded - it's remapped during import
 DASHCARD_EXCLUDED_FIELDS = frozenset(
     {
         "dashboard_id",
@@ -95,7 +96,6 @@ DASHCARD_EXCLUDED_FIELDS = frozenset(
         "card",
         "action_id",
         "collection_authority_level",
-        "dashboard_tab_id",
     }
 )
 
