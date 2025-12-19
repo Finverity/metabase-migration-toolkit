@@ -41,11 +41,11 @@ jobs:
         run: |
           twine check dist/*
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v6
-      with:
-        name: python-package-distributions
-        path: dist/
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: python-package-distributions
+          path: dist/
 
   publish-to-testpypi:
     name: Publish to TestPyPI
