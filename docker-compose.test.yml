@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL database for source Metabase
   source-postgres:
@@ -10,7 +8,7 @@ services:
       POSTGRES_USER: metabase
       POSTGRES_PASSWORD: metabase_password # pragma: allowlist-secret
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - source-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -64,7 +62,7 @@ services:
 
   # Source Metabase instance
   source-metabase:
-    image: metabase/metabase:v0.48.0
+    image: metabase/metabase:v0.56.1
     container_name: metabase-source
     environment:
       MB_DB_TYPE: postgres
@@ -76,7 +74,7 @@ services:
       MB_JETTY_PORT: 3000
       JAVA_TIMEZONE: UTC
     ports:
-      - "3000:3000"
+      - "3002:3000"
     depends_on:
       source-postgres:
         condition: service_healthy
@@ -95,7 +93,7 @@ services:
 
   # Target Metabase instance
   target-metabase:
-    image: metabase/metabase:v0.48.0
+    image: metabase/metabase:v0.56.1
     container_name: metabase-target
     environment:
       MB_DB_TYPE: postgres
@@ -107,7 +105,7 @@ services:
       MB_JETTY_PORT: 3000
       JAVA_TIMEZONE: UTC
     ports:
-      - "3001:3000"
+      - "3003:3000"
     depends_on:
       target-postgres:
         condition: service_healthy

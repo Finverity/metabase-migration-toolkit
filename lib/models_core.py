@@ -72,6 +72,7 @@ class ManifestMeta:
     export_timestamp: str
     tool_version: str
     cli_args: dict[str, Any]
+    metabase_version: str | None = None  # Metabase version used during export (e.g., "v56")
 
 
 @dataclasses.dataclass

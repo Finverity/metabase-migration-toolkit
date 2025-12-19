@@ -10,6 +10,7 @@ Features:
 - Dry-run mode for safe previews
 - Comprehensive logging and error handling
 - Retry logic with exponential backoff
+- Version-aware migration support
 """
 
 __version__ = "1.0.0"
@@ -18,7 +19,19 @@ __license__ = "MIT"
 
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ExportConfig, ImportConfig
-from lib.models import Card, Collection, Dashboard, Manifest
+from lib.constants import (
+    DEFAULT_METABASE_VERSION,
+    SUPPORTED_METABASE_VERSIONS,
+    MetabaseVersion,
+)
+from lib.models_core import Card, Collection, Dashboard, Manifest
+from lib.version import (
+    VersionAdapter,
+    VersionConfig,
+    get_version_adapter,
+    get_version_config,
+    validate_version_compatibility,
+)
 
 __all__ = [
     # Version info
@@ -36,4 +49,13 @@ __all__ = [
     "Card",
     "Dashboard",
     "Manifest",
+    # Metabase Version Support
+    "MetabaseVersion",
+    "DEFAULT_METABASE_VERSION",
+    "SUPPORTED_METABASE_VERSIONS",
+    "VersionConfig",
+    "VersionAdapter",
+    "get_version_config",
+    "get_version_adapter",
+    "validate_version_compatibility",
 ]

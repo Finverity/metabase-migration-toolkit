@@ -2,7 +2,8 @@
 
 ## Recent Updates (2025-10-22)
 
-✅ **Table & Field ID Remapping**: Automatically remaps table and field IDs during import (NEW!)
+✅ **Metabase v57 Support**: Full support for Metabase v0.57.x with MBQL 5 query format (NEW!)
+✅ **Table & Field ID Remapping**: Automatically remaps table and field IDs during import
 ✅ **Permissions Migration**: Export and import permissions to avoid 403 errors
 ✅ **Authentication Fixed**: Corrected `.env` file format
 ✅ **Dashboard Import Fixed**: Removed false error messages
@@ -293,6 +294,21 @@ MB_TARGET_PASSWORD=password123
 # OR use personal API token:
 # MB_TARGET_PERSONAL_TOKEN=mb_xyz...
 ```
+
+### Metabase Version
+
+```bash
+# Specify the Metabase version (determines query format)
+# Supported: v56 (default), v57
+MB_METABASE_VERSION=v56
+```
+
+**Version compatibility:**
+
+- `v56`: Metabase v0.56.x (MBQL 4 format)
+- `v57`: Metabase v0.57.x (MBQL 5 format with stages)
+
+**Important:** Source and target must be the same version.
 
 ---
 

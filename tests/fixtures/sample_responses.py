@@ -75,7 +75,8 @@ SAMPLE_MODEL = {
     "description": "Curated customer data model",
     "collection_id": 1,
     "database_id": 2,
-    "dataset": True,  # This marks it as a model
+    "type": "model",  # Card type for models in Metabase v56+
+    "dataset": True,  # Legacy field that also marks it as a model
     "dataset_query": {
         "type": "query",
         "database": 2,

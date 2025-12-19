@@ -82,6 +82,98 @@ docker-clean: ## Clean up Docker volumes and containers
 	docker-compose -f docker-compose.test.yml down -v
 	docker volume prune -f
 
+# =============================================================================
+# E2E Demo targets (v57)
+# =============================================================================
+
+demo-up: ## Start v57 Docker services for E2E demo
+	docker compose -f docker-compose.test.v57.yml up -d
+	@echo "Waiting for Metabase services to be ready (this may take 2-3 minutes)..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do \
+		if curl -sf http://localhost:3002/api/health > /dev/null 2>&1 && \
+		   curl -sf http://localhost:3003/api/health > /dev/null 2>&1; then \
+			echo "✓ Both Metabase instances are healthy!"; \
+			break; \
+		fi; \
+		echo "  Waiting... ($$i/24)"; \
+		sleep 5; \
+	done
+	@echo ""
+	@echo "Services started:"
+	@echo "  Source Metabase: http://localhost:3002"
+	@echo "  Target Metabase: http://localhost:3003"
+
+demo-down: ## Stop v57 Docker services
+	docker compose -f docker-compose.test.v57.yml down -v
+
+demo-status: ## Show status of v57 Docker services
+	docker compose -f docker-compose.test.v57.yml ps
+
+demo-logs: ## Show logs from v57 Docker services
+	docker compose -f docker-compose.test.v57.yml logs -f
+
+demo-setup: demo-up ## Start v57 services and setup test data
+	@echo ""
+	@echo "Setting up test data..."
+	$(PYTHON) scripts/setup_e2e_demo.py
+
+demo-export: ## Export from source Metabase (v57)
+	@echo "Exporting from source Metabase..."
+	$(PYTHON) export_metabase.py \
+		--source-url http://localhost:3002 \
+		--source-username admin@example.com \
+		--source-password 'Admin123!' \
+		--export-dir e2e_export \
+		--include-dashboards \
+		--metabase-version v57 \
+		--log-level INFO
+
+demo-import: ## Import to target Metabase (v57)
+	@echo "Importing to target Metabase..."
+	$(PYTHON) import_metabase.py \
+		--target-url http://localhost:3003 \
+		--target-username admin@example.com \
+		--target-password 'Admin123!' \
+		--export-dir e2e_export \
+		--db-map e2e_export/db_map.json \
+		--metabase-version v57 \
+		--log-level INFO
+
+demo-migrate: demo-export demo-import ## Run full export then import (v57)
+	@echo ""
+	@echo "✅ Migration complete!"
+	@echo ""
+	@echo "View results:"
+	@echo "  Source: http://localhost:3002"
+	@echo "  Target: http://localhost:3003"
+	@echo "  Credentials: admin@example.com / Admin123!"
+
+demo-verify: ## Verify migration results (models, tabs, embedded cards)
+	@echo "Verifying migration results..."
+	$(PYTHON) scripts/verify_e2e_demo.py
+
+demo: demo-setup demo-migrate demo-verify ## Full E2E demo: start services, setup data, run migration, verify
+	@echo ""
+	@echo "============================================================"
+	@echo "E2E DEMO COMPLETE!"
+	@echo "============================================================"
+	@echo ""
+	@echo "Source Metabase: http://localhost:3002"
+	@echo "Target Metabase: http://localhost:3003"
+	@echo "Credentials: admin@example.com / Admin123!"
+	@echo ""
+	@echo "Key items verified:"
+	@echo "  ✓ Collections migrated with hierarchy"
+	@echo "  ✓ Cards/Questions with correct field mappings"
+	@echo "  ✓ Models migrated"
+	@echo "  ✓ SQL cards referencing models (ID remapping)"
+	@echo "  ✓ Query Builder cards from models (source-table remapping)"
+	@echo "  ✓ Dashboards with filters"
+	@echo "  ✓ Dashboard tabs (tabs array + dashboard_tab_id remapping)"
+	@echo "  ✓ 'Visualize another way' embedded cards (card.id remapping)"
+	@echo ""
+	@echo "Containers are still running. Stop with: make demo-down"
+
 lint: ## Run all linters
 	@echo "Running ruff..."
 	$(RUFF) check lib/ tests/ scripts/ *.py --fix

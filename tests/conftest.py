@@ -222,7 +222,7 @@ def sample_export_config():
         source_url="https://source.example.com",
         export_dir="./test_export",
         source_username="test@example.com",
-        source_password="password123",
+        source_password="password123",  # pragma: allowlist secret
         include_dashboards=True,
         include_archived=False,
         root_collection_ids=None,
@@ -240,7 +240,7 @@ def sample_import_config(tmp_path: Path):
         export_dir=str(tmp_path / "metabase_export"),
         db_map_path=str(tmp_path / "db_map.json"),
         target_username="test@example.com",
-        target_password="password123",
+        target_password="password123",  # pragma: allowlist secret
         conflict_strategy="skip",
         dry_run=False,
         log_level="INFO",

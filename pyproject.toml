@@ -42,6 +42,7 @@ dependencies = [
     "tqdm>=4.64.0",
     "tenacity>=8.1.0",
     "python-dotenv>=0.20.0",
+    "pydantic>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -73,10 +74,11 @@ Changelog = "https://github.com/Finverity/metabase-migration-toolkit/blob/main/C
 [project.scripts]
 metabase-export = "export_metabase:main"
 metabase-import = "import_metabase:main"
+metabase-sync = "sync_metabase:main"
 
 [tool.setuptools]
 packages = ["lib"]
-py-modules = ["export_metabase", "import_metabase"]
+py-modules = ["export_metabase", "import_metabase", "sync_metabase"]
 
 [tool.setuptools.package-data]
 lib = ["py.typed"]
@@ -220,3 +222,14 @@ exclude_lines = [
 ]
 precision = 2
 show_missing = true
+# Coverage thresholds - fail if coverage is below these percentages
+fail_under = 80
+skip_covered = false
+skip_empty = true
+
+[tool.coverage.html]
+directory = "htmlcov"
+title = "Metabase Migration Toolkit Coverage Report"
+
+[tool.coverage.xml]
+output = "coverage.xml"
