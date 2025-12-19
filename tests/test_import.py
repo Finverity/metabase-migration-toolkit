@@ -1141,3 +1141,565 @@ class TestModelImport:
             # dataset field should either not be present or be False
             assert call_args.get("dataset", False) is False
             assert call_args["name"] == "Monthly Revenue"
+
+
+class TestRunImport:
+    """Test suite for run_import method."""
+
+    def test_run_import_dry_run(self, tmp_path):
+        """Test run_import with dry_run mode."""
+        # Create manifest
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"1": "DB1"},
+            "collections": [
+                {
+                    "id": 1,
+                    "name": "Test Collection",
+                    "path": "collections/test",
+                    "slug": "test-collection",
+                }
+            ],
+            "cards": [],
+            "dashboards": [],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+            dry_run=True,
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            importer.run_import()
+
+            # Dry run should complete without making API calls
+            assert importer.manifest is not None
+
+    def test_run_import_file_not_found(self, tmp_path):
+        """Test run_import raises FileNotFoundError for missing manifest."""
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path / "nonexistent"),
+            db_map_path=str(tmp_path / "db_map.json"),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            with pytest.raises(FileNotFoundError):
+                importer.run_import()
+
+    def test_run_import_api_error(self, tmp_path):
+        """Test run_import handles MetabaseAPIError."""
+        from lib.client import MetabaseAPIError
+
+        # Create manifest
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"1": "DB1"},
+            "collections": [],
+            "cards": [],
+            "dashboards": [],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.side_effect = MetabaseAPIError("API Error", status_code=500)
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            with pytest.raises(MetabaseAPIError):
+                importer.run_import()
+
+
+class TestGettersWithErrors:
+    """Test suite for getter methods when not initialized."""
+
+    def test_get_manifest_not_loaded(self, tmp_path):
+        """Test _get_manifest raises RuntimeError when not loaded."""
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(tmp_path / "db_map.json"),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            with pytest.raises(RuntimeError, match="Manifest not loaded"):
+                importer._get_manifest()
+
+    def test_get_id_mapper_not_initialized(self, tmp_path):
+        """Test _get_id_mapper raises RuntimeError when not initialized."""
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(tmp_path / "db_map.json"),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            with pytest.raises(RuntimeError, match="ID mapper not initialized"):
+                importer._get_id_mapper()
+
+    def test_get_context_not_initialized(self, tmp_path):
+        """Test _get_context raises RuntimeError when not initialized."""
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(tmp_path / "db_map.json"),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            with pytest.raises(RuntimeError, match="Import context not initialized"):
+                importer._get_context()
+
+
+class TestValidateMetabaseVersion:
+    """Test suite for _validate_metabase_version method."""
+
+    def test_validate_version_missing_in_manifest(self, tmp_path):
+        """Test validation when manifest has no metabase_version."""
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"1": "DB1"},
+            "collections": [],
+            "cards": [],
+            "dashboards": [],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            # Should not raise - backward compatible
+            importer._validate_metabase_version()
+
+    def test_validate_version_unsupported(self, tmp_path):
+        """Test validation with unsupported version raises ValueError."""
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+                "metabase_version": "v99",  # Unsupported version
+            },
+            "databases": {"1": "DB1"},
+            "collections": [],
+            "cards": [],
+            "dashboards": [],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            with pytest.raises(ValueError, match="unsupported Metabase version"):
+                importer._load_export_package()
+
+    def test_validate_version_compatible(self, tmp_path):
+        """Test validation with compatible versions."""
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+                "metabase_version": "v56",
+            },
+            "databases": {"1": "DB1"},
+            "collections": [],
+            "cards": [],
+            "dashboards": [],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+            metabase_version="v56",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+            # Should not raise
+            importer._validate_metabase_version()
+
+
+class TestPerformDryRun:
+    """Test suite for _perform_dry_run method."""
+
+    def test_dry_run_with_unmapped_database(self, tmp_path):
+        """Test dry run raises ValueError for unmapped databases."""
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"1": "DB1", "999": "Unmapped DB"},
+            "collections": [],
+            "cards": [
+                {
+                    "id": 100,
+                    "name": "Test Card",
+                    "collection_id": 1,
+                    "database_id": 999,
+                    "archived": False,
+                    "file_path": "test.json",
+                }
+            ],
+            "dashboards": [],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+            dry_run=True,
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            with pytest.raises(ValueError, match="Unmapped databases found"):
+                importer.run_import()
+
+    def test_dry_run_with_dashboards(self, tmp_path):
+        """Test dry run logs dashboards."""
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"1": "DB1"},
+            "collections": [],
+            "cards": [],
+            "dashboards": [
+                {
+                    "id": 1,
+                    "name": "Test Dashboard",
+                    "collection_id": 1,
+                    "archived": False,
+                    "file_path": "dashboards/dash.json",
+                }
+            ],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+            dry_run=True,
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            importer.run_import()
+            # Should complete without errors
+
+    def test_dry_run_skips_archived_cards(self, tmp_path):
+        """Test dry run skips archived cards when include_archived is False."""
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"1": "DB1"},
+            "collections": [],
+            "cards": [
+                {
+                    "id": 100,
+                    "name": "Archived Card",
+                    "collection_id": 1,
+                    "database_id": 1,
+                    "archived": True,
+                    "file_path": "cards/archived.json",
+                }
+            ],
+            "dashboards": [],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+            dry_run=True,
+            include_archived=False,
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            importer.run_import()
+            # Should complete without errors
+
+
+class TestPerformImport:
+    """Test suite for _perform_import method."""
+
+    def test_perform_import_with_failures(self, tmp_path):
+        """Test that import raises RuntimeError when there are failures."""
+
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"1": "DB1"},
+            "collections": [
+                {
+                    "id": 1,
+                    "name": "Test Collection",
+                    "path": "collections/test",
+                    "slug": "test-collection",
+                }
+            ],
+            "cards": [],
+            "dashboards": [],
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = [{"id": 10, "name": "DB1"}]
+            mock_client.get_database_metadata.return_value = {"tables": []}
+            mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
+            mock_client.create_collection.side_effect = Exception("Creation failed")
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            with pytest.raises(RuntimeError, match="Import finished with one or more failures"):
+                importer.run_import()
+
+
+class TestImportPermissions:
+    """Test suite for permissions import."""
+
+    def test_import_permissions_when_enabled(self, tmp_path):
+        """Test permissions are imported when apply_permissions is True."""
+
+        manifest_data = {
+            "meta": {
+                "source_url": "https://example.com",
+                "export_timestamp": "2025-10-07T12:00:00",
+                "tool_version": "1.0.0",
+                "cli_args": {},
+            },
+            "databases": {"1": "DB1"},
+            "collections": [],
+            "cards": [],
+            "dashboards": [],
+            "permission_groups": [{"id": 1, "name": "All Users", "member_count": 5}],
+            "permissions_graph": {"groups": {}},
+            "collection_permissions_graph": {"groups": {}},
+        }
+        manifest_path = tmp_path / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        db_map_data = {"by_id": {"1": 10}, "by_name": {"DB1": 10}}
+        db_map_path = tmp_path / "db_map.json"
+        with open(db_map_path, "w") as f:
+            json.dump(db_map_data, f)
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(db_map_path),
+            target_session_token="token",
+            apply_permissions=True,
+        )
+
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = [{"id": 10, "name": "DB1"}]
+            mock_client.get_database_metadata.return_value = {"tables": []}
+            mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
+            mock_client.get_permission_groups.return_value = [
+                {"id": 1, "name": "All Users", "member_count": 5}
+            ]
+            mock_client.get_permissions_graph.return_value = {"groups": {}}
+            mock_client.get_collection_permissions_graph.return_value = {"groups": {}}
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            importer.run_import()
+
+            # Should complete without errors
+
+
+class TestLogUnmappedDatabases:
+    """Test suite for _log_unmapped_databases_error method."""
+
+    def test_log_unmapped_databases(self, tmp_path):
+        """Test logging of unmapped databases."""
+        from lib.models import UnmappedDatabase
+
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(tmp_path / "db_map.json"),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            unmapped = [
+                UnmappedDatabase(
+                    source_db_id=999, source_db_name="Unmapped DB", card_ids={100, 101}
+                )
+            ]
+            # Should not raise
+            importer._log_unmapped_databases_error(unmapped)
+
+
+class TestLogInvalidDatabaseMapping:
+    """Test suite for _log_invalid_database_mapping method."""
+
+    def test_log_invalid_mapping(self, tmp_path):
+        """Test logging of invalid database mappings."""
+        config = ImportConfig(
+            target_url="https://example.com",
+            export_dir=str(tmp_path),
+            db_map_path=str(tmp_path / "db_map.json"),
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient"):
+            importer = MetabaseImporter(config)
+            missing_ids = {99, 100}
+            target_databases = [{"id": 10, "name": "DB1"}, {"id": 20, "name": "DB2"}]
+            # Should not raise
+            importer._log_invalid_database_mapping(missing_ids, target_databases)

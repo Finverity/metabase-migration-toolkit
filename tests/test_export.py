@@ -372,3 +372,492 @@ class TestModelExport:
             assert exported_card.id == 100
             assert exported_card.name == "Monthly Revenue"
             assert exported_card.dataset is False
+
+
+class TestExportDashboard:
+    """Test suite for _export_dashboard method."""
+
+    def test_export_dashboard_success(self, tmp_path):
+        """Test successful dashboard export."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_dashboard.return_value = {
+                "id": 1,
+                "name": "Test Dashboard",
+                "collection_id": 10,
+                "dashcards": [],
+                "parameters": [],
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_dashboard(1, "test-collection")
+
+            assert len(exporter.manifest.dashboards) == 1
+            assert exporter.manifest.dashboards[0].id == 1
+            assert exporter.manifest.dashboards[0].name == "Test Dashboard"
+
+    def test_export_dashboard_with_cards(self, tmp_path):
+        """Test dashboard export with dashcards."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_dashboard.return_value = {
+                "id": 1,
+                "name": "Test Dashboard",
+                "collection_id": 10,
+                "dashcards": [{"id": 1, "card_id": 100}, {"id": 2, "card_id": 101}],
+                "parameters": [],
+            }
+            mock_client.get_card.return_value = {
+                "id": 100,
+                "name": "Card 1",
+                "database_id": 1,
+                "dataset_query": {"database": 1, "type": "query", "query": {}},
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_dashboard(1, "test-collection")
+
+            assert len(exporter.manifest.dashboards) == 1
+            assert exporter.manifest.dashboards[0].ordered_cards == [100, 101]
+
+    def test_export_dashboard_with_parameter_card_reference(self, tmp_path):
+        """Test dashboard export with parameter referencing a card."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_dashboard.return_value = {
+                "id": 1,
+                "name": "Test Dashboard",
+                "collection_id": 10,
+                "dashcards": [],
+                "parameters": [
+                    {
+                        "name": "Filter",
+                        "values_source_config": {"card_id": 200},
+                    }
+                ],
+            }
+            mock_client.get_card.return_value = {
+                "id": 200,
+                "name": "Values Card",
+                "database_id": 1,
+                "dataset_query": {"database": 1, "type": "query", "query": {}},
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_dashboard(1, "test-collection")
+
+            # Card ID from parameter should be included
+            assert 200 in exporter.manifest.dashboards[0].ordered_cards
+
+    def test_export_dashboard_archived_404(self, tmp_path):
+        """Test handling of archived dashboard 404."""
+        from lib.client import MetabaseAPIError
+
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_dashboard.side_effect = MetabaseAPIError(
+                "archived dashboard", status_code=404
+            )
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            # Should not raise, should log warning
+            exporter._export_dashboard(1, "test-collection")
+
+            assert len(exporter.manifest.dashboards) == 0
+
+
+class TestExportPermissions:
+    """Test suite for _export_permissions method."""
+
+    def test_export_permissions_success(self, tmp_path):
+        """Test successful permissions export."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+            include_permissions=True,
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_permission_groups.return_value = [
+                {"id": 1, "name": "All Users", "member_count": 10},
+                {"id": 2, "name": "Admins", "member_count": 2},
+            ]
+            mock_client.get_permissions_graph.return_value = {"groups": {}}
+            mock_client.get_collection_permissions_graph.return_value = {"groups": {}}
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_permissions()
+
+            assert len(exporter.manifest.permission_groups) == 2
+            assert exporter.manifest.permissions_graph is not None
+            assert exporter.manifest.collection_permissions_graph is not None
+
+    def test_export_permissions_api_error(self, tmp_path):
+        """Test permissions export with API error continues gracefully."""
+        from lib.client import MetabaseAPIError
+
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+            include_permissions=True,
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_permission_groups.side_effect = MetabaseAPIError(
+                "Permission denied", status_code=403
+            )
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            # Should not raise, should log warning
+            exporter._export_permissions()
+
+
+class TestRunExport:
+    """Test suite for run_export method."""
+
+    def test_run_export_no_collections(self, tmp_path):
+        """Test export with no collections."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = []
+            mock_client.get_collections_tree.return_value = []
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter.run_export()
+
+            # Should complete without errors
+            assert len(exporter.manifest.collections) == 0
+
+    def test_run_export_with_root_collection_filter(self, tmp_path):
+        """Test export with root collection filter."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+            root_collection_ids=[5],
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = []
+            mock_client.get_database_metadata.return_value = {"tables": []}
+            mock_client.get_collections_tree.return_value = [
+                {"id": 1, "name": "Collection 1", "children": []},
+                {"id": 5, "name": "Collection 5", "children": []},
+            ]
+            mock_client.get_collection_items.return_value = {"data": []}
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter.run_export()
+
+            # Should only include collection 5
+            collection_ids = [c.id for c in exporter.manifest.collections]
+            assert 5 in collection_ids
+            assert 1 not in collection_ids
+
+    def test_run_export_with_permissions(self, tmp_path):
+        """Test export with permissions included."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+            include_permissions=True,
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = []
+            # Need at least one collection for permissions to be exported
+            mock_client.get_collections_tree.return_value = [
+                {"id": 1, "name": "Test Collection", "children": []}
+            ]
+            mock_client.get_collection_items.return_value = {"data": []}
+            mock_client.get_permission_groups.return_value = [
+                {"id": 1, "name": "All Users", "member_count": 5}
+            ]
+            mock_client.get_permissions_graph.return_value = {"groups": {}}
+            mock_client.get_collection_permissions_graph.return_value = {"groups": {}}
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter.run_export()
+
+            assert len(exporter.manifest.permission_groups) == 1
+
+
+class TestFetchDatabasesMetadata:
+    """Test suite for database metadata fetching."""
+
+    def test_fetch_databases_with_metadata(self, sample_export_config, tmp_path):
+        """Test fetching databases with metadata."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = [{"id": 1, "name": "TestDB"}]
+            mock_client.get_database_metadata.return_value = {
+                "tables": [
+                    {
+                        "id": 10,
+                        "name": "users",
+                        "fields": [{"id": 100, "name": "id"}, {"id": 101, "name": "email"}],
+                    }
+                ]
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._fetch_and_store_databases()
+
+            assert 1 in exporter.manifest.database_metadata
+            assert len(exporter.manifest.database_metadata[1]["tables"]) == 1
+            assert exporter.manifest.database_metadata[1]["tables"][0]["name"] == "users"
+
+    def test_fetch_databases_metadata_error(self, sample_export_config, tmp_path):
+        """Test handling of metadata fetch error."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = [{"id": 1, "name": "TestDB"}]
+            mock_client.get_database_metadata.side_effect = Exception("Connection error")
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            # Should not raise, should continue
+            exporter._fetch_and_store_databases()
+
+            assert exporter.manifest.databases == {1: "TestDB"}
+            # Metadata may be missing but database should still be recorded
+
+    def test_fetch_databases_unexpected_format(self, sample_export_config, tmp_path):
+        """Test handling of unexpected database response format."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = "unexpected string"
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._fetch_and_store_databases()
+
+            # Should handle gracefully
+            assert exporter.manifest.databases == {}
+
+
+class TestTraverseCollectionsParentId:
+    """Test suite for parent ID extraction in collection traversal."""
+
+    def test_extract_parent_id_from_location(self, tmp_path):
+        """Test extracting parent ID from location field."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_collection_items.return_value = {"data": []}
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+
+            collections = [
+                {
+                    "id": 10,
+                    "name": "Child Collection",
+                    "location": "/5/7/",  # Parent is 7, grandparent is 5
+                    "children": [],
+                }
+            ]
+
+            exporter._traverse_collections(collections)
+
+            assert len(exporter.manifest.collections) == 1
+            assert exporter.manifest.collections[0].parent_id == 7
+
+    def test_extract_parent_id_empty_location(self, tmp_path):
+        """Test with empty location field (root collection)."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_collection_items.return_value = {"data": []}
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+
+            collections = [
+                {
+                    "id": 10,
+                    "name": "Root Collection",
+                    "location": "/",
+                    "children": [],
+                }
+            ]
+
+            exporter._traverse_collections(collections)
+
+            assert len(exporter.manifest.collections) == 1
+            assert exporter.manifest.collections[0].parent_id is None
+
+
+class TestExportCardEdgeCases:
+    """Test suite for export card edge cases."""
+
+    def test_export_card_no_dataset_query(self, tmp_path):
+        """Test exporting card without dataset_query."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = {
+                "id": 100,
+                "name": "Invalid Card",
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card(100, "test-collection")
+
+            # Card without dataset_query should be skipped
+            assert len(exporter.manifest.cards) == 0
+
+    def test_export_card_no_database_id(self, tmp_path):
+        """Test exporting card without database ID."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = {
+                "id": 100,
+                "name": "No DB Card",
+                "dataset_query": {"type": "native", "native": {"query": "SELECT 1"}},
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card(100, "test-collection")
+
+            # Card without database_id should be skipped
+            assert len(exporter.manifest.cards) == 0
+
+    def test_export_card_already_exported(self, tmp_path):
+        """Test that already exported cards are skipped."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = {
+                "id": 100,
+                "name": "Test Card",
+                "database_id": 1,
+                "dataset_query": {"database": 1, "type": "query", "query": {}},
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._exported_cards.add(100)  # Pre-mark as exported
+
+            exporter._export_card(100, "test-collection")
+
+            # Should not add again
+            assert len(exporter.manifest.cards) == 0
+            mock_client.get_card.assert_not_called()
+
+    def test_export_card_with_type_model(self, tmp_path):
+        """Test exporting card with type='model' (Metabase 0.49+)."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = {
+                "id": 100,
+                "name": "Model Card",
+                "type": "model",
+                "database_id": 1,
+                "dataset_query": {"database": 1, "type": "query", "query": {}},
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card(100, "test-collection")
+
+            assert len(exporter.manifest.cards) == 1
+            assert exporter.manifest.cards[0].dataset is True

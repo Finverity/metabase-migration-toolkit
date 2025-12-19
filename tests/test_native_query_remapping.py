@@ -704,3 +704,351 @@ class TestV57TemplateTagHashPrefix:
         assert tag_data["card-id"] == 406
         assert tag_data["name"] == "#406-filtered-xxxx-server-dataset"
         assert tag_data["display-name"] == "#406 Filtered XXXX Server Dataset"
+
+
+class TestQueryRemapperV57Advanced:
+    """Advanced tests for v57 query remapping including stages and nested structures."""
+
+    @pytest.fixture
+    def id_mapper(self):
+        """Create an ID mapper with mappings."""
+        mapper = create_test_id_mapper(
+            db_mapping={1: 100, 2: 200},
+            card_mapping={50: 500, 60: 600, 70: 700},
+        )
+        # Add table and field mappings
+        mapper._table_map[(1, 10)] = 1000
+        mapper._field_map[(1, 101)] = 10100
+        mapper._field_map[(1, 102)] = 10200
+        return mapper
+
+    @pytest.fixture
+    def remapper(self, id_mapper):
+        """Create a query remapper."""
+        return QueryRemapper(id_mapper)
+
+    def test_remap_v57_source_card_integer(self, remapper):
+        """Test remapping source-card (integer) in v57 format."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/mbql",
+                        "source-card": 50,
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["dataset_query"]["stages"][0]["source-card"] == 500
+
+    def test_remap_v57_multiple_stages(self, remapper):
+        """Test remapping multiple stages in v57 format."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/mbql",
+                        "source-card": 50,
+                    },
+                    {
+                        "lib/type": "mbql.stage/mbql",
+                        "joins": [{"source-card": 60}],
+                    },
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["dataset_query"]["stages"][0]["source-card"] == 500
+        assert result["dataset_query"]["stages"][1]["joins"][0]["source-card"] == 600
+
+    def test_remap_v57_filters_plural(self, remapper):
+        """Test remapping filters (plural) in v57 format."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/mbql",
+                        "source-table": 10,
+                        "filters": [
+                            ["=", ["field", 101, {"base-type": "type/Integer"}], 1],
+                        ],
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["dataset_query"]["stages"][0]["filters"][0][1][1] == 10100
+
+    def test_remap_v57_breakout(self, remapper):
+        """Test remapping breakout fields in v57 format."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/mbql",
+                        "source-table": 10,
+                        "breakout": [["field", 101, {"temporal-unit": "month"}]],
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["dataset_query"]["stages"][0]["breakout"][0][1] == 10100
+
+    def test_remap_v57_aggregation(self, remapper):
+        """Test remapping aggregation fields in v57 format."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/mbql",
+                        "source-table": 10,
+                        "aggregation": [["sum", ["field", 101, None]]],
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["dataset_query"]["stages"][0]["aggregation"][0][1][1] == 10100
+
+    def test_remap_v57_order_by(self, remapper):
+        """Test remapping order-by fields in v57 format."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/mbql",
+                        "source-table": 10,
+                        "order-by": [["asc", ["field", 101, None]]],
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["dataset_query"]["stages"][0]["order-by"][0][1][1] == 10100
+
+    def test_remap_v57_expressions(self, remapper):
+        """Test remapping expressions in v57 format."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/mbql",
+                        "source-table": 10,
+                        "expressions": [
+                            [
+                                "concat",
+                                ["field", 101, None],
+                                ["field", 102, None],
+                            ]
+                        ],
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["dataset_query"]["stages"][0]["expressions"][0][1][1] == 10100
+        assert result["dataset_query"]["stages"][0]["expressions"][0][2][1] == 10200
+
+
+class TestQueryRemapperEdgeCases:
+    """Tests for edge cases in query remapping."""
+
+    @pytest.fixture
+    def id_mapper(self):
+        """Create an ID mapper with minimal mappings."""
+        return create_test_id_mapper(
+            db_mapping={1: 100},
+            card_mapping={},
+        )
+
+    @pytest.fixture
+    def remapper(self, id_mapper):
+        """Create a query remapper."""
+        return QueryRemapper(id_mapper)
+
+    def test_remap_empty_dataset_query(self, remapper):
+        """Test remapping card with empty dataset_query."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {},
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["database_id"] == 100
+
+    def test_remap_no_dataset_query(self, remapper):
+        """Test remapping card without dataset_query returns failure."""
+        card_data = {"database_id": 1}
+
+        result, success = remapper.remap_card_data(card_data)
+
+        # Should still set database_id
+        assert result["database_id"] == 100
+        assert success
+
+    def test_remap_unmapped_database(self):
+        """Test remapping with unmapped database ID raises ValueError."""
+        mapper = create_test_id_mapper(db_mapping={})  # No mappings
+
+        remapper = QueryRemapper(mapper)
+
+        card_data = {
+            "database_id": 999,  # Not mapped
+            "dataset_query": {
+                "type": "query",
+                "database": 999,
+                "query": {},
+            },
+        }
+
+        # Should raise ValueError when database is not mapped
+        with pytest.raises(ValueError, match="Unmapped database ID"):
+            remapper.remap_card_data(card_data)
+
+    def test_remap_preserves_unknown_fields(self, remapper):
+        """Test that unknown fields in card data are preserved."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "type": "query",
+                "database": 1,
+                "query": {},
+            },
+            "custom_field": "preserved",
+            "another_field": {"nested": "value"},
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["custom_field"] == "preserved"
+        assert result["another_field"]["nested"] == "value"
+
+
+class TestQueryRemapperResultMetadata:
+    """Tests for result_metadata remapping."""
+
+    @pytest.fixture
+    def id_mapper(self):
+        """Create an ID mapper with mappings."""
+        mapper = create_test_id_mapper(
+            db_mapping={1: 100},
+            card_mapping={},
+        )
+        mapper._table_map[(1, 10)] = 1000
+        mapper._field_map[(1, 101)] = 10100
+        mapper._field_map[(1, 102)] = 10200
+        return mapper
+
+    @pytest.fixture
+    def remapper(self, id_mapper):
+        """Create a query remapper."""
+        return QueryRemapper(id_mapper)
+
+    def test_remap_result_metadata_fields(self, remapper):
+        """Test remapping field IDs in result_metadata."""
+        card_data = {
+            "database_id": 1,
+            "table_id": 10,
+            "dataset_query": {
+                "type": "query",
+                "database": 1,
+                "query": {"source-table": 10},
+            },
+            "result_metadata": [
+                {
+                    "id": 101,
+                    "name": "field1",
+                    "table_id": 10,
+                    "field_ref": ["field", 101, None],
+                },
+                {
+                    "id": 102,
+                    "name": "field2",
+                    "table_id": 10,
+                    "field_ref": ["field", 102, {"base-type": "type/Text"}],
+                },
+            ],
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        assert result["result_metadata"][0]["id"] == 10100
+        assert result["result_metadata"][0]["table_id"] == 1000
+        assert result["result_metadata"][0]["field_ref"][1] == 10100
+        assert result["result_metadata"][1]["id"] == 10200
+        assert result["result_metadata"][1]["table_id"] == 1000
+        assert result["result_metadata"][1]["field_ref"][1] == 10200
+
+    def test_remap_result_metadata_expression_field(self, remapper):
+        """Test that expression fields in result_metadata are preserved."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "type": "query",
+                "database": 1,
+                "query": {"source-table": 10},
+            },
+            "result_metadata": [
+                {
+                    "name": "custom_expression",
+                    "field_ref": ["expression", "custom_expression"],
+                },
+            ],
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        # Expression field refs should be preserved as-is
+        assert result["result_metadata"][0]["field_ref"] == [
+            "expression",
+            "custom_expression",
+        ]
