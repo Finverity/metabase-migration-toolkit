@@ -16,7 +16,7 @@ class TestMetabaseExporterInit:
 
     def test_init_with_config(self, sample_export_config):
         """Test MetabaseExporter initialization with config."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             assert exporter.config == sample_export_config
@@ -29,7 +29,7 @@ class TestMetabaseExporterInit:
 
     def test_init_creates_client(self, sample_export_config):
         """Test that initialization creates a MetabaseClient."""
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             MetabaseExporter(sample_export_config)
 
             mock_client_class.assert_called_once_with(
@@ -42,7 +42,7 @@ class TestMetabaseExporterInit:
 
     def test_init_creates_manifest(self, sample_export_config):
         """Test that initialization creates a manifest."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             assert exporter.manifest is not None
@@ -56,7 +56,7 @@ class TestManifestInitialization:
 
     def test_initialize_manifest_redacts_secrets(self, sample_export_config):
         """Test that secrets are redacted in manifest."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             cli_args = exporter.manifest.meta.cli_args
@@ -64,7 +64,7 @@ class TestManifestInitialization:
 
     def test_initialize_manifest_includes_metadata(self, sample_export_config):
         """Test that manifest includes proper metadata."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             meta = exporter.manifest.meta
@@ -81,7 +81,7 @@ class TestManifestInitialization:
             source_session_token="session-token-123",
         )
 
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(config)
 
             cli_args = exporter.manifest.meta.cli_args
@@ -93,7 +93,7 @@ class TestFetchAndStoreDatabases:
 
     def test_fetch_databases_list_format(self, sample_export_config):
         """Test fetching databases when API returns a list."""
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_databases.return_value = [
                 {"id": 1, "name": "DB1"},
@@ -108,7 +108,7 @@ class TestFetchAndStoreDatabases:
 
     def test_fetch_databases_dict_format(self, sample_export_config):
         """Test fetching databases when API returns a dict with 'data' key."""
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_databases.return_value = {
                 "data": [{"id": 1, "name": "DB1"}, {"id": 2, "name": "DB2"}]
@@ -122,7 +122,7 @@ class TestFetchAndStoreDatabases:
 
     def test_fetch_databases_empty_response(self, sample_export_config):
         """Test fetching databases with empty response."""
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_databases.return_value = []
             mock_client_class.return_value = mock_client
@@ -138,7 +138,7 @@ class TestExtractCardDependencies:
 
     def test_extract_no_dependencies(self, sample_export_config):
         """Test extracting dependencies from card with no dependencies."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -151,7 +151,7 @@ class TestExtractCardDependencies:
 
     def test_extract_single_dependency(self, sample_export_config):
         """Test extracting single card dependency."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -168,7 +168,7 @@ class TestExtractCardDependencies:
 
     def test_extract_multiple_dependencies(self, sample_export_config):
         """Test extracting multiple card dependencies from joins."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -188,7 +188,7 @@ class TestExtractCardDependencies:
 
     def test_extract_dependencies_invalid_format(self, sample_export_config):
         """Test extracting dependencies with invalid card reference format."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -205,7 +205,7 @@ class TestExtractCardDependencies:
 
     def test_extract_dependencies_no_dataset_query(self, sample_export_config):
         """Test extracting dependencies from card without dataset_query."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {"id": 100}
@@ -219,9 +219,13 @@ class TestTraverseCollections:
 
     def test_traverse_empty_collections(self, sample_export_config, tmp_path):
         """Test traversing empty collection list."""
-        config = ExportConfig(source_url="https://example.com", export_dir=str(tmp_path / "export"))
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
 
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(config)
             exporter._traverse_collections([])
 
@@ -229,9 +233,13 @@ class TestTraverseCollections:
 
     def test_traverse_skips_personal_collections(self, sample_export_config, tmp_path):
         """Test that personal collections are skipped."""
-        config = ExportConfig(source_url="https://example.com", export_dir=str(tmp_path / "export"))
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
 
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(config)
 
             collections = [
@@ -245,9 +253,13 @@ class TestTraverseCollections:
 
     def test_traverse_processes_root_collection(self, sample_export_config, tmp_path):
         """Test processing root collection."""
-        config = ExportConfig(source_url="https://example.com", export_dir=str(tmp_path / "export"))
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
 
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(config)
 
             collections = [{"id": "root", "name": "Our analytics", "children": []}]
@@ -262,7 +274,7 @@ class TestProcessCollectionItems:
 
     def test_process_empty_collection(self, sample_export_config):
         """Test processing collection with no items."""
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_collection_items.return_value = {"data": []}
             mock_client_class.return_value = mock_client
@@ -275,7 +287,7 @@ class TestProcessCollectionItems:
 
     def test_process_collection_with_cards(self, sample_export_config):
         """Test processing collection with cards."""
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_collection_items.return_value = {
                 "data": [{"id": 100, "model": "card"}, {"id": 101, "model": "card"}]
@@ -296,10 +308,12 @@ class TestExportDirectory:
     def test_export_dir_created(self, sample_export_config, tmp_path):
         """Test that export directory is created."""
         config = ExportConfig(
-            source_url="https://example.com", export_dir=str(tmp_path / "new_export")
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "new_export"),
+            source_session_token="token",
         )
 
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(config)
 
             # Directory should not exist yet
@@ -313,9 +327,13 @@ class TestModelExport:
         """Test that exporting a model preserves the dataset=True field."""
         from tests.fixtures.sample_responses import SAMPLE_MODEL
 
-        config = ExportConfig(source_url="https://example.com", export_dir=str(tmp_path / "export"))
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
 
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_card.return_value = SAMPLE_MODEL
             mock_client_class.return_value = mock_client
@@ -334,9 +352,13 @@ class TestModelExport:
         """Test that exporting a regular question has dataset=False."""
         from tests.fixtures.sample_responses import SAMPLE_CARD
 
-        config = ExportConfig(source_url="https://example.com", export_dir=str(tmp_path / "export"))
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
 
-        with patch("export_metabase.MetabaseClient") as mock_client_class:
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
             mock_client = Mock()
             mock_client.get_card.return_value = SAMPLE_CARD
             mock_client_class.return_value = mock_client
