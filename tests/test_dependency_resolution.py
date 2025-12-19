@@ -14,7 +14,7 @@ class TestCardDependencyExtraction:
 
     def test_no_dependencies(self, sample_export_config):
         """Test card with no dependencies."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -32,7 +32,7 @@ class TestCardDependencyExtraction:
 
     def test_single_card_dependency(self, sample_export_config):
         """Test card with single card dependency."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -50,7 +50,7 @@ class TestCardDependencyExtraction:
 
     def test_multiple_dependencies_in_joins(self, sample_export_config):
         """Test card with multiple dependencies in joins."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -74,7 +74,7 @@ class TestCardDependencyExtraction:
 
     def test_mixed_dependencies(self, sample_export_config):
         """Test card with mix of card and table dependencies."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -99,7 +99,7 @@ class TestCardDependencyExtraction:
 
     def test_nested_query_dependencies(self, sample_export_config):
         """Test card with nested query dependencies."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -129,14 +129,14 @@ class TestDependencyChainTracking:
 
     def test_dependency_chain_initialization(self, sample_export_config):
         """Test that dependency chain is initialized empty."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             assert exporter._dependency_chain == []
 
     def test_track_simple_dependency_chain(self, sample_export_config):
         """Test tracking a simple dependency chain."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             # Simulate processing cards in dependency order
@@ -151,7 +151,7 @@ class TestCircularDependencyDetection:
 
     def test_detect_direct_circular_dependency(self, sample_export_config):
         """Test detection of direct circular dependency (A -> B -> A)."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             # Simulate circular dependency
@@ -163,7 +163,7 @@ class TestCircularDependencyDetection:
 
     def test_detect_indirect_circular_dependency(self, sample_export_config):
         """Test detection of indirect circular dependency (A -> B -> C -> A)."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             # Simulate longer circular chain
@@ -179,7 +179,7 @@ class TestDependencyOrdering:
 
     def test_dependencies_exported_before_dependent(self, sample_export_config):
         """Test that dependencies are exported before dependent cards."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             # Track exported cards
@@ -192,7 +192,7 @@ class TestDependencyOrdering:
 
     def test_prevent_duplicate_exports(self, sample_export_config):
         """Test that cards are not exported multiple times."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             # Mark card as exported
@@ -217,7 +217,7 @@ class TestComplexDependencyScenarios:
 
         D depends on both B and C, which both depend on A.
         """
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             # Card A (no dependencies)
@@ -249,7 +249,7 @@ class TestComplexDependencyScenarios:
 
     def test_long_dependency_chain(self, sample_export_config):
         """Test long chain of dependencies (A -> B -> C -> D -> E)."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             cards = []
@@ -276,7 +276,7 @@ class TestInvalidDependencyReferences:
 
     def test_invalid_card_reference_format(self, sample_export_config):
         """Test handling of invalid card reference format."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {"id": 100, "dataset_query": {"query": {"source-table": "card__invalid"}}}
@@ -287,7 +287,7 @@ class TestInvalidDependencyReferences:
 
     def test_malformed_card_reference(self, sample_export_config):
         """Test handling of malformed card reference."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -300,7 +300,7 @@ class TestInvalidDependencyReferences:
 
     def test_non_string_source_table(self, sample_export_config):
         """Test handling of non-string source-table value."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             card_data = {
@@ -318,7 +318,7 @@ class TestDependencyResolutionPerformance:
 
     def test_many_dependencies(self, sample_export_config):
         """Test handling of card with many dependencies."""
-        with patch("export_metabase.MetabaseClient"):
+        with patch("lib.services.export_service.MetabaseClient"):
             exporter = MetabaseExporter(sample_export_config)
 
             # Create card with 50 dependencies

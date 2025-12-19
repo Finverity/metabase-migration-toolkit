@@ -1,0 +1,136 @@
+# Docker Compose for testing with Metabase v57 (MBQL 5 format)
+# Use with: MB_METABASE_VERSION=v57 docker compose -f docker-compose.test.v57.yml up -d
+services:
+  # PostgreSQL database for source Metabase
+  source-postgres:
+    image: postgres:15-alpine
+    container_name: metabase-source-postgres-v57
+    environment:
+      POSTGRES_DB: metabase_source
+      POSTGRES_USER: metabase
+      POSTGRES_PASSWORD: metabase_password # pragma: allowlist-secret
+    ports:
+      - "5435:5432"
+    volumes:
+      - source-postgres-data-v57:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - metabase-test-network-v57
+
+  # PostgreSQL database for target Metabase
+  target-postgres:
+    image: postgres:15-alpine
+    container_name: metabase-target-postgres-v57
+    environment:
+      POSTGRES_DB: metabase_target
+      POSTGRES_USER: metabase
+      POSTGRES_PASSWORD: metabase_password # pragma: allowlist-secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - target-postgres-data-v57:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - metabase-test-network-v57
+
+  # Sample data database (shared between source and target)
+  sample-data-postgres:
+    image: postgres:15-alpine
+    container_name: metabase-sample-data-v57
+    environment:
+      POSTGRES_DB: sample_data
+      POSTGRES_USER: sample_user
+      POSTGRES_PASSWORD: sample_password # pragma: allowlist-secret
+    ports:
+      - "5434:5432"
+    volumes:
+      - sample-data-v57:/var/lib/postgresql/data
+      - ./tests/integration/fixtures/init-sample-data.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sample_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - metabase-test-network-v57
+
+  # Source Metabase instance (v57)
+  source-metabase:
+    image: metabase/metabase:v0.57.2
+    container_name: metabase-source-v57
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase_source
+      MB_DB_PORT: 5432
+      MB_DB_USER: metabase
+      MB_DB_PASS: metabase_password # pragma: allowlist-secret
+      MB_DB_HOST: source-postgres
+      MB_JETTY_PORT: 3000
+      JAVA_TIMEZONE: UTC
+    ports:
+      - "3002:3000"
+    depends_on:
+      source-postgres:
+        condition: service_healthy
+      sample-data-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    networks:
+      - metabase-test-network-v57
+    volumes:
+      - source-metabase-data-v57:/metabase-data
+
+  # Target Metabase instance (v57)
+  target-metabase:
+    image: metabase/metabase:v0.57.2
+    container_name: metabase-target-v57
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase_target
+      MB_DB_PORT: 5432
+      MB_DB_USER: metabase
+      MB_DB_PASS: metabase_password # pragma: allowlist-secret
+      MB_DB_HOST: target-postgres
+      MB_JETTY_PORT: 3000
+      JAVA_TIMEZONE: UTC
+    ports:
+      - "3003:3000"
+    depends_on:
+      target-postgres:
+        condition: service_healthy
+      sample-data-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    networks:
+      - metabase-test-network-v57
+    volumes:
+      - target-metabase-data-v57:/metabase-data
+
+networks:
+  metabase-test-network-v57:
+    driver: bridge
+
+volumes:
+  source-postgres-data-v57:
+  target-postgres-data-v57:
+  sample-data-v57:
+  source-metabase-data-v57:
+  target-metabase-data-v57:

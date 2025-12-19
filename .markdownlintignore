@@ -1,0 +1,9 @@
+# Ignore external documentation
+doc/
+htmlcov/
+tmp/
+venv/
+venv1/
+.venv/
+.pytest_cache/
+node_modules/

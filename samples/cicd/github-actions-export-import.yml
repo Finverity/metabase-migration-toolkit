@@ -19,6 +19,14 @@ on:
         options:
           - skip
           - overwrite
+      metabase_version:
+        description: 'Metabase version (must match source and target)'
+        type: choice
+        required: true
+        default: 'v56'
+        options:
+          - v56
+          - v57
 
 jobs:
   export:
@@ -48,6 +56,7 @@ jobs:
           set -euo pipefail
           echo "=== Starting Metabase Export ==="
           echo "Source environment: ${{ inputs.source_environment }}"
+          echo "Metabase version: ${{ inputs.metabase_version }}"
           # Do NOT print URL or credentials
           metabase-export \
             --source-url "${MB_SOURCE_URL}" \
@@ -57,6 +66,7 @@ jobs:
             --root-collections "24" \
             --include-dashboards \
             --include-archived \
+            --metabase-version ${{ inputs.metabase_version }} \
             --log-level INFO
           echo "Export complete."
       - name: Upload exported Metabase state
@@ -133,6 +143,7 @@ jobs:
           echo "=== Starting Metabase Import ==="
           echo "Target environment: ${{ inputs.target_environment }}"
           echo "Conflict strategy: ${{ inputs.conflict_strategy }}"
+          echo "Metabase version: ${{ inputs.metabase_version }}"
           metabase-import \
             --target-url "${MB_TARGET_URL}" \
             --target-username "${MB_TARGET_USERNAME}" \
@@ -140,6 +151,7 @@ jobs:
             --export-dir "./metabase-state" \
             --db-map "./db_map.json" \
             --conflict ${{ inputs.conflict_strategy }} \
+            --metabase-version ${{ inputs.metabase_version }} \
             --log-level INFO
           echo "Import complete."
       - name: Sync Summary
@@ -150,6 +162,7 @@ jobs:
           echo "**Source Environment:** \`${{ inputs.source_environment }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Target Environment:** \`${{ inputs.target_environment }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Conflict Strategy:** \`${{ inputs.conflict_strategy }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Metabase Version:** \`${{ inputs.metabase_version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Synced using:** metabase-migration-toolkit" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

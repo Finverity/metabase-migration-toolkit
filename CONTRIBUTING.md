@@ -1,6 +1,7 @@
 # Contributing to Metabase Migration Toolkit
 
-Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to this project.
+Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to
+this project.
 
 ## Table of Contents
 
@@ -14,7 +15,8 @@ Thank you for your interest in contributing! This document provides guidelines a
 
 ## Code of Conduct
 
-This project adheres to a Code of Conduct that all contributors are expected to follow. Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before contributing.
+This project adheres to a Code of Conduct that all contributors are expected to follow. Please read
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before contributing.
 
 ## Getting Started
 

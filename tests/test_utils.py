@@ -76,7 +76,7 @@ class TestCalculateChecksum:
         checksum = calculate_checksum(test_file)
 
         # SHA256 of "Hello, World!"
-        expected = "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+        expected = "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"  # pragma: allowlist secret
         assert checksum == expected
 
     def test_calculate_checksum_empty_file(self, tmp_path: Path):
@@ -87,7 +87,7 @@ class TestCalculateChecksum:
         checksum = calculate_checksum(test_file)
 
         # SHA256 of empty string
-        expected = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        expected = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"  # pragma: allowlist secret
         assert checksum == expected
 
     def test_calculate_checksum_binary_file(self, tmp_path: Path):
@@ -234,6 +234,98 @@ class TestCleanForCreate:
         cleaned = clean_for_create(payload)
 
         assert cleaned == {}
+
+    def test_clean_model_sets_type_model(self):
+        """Test that clean_for_create sets type='model' for cards with dataset=True."""
+        payload = {
+            "id": 123,
+            "name": "Customer Model",
+            "dataset": True,
+            "dataset_query": {"type": "query", "database": 1, "query": {"source-table": 10}},
+        }
+        cleaned = clean_for_create(payload)
+
+        assert cleaned["type"] == "model"
+        assert cleaned["dataset"] is True
+
+    def test_clean_question_sets_type_question(self):
+        """Test that clean_for_create sets type='question' for cards without type."""
+        payload = {
+            "id": 123,
+            "name": "Revenue Query",
+            "dataset": False,
+            "dataset_query": {"type": "query", "database": 1, "query": {"source-table": 10}},
+        }
+        cleaned = clean_for_create(payload)
+
+        assert cleaned["type"] == "question"
+        assert cleaned["dataset"] is False
+
+    def test_clean_question_no_dataset_field_defaults_to_question(self):
+        """Test that clean_for_create defaults to type='question' when dataset is not set."""
+        payload = {
+            "id": 123,
+            "name": "Simple Query",
+            "dataset_query": {"type": "query", "database": 1, "query": {"source-table": 10}},
+        }
+        cleaned = clean_for_create(payload)
+
+        assert cleaned["type"] == "question"
+
+    def test_clean_preserves_existing_type_for_question(self):
+        """Test that clean_for_create preserves existing type for questions."""
+        payload = {
+            "id": 123,
+            "name": "Native Query",
+            "type": "question",
+            "dataset": False,
+            "dataset_query": {"type": "native", "database": 1, "native": {"query": "SELECT 1"}},
+        }
+        cleaned = clean_for_create(payload)
+
+        assert cleaned["type"] == "question"
+
+    def test_clean_model_overrides_wrong_type(self):
+        """Test that clean_for_create overrides type to 'model' when dataset=True."""
+        # This handles the case where a model might have been incorrectly marked as question
+        payload = {
+            "id": 123,
+            "name": "Customer Model",
+            "type": "question",  # Wrong type for a model
+            "dataset": True,  # This is a model
+            "dataset_query": {"type": "query", "database": 1, "query": {"source-table": 10}},
+        }
+        cleaned = clean_for_create(payload)
+
+        # dataset=True should override the type to 'model'
+        assert cleaned["type"] == "model"
+        assert cleaned["dataset"] is True
+
+    def test_clean_non_card_payload_unchanged(self):
+        """Test that clean_for_create doesn't add type to non-card payloads."""
+        # Collection payload - should not have type added
+        payload = {
+            "id": 123,
+            "name": "Test Collection",
+            "description": "A collection",
+        }
+        cleaned = clean_for_create(payload)
+
+        assert "type" not in cleaned
+        assert cleaned["name"] == "Test Collection"
+
+    def test_clean_metric_type_preserved(self):
+        """Test that clean_for_create preserves metric type."""
+        payload = {
+            "id": 123,
+            "name": "Revenue Metric",
+            "type": "metric",
+            "dataset": False,
+            "dataset_query": {"type": "query", "database": 1, "query": {"source-table": 10}},
+        }
+        cleaned = clean_for_create(payload)
+
+        assert cleaned["type"] == "metric"
 
 
 class TestCustomJsonEncoder:
