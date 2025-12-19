@@ -12,6 +12,7 @@ from lib.utils import (
     TOOL_VERSION,
     CustomJsonEncoder,
     calculate_checksum,
+    clean_dashboard_for_update,
     clean_for_create,
     sanitize_filename,
     setup_logging,
@@ -337,3 +338,148 @@ class TestToolVersion:
         from lib import __version__
 
         assert TOOL_VERSION == __version__
+
+
+class TestCleanDashboardForUpdate:
+    """Test suite for clean_dashboard_for_update function."""
+
+    def test_clean_dashboard_removes_dashcards(self):
+        """Test that clean_dashboard_for_update removes dashcards field."""
+        payload = {
+            "id": 123,
+            "name": "Test Dashboard",
+            "dashcards": [{"id": 1, "card_id": 100}],
+        }
+        cleaned = clean_dashboard_for_update(payload)
+
+        assert "dashcards" not in cleaned
+        assert cleaned["name"] == "Test Dashboard"
+
+    def test_clean_dashboard_removes_tabs(self):
+        """Test that clean_dashboard_for_update removes tabs field."""
+        payload = {
+            "id": 123,
+            "name": "Test Dashboard",
+            "tabs": [{"id": 1, "name": "Tab 1"}],
+        }
+        cleaned = clean_dashboard_for_update(payload)
+
+        assert "tabs" not in cleaned
+        assert cleaned["name"] == "Test Dashboard"
+
+    def test_clean_dashboard_removes_both_dashcards_and_tabs(self):
+        """Test that clean_dashboard_for_update removes both dashcards and tabs."""
+        payload = {
+            "id": 123,
+            "name": "Test Dashboard",
+            "dashcards": [{"id": 1}],
+            "tabs": [{"id": 1}],
+        }
+        cleaned = clean_dashboard_for_update(payload)
+
+        assert "dashcards" not in cleaned
+        assert "tabs" not in cleaned
+        assert "id" not in cleaned  # Also removed by clean_for_create
+        assert cleaned["name"] == "Test Dashboard"
+
+    def test_clean_dashboard_removes_standard_fields(self):
+        """Test that clean_dashboard_for_update also removes standard immutable fields."""
+        payload = {
+            "id": 123,
+            "name": "Test Dashboard",
+            "created_at": "2025-01-01T00:00:00Z",
+            "creator_id": 1,
+        }
+        cleaned = clean_dashboard_for_update(payload)
+
+        assert "id" not in cleaned
+        assert "created_at" not in cleaned
+        assert "creator_id" not in cleaned
+        assert cleaned["name"] == "Test Dashboard"
+
+
+class TestCleanForCreateTableId:
+    """Test suite for clean_for_create handling of table_id."""
+
+    def test_clean_sets_table_id_to_null(self):
+        """Test that clean_for_create sets table_id to null."""
+        payload = {
+            "name": "Test Card",
+            "table_id": 123,
+            "dataset_query": {},
+        }
+        cleaned = clean_for_create(payload)
+
+        assert cleaned["table_id"] is None
+        assert cleaned["name"] == "Test Card"
+
+    def test_clean_without_table_id(self):
+        """Test that clean_for_create works without table_id field."""
+        payload = {
+            "name": "Test Card",
+            "dataset_query": {},
+        }
+        cleaned = clean_for_create(payload)
+
+        assert "table_id" not in cleaned
+        assert cleaned["name"] == "Test Card"
+
+
+class TestSetupLoggingAdvanced:
+    """Additional test cases for setup_logging function."""
+
+    def teardown_method(self):
+        """Clean up logger handlers after each test."""
+        logger = logging.getLogger("metabase_migration")
+        logger.handlers.clear()
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()
+
+    def test_setup_logging_with_explicit_level_parameter(self):
+        """Test setting up logging with explicit level parameter."""
+        logger = setup_logging("my_module", level="DEBUG")
+
+        assert logger.name == "my_module"
+        assert logger.level == logging.DEBUG
+
+    def test_setup_logging_with_module_name(self):
+        """Test setting up logging with module name as first argument."""
+        logger = setup_logging("my_custom_logger")
+
+        assert logger.name == "my_custom_logger"
+        # Default level should be INFO
+        assert logger.level == logging.INFO
+
+    def test_setup_logging_level_as_first_arg_uses_default_name(self):
+        """Test that log level as first arg uses default logger name."""
+        logger = setup_logging("WARNING")
+
+        assert logger.name == "metabase_migration"
+        assert logger.level == logging.WARNING
+
+
+class TestCustomJsonEncoderFallback:
+    """Test suite for CustomJsonEncoder fallback behavior."""
+
+    def test_encode_non_serializable_raises_error(self):
+        """Test that non-serializable objects raise TypeError."""
+        import pytest
+
+        class NonSerializable:
+            pass
+
+        obj = NonSerializable()
+
+        with pytest.raises(TypeError):
+            json.dumps(obj, cls=CustomJsonEncoder)
+
+    def test_encode_datetime_raises_error(self):
+        """Test that datetime objects raise TypeError (not a dataclass)."""
+        from datetime import datetime
+
+        import pytest
+
+        now = datetime.now()
+
+        with pytest.raises(TypeError):
+            json.dumps(now, cls=CustomJsonEncoder)
