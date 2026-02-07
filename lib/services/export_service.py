@@ -333,7 +333,9 @@ class ExportService:
                 item_id = item.get("id")
                 model = item.get("model")
                 item_type = item.get("type")
-                logger.debug(f"Processing trash item: id={item_id}, model={model}, type={item_type}")
+                logger.debug(
+                    f"Processing trash item: id={item_id}, model={model}, type={item_type}"
+                )
 
                 if model in ("card", "dataset"):
                     # Fetch full card data to get original collection_id
@@ -342,16 +344,26 @@ class ExportService:
                         # In v58+, archived cards have collection_id set to Trash,
                         # but the original collection is preserved in the nested "collection" object
                         collection_obj = card_data.get("collection", {})
-                        original_collection_id = collection_obj.get("id") if collection_obj else card_data.get("collection_id")
-                        logger.debug(f"Card {item_id} original_collection_id: {original_collection_id} (from collection object: {bool(collection_obj)})")
+                        original_collection_id = (
+                            collection_obj.get("id")
+                            if collection_obj
+                            else card_data.get("collection_id")
+                        )
+                        logger.debug(
+                            f"Card {item_id} original_collection_id: {original_collection_id} (from collection object: {bool(collection_obj)})"
+                        )
 
                         if original_collection_id not in self._processed_collections:
-                            logger.debug(f"Skipping card {item_id}: collection {original_collection_id} not in processed collections")
+                            logger.debug(
+                                f"Skipping card {item_id}: collection {original_collection_id} not in processed collections"
+                            )
                             continue
 
                         base_path = self._collection_path_map.get(original_collection_id, "")
                         if not base_path:
-                            logger.debug(f"Skipping card {item_id}: no base_path for collection {original_collection_id}")
+                            logger.debug(
+                                f"Skipping card {item_id}: no base_path for collection {original_collection_id}"
+                            )
                             continue
 
                         is_model_hint = model == "dataset" or item_type == "model"
@@ -368,7 +380,11 @@ class ExportService:
                         # In v58+, archived dashboards have collection_id set to Trash,
                         # but the original collection is preserved in the nested "collection" object
                         collection_obj = dashboard_data.get("collection", {})
-                        original_collection_id = collection_obj.get("id") if collection_obj else dashboard_data.get("collection_id")
+                        original_collection_id = (
+                            collection_obj.get("id")
+                            if collection_obj
+                            else dashboard_data.get("collection_id")
+                        )
 
                         if original_collection_id not in self._processed_collections:
                             continue

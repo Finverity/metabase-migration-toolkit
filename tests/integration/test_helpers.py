@@ -297,7 +297,9 @@ class MetabaseTestHelper:
         try:
             collection_data: dict[str, str | int | None] = {
                 "name": name,
-                "description": description if description else None,  # v58+ requires None, not empty string
+                "description": (
+                    description if description else None
+                ),  # v58+ requires None, not empty string
                 "color": "#509EE3",
             }
 
