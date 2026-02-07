@@ -292,8 +292,8 @@ class V56Adapter(VersionAdapter):
         """
         result = self.clean_for_create(card_data.copy())
 
-        # v56 specific: Set table_id to null (auto-populated by Metabase)
-        result["table_id"] = None
+        # table_id is removed by clean_for_create - it's instance-specific
+        # and auto-populated by Metabase based on the query's source-table
 
         return result
 
@@ -381,8 +381,8 @@ class V57Adapter(VersionAdapter):
         """
         result = self.clean_for_create(card_data.copy())
 
-        # v57 specific: Set table_id to null (auto-populated by Metabase)
-        result["table_id"] = None
+        # table_id is removed by clean_for_create - it's instance-specific
+        # and auto-populated by Metabase based on the query's source-table
 
         return result
 

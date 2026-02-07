@@ -493,8 +493,8 @@ class TestCleanDashboardForUpdate:
 class TestCleanForCreateTableId:
     """Test suite for clean_for_create handling of table_id."""
 
-    def test_clean_sets_table_id_to_null(self):
-        """Test that clean_for_create sets table_id to null."""
+    def test_clean_removes_table_id(self):
+        """Test that clean_for_create removes table_id to avoid FK constraint violations."""
         payload = {
             "name": "Test Card",
             "table_id": 123,
@@ -502,7 +502,7 @@ class TestCleanForCreateTableId:
         }
         cleaned = clean_for_create(payload)
 
-        assert cleaned["table_id"] is None
+        assert "table_id" not in cleaned
         assert cleaned["name"] == "Test Card"
 
     def test_clean_without_table_id(self):

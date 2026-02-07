@@ -231,8 +231,8 @@ class TestV56Adapter:
         assert result["name"] == "Test Card"
         assert result["database_id"] == 1
 
-        # Should set table_id to None
-        assert result["table_id"] is None
+        # table_id should be removed (not set to None) to avoid FK constraint violations
+        assert "table_id" not in result
 
     def test_transform_dashboard_for_create(self):
         """Test dashboard transformation for create."""
@@ -338,7 +338,7 @@ class TestV57Adapter:
         assert "id" not in result
         assert "created_at" not in result
         assert result["name"] == "Test Card"
-        assert result["table_id"] is None
+        assert "table_id" not in result
 
     def test_transform_dashboard_for_create(self):
         """Test dashboard transformation for v57 create."""
@@ -451,7 +451,7 @@ class TestV58Adapter:
         assert "id" not in result
         assert "created_at" not in result
         assert result["name"] == "Test Card V58"
-        assert result["table_id"] is None
+        assert "table_id" not in result
 
     def test_transform_dashboard_for_create(self):
         """Test dashboard transformation for v58 create."""

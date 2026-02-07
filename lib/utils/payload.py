@@ -24,10 +24,11 @@ def clean_for_create(payload: dict[str, Any]) -> dict[str, Any]:
     """
     cleaned = {k: v for k, v in payload.items() if k not in IMMUTABLE_FIELDS}
 
-    # Set table_id to null - it's instance-specific and will be auto-populated by Metabase
-    # based on the query's source-table
+    # Remove table_id entirely - it's instance-specific and will be auto-populated by Metabase
+    # based on the query's source-table. Sending table_id (even as null) can cause foreign key
+    # constraint violations if the source table_id doesn't exist in the target instance.
     if "table_id" in cleaned:
-        cleaned["table_id"] = None
+        del cleaned["table_id"]
 
     # Ensure 'type' field is set correctly for cards based on 'dataset' field
     # In Metabase v56+, cards with dataset=True must have type='model'
