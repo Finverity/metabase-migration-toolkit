@@ -315,3 +315,391 @@ class TestMetabaseClientPublicMethods:
 
         assert result == {"id": 200, "name": "Test Dashboard"}
         mock_request.assert_called_once_with("get", "/dashboard/200")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_trash_collection(self, mock_request):
+        """Test get_trash_collection method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 1, "name": "Trash", "type": "trash"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_trash_collection()
+
+        assert result == {"id": 1, "name": "Trash", "type": "trash"}
+        mock_request.assert_called_once_with("get", "/collection/trash")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_collection_items(self, mock_request):
+        """Test get_collection_items method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"data": [{"id": 1, "name": "Card 1"}]}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_collection_items(5, params={"models": "card"})
+
+        assert result == {"data": [{"id": 1, "name": "Card 1"}]}
+        mock_request.assert_called_once_with("get", "/collection/5/items", params={"models": "card"})
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_databases_dict_format(self, mock_request):
+        """Test get_databases with dict response format."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"data": [{"id": 1, "name": "DB1"}]}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_databases()
+
+        assert result == [{"id": 1, "name": "DB1"}]
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_databases_list_format(self, mock_request):
+        """Test get_databases with list response format."""
+        mock_response = Mock()
+        mock_response.json.return_value = [{"id": 1, "name": "DB1"}]
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_databases()
+
+        assert result == [{"id": 1, "name": "DB1"}]
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_databases_unexpected_format(self, mock_request):
+        """Test get_databases with unexpected response format."""
+        mock_response = Mock()
+        mock_response.json.return_value = "unexpected"
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_databases()
+
+        assert result == []
+
+    @patch.object(MetabaseClient, "_request")
+    def test_create_collection(self, mock_request):
+        """Test create_collection method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 10, "name": "New Collection"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.create_collection({"name": "New Collection"})
+
+        assert result == {"id": 10, "name": "New Collection"}
+        mock_request.assert_called_once_with("post", "/collection", json={"name": "New Collection"})
+
+    @patch.object(MetabaseClient, "_request")
+    def test_update_collection(self, mock_request):
+        """Test update_collection method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 10, "name": "Updated Collection"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.update_collection(10, {"name": "Updated Collection"})
+
+        assert result == {"id": 10, "name": "Updated Collection"}
+        mock_request.assert_called_once_with(
+            "put", "/collection/10", json={"name": "Updated Collection"}
+        )
+
+    @patch.object(MetabaseClient, "_request")
+    def test_create_card(self, mock_request):
+        """Test create_card method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 100, "name": "New Card"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.create_card({"name": "New Card"})
+
+        assert result == {"id": 100, "name": "New Card"}
+        mock_request.assert_called_once_with("post", "/card", json={"name": "New Card"})
+
+    @patch.object(MetabaseClient, "_request")
+    def test_update_card(self, mock_request):
+        """Test update_card method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 100, "name": "Updated Card"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.update_card(100, {"name": "Updated Card"})
+
+        assert result == {"id": 100, "name": "Updated Card"}
+        mock_request.assert_called_once_with("put", "/card/100", json={"name": "Updated Card"})
+
+    @patch.object(MetabaseClient, "_request")
+    def test_create_dashboard(self, mock_request):
+        """Test create_dashboard method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 200, "name": "New Dashboard"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.create_dashboard({"name": "New Dashboard"})
+
+        assert result == {"id": 200, "name": "New Dashboard"}
+        mock_request.assert_called_once_with("post", "/dashboard", json={"name": "New Dashboard"})
+
+    @patch.object(MetabaseClient, "_request")
+    def test_update_dashboard(self, mock_request):
+        """Test update_dashboard method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 200, "name": "Updated Dashboard"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.update_dashboard(200, {"name": "Updated Dashboard"})
+
+        assert result == {"id": 200, "name": "Updated Dashboard"}
+        mock_request.assert_called_once_with(
+            "put", "/dashboard/200", json={"name": "Updated Dashboard"}
+        )
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_permission_groups(self, mock_request):
+        """Test get_permission_groups method."""
+        mock_response = Mock()
+        mock_response.json.return_value = [{"id": 1, "name": "All Users"}]
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_permission_groups()
+
+        assert result == [{"id": 1, "name": "All Users"}]
+        mock_request.assert_called_once_with("get", "/permissions/group")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_permissions_graph(self, mock_request):
+        """Test get_permissions_graph method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"groups": {}}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_permissions_graph()
+
+        assert result == {"groups": {}}
+        mock_request.assert_called_once_with("get", "/permissions/graph")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_update_permissions_graph(self, mock_request):
+        """Test update_permissions_graph method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"groups": {"1": {}}}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.update_permissions_graph({"groups": {"1": {}}})
+
+        assert result == {"groups": {"1": {}}}
+        mock_request.assert_called_once_with("put", "/permissions/graph", json={"groups": {"1": {}}})
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_collection_permissions_graph(self, mock_request):
+        """Test get_collection_permissions_graph method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"groups": {}}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_collection_permissions_graph()
+
+        assert result == {"groups": {}}
+        mock_request.assert_called_once_with("get", "/collection/graph")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_update_collection_permissions_graph(self, mock_request):
+        """Test update_collection_permissions_graph method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"groups": {"1": {}}}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.update_collection_permissions_graph({"groups": {"1": {}}})
+
+        assert result == {"groups": {"1": {}}}
+        mock_request.assert_called_once_with(
+            "put", "/collection/graph", json={"groups": {"1": {}}}
+        )
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_database_metadata(self, mock_request):
+        """Test get_database_metadata method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 1, "tables": []}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_database_metadata(1)
+
+        assert result == {"id": 1, "tables": []}
+        mock_request.assert_called_once_with("get", "/database/1/metadata")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_table(self, mock_request):
+        """Test get_table method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 10, "name": "users"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_table(10)
+
+        assert result == {"id": 10, "name": "users"}
+        mock_request.assert_called_once_with("get", "/table/10")
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_field(self, mock_request):
+        """Test get_field method."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": 100, "name": "email"}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client.get_field(100)
+
+        assert result == {"id": 100, "name": "email"}
+        mock_request.assert_called_once_with("get", "/field/100")
+
+
+class TestPagination:
+    """Test suite for pagination logic."""
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_all_paginated_list_response(self, mock_request):
+        """Test pagination with simple list response."""
+        mock_response = Mock()
+        mock_response.json.return_value = [{"id": 1}, {"id": 2}]
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._get_all_paginated("/test")
+
+        assert result == [{"id": 1}, {"id": 2}]
+        mock_request.assert_called_once()
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_all_paginated_dict_response_single_page(self, mock_request):
+        """Test pagination with dict response, single page."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"data": [{"id": 1}, {"id": 2}], "total": 2, "limit": 10}
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._get_all_paginated("/test")
+
+        assert result == [{"id": 1}, {"id": 2}]
+
+    @patch.object(MetabaseClient, "_request")
+    def test_get_all_paginated_unexpected_format(self, mock_request):
+        """Test pagination with unexpected response format."""
+        mock_response = Mock()
+        mock_response.json.return_value = "unexpected"
+        mock_request.return_value = mock_response
+
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        with pytest.raises(MetabaseAPIError, match="Unexpected pagination response format"):
+            client._get_all_paginated("/test")
+
+
+class TestRetryLogic:
+    """Test suite for retry logic."""
+
+    def test_should_retry_connection_error(self):
+        """Test that connection errors should be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(requests.exceptions.ConnectionError())
+
+        assert result is True
+
+    def test_should_retry_timeout(self):
+        """Test that timeout errors should be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(requests.exceptions.Timeout())
+
+        assert result is True
+
+    def test_should_retry_api_error_429(self):
+        """Test that 429 errors should be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(MetabaseAPIError("Rate limited", status_code=429))
+
+        assert result is True
+
+    def test_should_retry_api_error_500(self):
+        """Test that 500 errors should be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(MetabaseAPIError("Server error", status_code=500))
+
+        assert result is True
+
+    def test_should_retry_api_error_502(self):
+        """Test that 502 errors should be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(MetabaseAPIError("Bad gateway", status_code=502))
+
+        assert result is True
+
+    def test_should_retry_api_error_503(self):
+        """Test that 503 errors should be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(MetabaseAPIError("Service unavailable", status_code=503))
+
+        assert result is True
+
+    def test_should_retry_api_error_504(self):
+        """Test that 504 errors should be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(MetabaseAPIError("Gateway timeout", status_code=504))
+
+        assert result is True
+
+    def test_should_not_retry_api_error_404(self):
+        """Test that 404 errors should not be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(MetabaseAPIError("Not found", status_code=404))
+
+        assert result is False
+
+    def test_should_not_retry_value_error(self):
+        """Test that ValueError should not be retried."""
+        client = MetabaseClient(base_url="https://example.com", session_token="test-token")
+
+        result = client._should_retry(ValueError("Invalid value"))
+
+        assert result is False

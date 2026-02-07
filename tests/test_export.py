@@ -372,3 +372,150 @@ class TestModelExport:
             assert exported_card.id == 100
             assert exported_card.name == "Monthly Revenue"
             assert exported_card.dataset is False
+
+
+class TestExportMainFlow:
+    """Test suite for main export flow."""
+
+    def test_export_empty_collection_tree(self, tmp_path):
+        """Test export with empty collection tree."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = []
+            mock_client.get_collections_tree.return_value = []
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter.export()
+
+            # Should not create manifest file when no collections
+            assert not (tmp_path / "export" / "manifest.json").exists()
+
+    def test_export_with_root_collection_filter(self, tmp_path):
+        """Test export with root_collection_ids filter."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+            root_collection_ids=[1],
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = []
+            mock_client.get_collections_tree.return_value = [
+                {"id": 1, "name": "Collection 1"},
+                {"id": 2, "name": "Collection 2"},
+            ]
+            mock_client.get_collection_items.return_value = {"data": []}
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+
+            with patch.object(exporter, "_traverse_collections") as mock_traverse:
+                with patch.object(exporter, "_export_permissions"):
+                    exporter.export()
+
+                    # Should only pass filtered collections
+                    mock_traverse.assert_called_once()
+                    args = mock_traverse.call_args[0][0]
+                    assert len(args) == 1
+                    assert args[0]["id"] == 1
+
+    def test_export_handles_api_error(self, tmp_path):
+        """Test export handles MetabaseAPIError."""
+        from lib.client import MetabaseAPIError
+
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.side_effect = MetabaseAPIError("API Error", status_code=500)
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+
+            with pytest.raises(MetabaseAPIError):
+                exporter.export()
+
+    def test_export_handles_unexpected_error(self, tmp_path):
+        """Test export handles unexpected errors."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.side_effect = RuntimeError("Unexpected error")
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+
+            with pytest.raises(RuntimeError):
+                exporter.export()
+
+
+class TestFetchDatabaseMetadata:
+    """Test suite for database metadata fetching."""
+
+    def test_fetch_database_metadata_success(self, sample_export_config):
+        """Test successful database metadata fetching."""
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = [{"id": 1, "name": "DB1"}]
+            mock_client.get_database_metadata.return_value = {
+                "tables": [
+                    {
+                        "id": 10,
+                        "name": "users",
+                        "fields": [{"id": 100, "name": "id"}, {"id": 101, "name": "email"}],
+                    }
+                ]
+            }
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(sample_export_config)
+            exporter._fetch_and_store_databases()
+
+            assert 1 in exporter.manifest.database_metadata
+            assert len(exporter.manifest.database_metadata[1]["tables"]) == 1
+            assert exporter.manifest.database_metadata[1]["tables"][0]["name"] == "users"
+
+    def test_fetch_database_metadata_failure(self, sample_export_config):
+        """Test database metadata fetching handles errors gracefully."""
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = [{"id": 1, "name": "DB1"}]
+            mock_client.get_database_metadata.side_effect = Exception("Metadata error")
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(sample_export_config)
+            exporter._fetch_and_store_databases()
+
+            # Should continue without metadata
+            assert exporter.manifest.databases == {1: "DB1"}
+            assert 1 not in exporter.manifest.database_metadata
+
+    def test_fetch_databases_unexpected_format(self, sample_export_config):
+        """Test fetching databases with unexpected format."""
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = "unexpected"
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(sample_export_config)
+            exporter._fetch_and_store_databases()
+
+            assert exporter.manifest.databases == {}

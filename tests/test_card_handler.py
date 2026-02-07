@@ -1042,3 +1042,168 @@ class TestImportCards:
 
             # Should import both cards
             assert mock_import.call_count == 2
+
+
+class TestPrefetchCollectionItems:
+    """Test suite for ImportContext.prefetch_collection_items method."""
+
+    def test_prefetch_collection_items_basic(
+        self, mock_client, mock_id_mapper, mock_query_remapper, mock_config, tmp_path
+    ):
+        """Test basic prefetch of collection items."""
+        manifest = Mock(spec=Manifest)
+        manifest.cards = [
+            Card(
+                id=1,
+                name="Card 1",
+                file_path="card1.json",
+                collection_id=10,
+                database_id=1,
+                archived=False,
+                dataset=False,
+            )
+        ]
+        manifest.dashboards = []
+
+        mock_id_mapper.resolve_collection_id.return_value = 100
+
+        mock_client.get_collection_items.return_value = {
+            "data": [{"id": 1, "name": "Existing Card", "model": "card"}]
+        }
+
+        context = ImportContext(
+            config=mock_config,
+            client=mock_client,
+            manifest=manifest,
+            export_dir=tmp_path,
+            id_mapper=mock_id_mapper,
+            query_remapper=mock_query_remapper,
+            report=ImportReport(),
+        )
+
+        context.prefetch_collection_items()
+
+        assert context._collection_items_prefetched is True
+        assert 100 in context._collection_items_cache
+        assert len(context._collection_items_cache[100]) == 1
+
+    def test_prefetch_collection_items_already_prefetched(
+        self, mock_client, mock_id_mapper, mock_query_remapper, mock_config, tmp_path
+    ):
+        """Test that prefetch is skipped if already done."""
+        manifest = Mock(spec=Manifest)
+        manifest.cards = []
+        manifest.dashboards = []
+
+        context = ImportContext(
+            config=mock_config,
+            client=mock_client,
+            manifest=manifest,
+            export_dir=tmp_path,
+            id_mapper=mock_id_mapper,
+            query_remapper=mock_query_remapper,
+            report=ImportReport(),
+        )
+        context._collection_items_prefetched = True
+
+        context.prefetch_collection_items()
+
+        mock_client.get_collection_items.assert_not_called()
+
+    def test_prefetch_collection_items_no_collections(
+        self, mock_client, mock_id_mapper, mock_query_remapper, mock_config, tmp_path
+    ):
+        """Test prefetch with no collections to fetch."""
+        manifest = Mock(spec=Manifest)
+        manifest.cards = []
+        manifest.dashboards = []
+
+        context = ImportContext(
+            config=mock_config,
+            client=mock_client,
+            manifest=manifest,
+            export_dir=tmp_path,
+            id_mapper=mock_id_mapper,
+            query_remapper=mock_query_remapper,
+            report=ImportReport(),
+        )
+
+        context.prefetch_collection_items()
+
+        assert context._collection_items_prefetched is True
+        mock_client.get_collection_items.assert_not_called()
+
+    def test_prefetch_collection_items_with_root_collection(
+        self, mock_client, mock_id_mapper, mock_query_remapper, mock_config, tmp_path
+    ):
+        """Test prefetch with cards in root collection."""
+        manifest = Mock(spec=Manifest)
+        manifest.cards = [
+            Card(
+                id=1,
+                name="Card 1",
+                file_path="card1.json",
+                collection_id=None,
+                database_id=1,
+                archived=False,
+                dataset=False,
+            )
+        ]
+        manifest.dashboards = []
+
+        mock_id_mapper.resolve_collection_id.return_value = None
+
+        mock_client.get_collection_items.return_value = {"data": []}
+
+        context = ImportContext(
+            config=mock_config,
+            client=mock_client,
+            manifest=manifest,
+            export_dir=tmp_path,
+            id_mapper=mock_id_mapper,
+            query_remapper=mock_query_remapper,
+            report=ImportReport(),
+        )
+
+        context.prefetch_collection_items()
+
+        assert context._collection_items_prefetched is True
+        assert "root" in context._collection_items_cache
+
+    def test_prefetch_collection_items_handles_api_error(
+        self, mock_client, mock_id_mapper, mock_query_remapper, mock_config, tmp_path
+    ):
+        """Test that prefetch handles API errors gracefully."""
+        manifest = Mock(spec=Manifest)
+        manifest.cards = [
+            Card(
+                id=1,
+                name="Card 1",
+                file_path="card1.json",
+                collection_id=10,
+                database_id=1,
+                archived=False,
+                dataset=False,
+            )
+        ]
+        manifest.dashboards = []
+
+        mock_id_mapper.resolve_collection_id.return_value = 100
+
+        mock_client.get_collection_items.side_effect = Exception("API Error")
+
+        context = ImportContext(
+            config=mock_config,
+            client=mock_client,
+            manifest=manifest,
+            export_dir=tmp_path,
+            id_mapper=mock_id_mapper,
+            query_remapper=mock_query_remapper,
+            report=ImportReport(),
+        )
+
+        context.prefetch_collection_items()
+
+        assert context._collection_items_prefetched is True
+        assert 100 in context._collection_items_cache
+        assert context._collection_items_cache[100] == []
