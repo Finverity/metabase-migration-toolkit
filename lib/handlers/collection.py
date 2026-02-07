@@ -127,10 +127,21 @@ class CollectionHandler(BaseHandler):
             logger.debug(f"Updated collection '{collection.name}' (ID: {updated_coll['id']})")
 
         elif strategy == CONFLICT_RENAME:
-            # Generate unique name and create new collection
-            new_name = self._generate_unique_collection_name(collection.name, target_parent_id)
-            logger.info(f"Renamed collection '{collection.name}' to '{new_name}' to avoid conflict")
-            self._create_collection(collection, new_name, target_parent_id)
+            # For collections, rename strategy behaves like skip - reuse existing collection.
+            # Only cards/dashboards should be renamed, not the collection structure.
+            self.id_mapper.set_collection_mapping(collection.id, existing_coll["id"])
+            self._add_report_item(
+                "collection",
+                "skipped",
+                collection.id,
+                existing_coll["id"],
+                collection.name,
+                "Already exists (reused for rename strategy)",
+            )
+            logger.debug(
+                f"Reused collection '{collection.name}' (ID: {existing_coll['id']}) "
+                f"for rename strategy"
+            )
 
     def _create_collection(
         self,

@@ -83,9 +83,9 @@ class ExportService:
             self._fetch_and_store_databases()
 
             logger.info("Fetching collection tree...")
-            # Metabase API expects lowercase string "true"/"false" for archived param
-            archived_str = "true" if self.config.include_archived else "false"
-            collection_tree = self.client.get_collections_tree(params={"archived": archived_str})
+            # Always fetch non-archived collections for the tree
+            # Archived items within collections are handled separately when fetching collection items
+            collection_tree = self.client.get_collections_tree(params={"archived": "false"})
 
             # Filter tree if root_collection_ids are specified
             if self.config.root_collection_ids:
@@ -102,6 +102,10 @@ class ExportService:
 
             # Process collections recursively
             self._traverse_collections(collection_tree)
+
+            # Process archived items from Trash if include_archived is True
+            if self.config.include_archived:
+                self._process_archived_items_from_trash()
 
             # Export permissions if requested
             if self.config.include_permissions:
@@ -259,12 +263,10 @@ class ExportService:
         """
         try:
             # Include 'dataset' to fetch models (Metabase models are returned as model='dataset')
-            # Metabase API expects lowercase string "true"/"false" for archived param
             # Use pinned_state="all" to get both pinned and non-pinned items
-            archived_str = "true" if self.config.include_archived else "false"
             params = {
                 "models": ["card", "dashboard", "dataset"],
-                "archived": archived_str,
+                "archived": "false",
                 "pinned_state": "all",
             }
             items_response = self.client.get_collection_items(collection_id, params)
@@ -289,6 +291,101 @@ class ExportService:
 
         except MetabaseAPIError as e:
             logger.error(f"Failed to process items for collection {collection_id}: {e}")
+
+    def _process_archived_items_from_trash(self) -> None:
+        """Fetches and processes archived items from the Trash collection.
+
+        In Metabase v58+, archived items are moved to a special Trash collection.
+        This method fetches items from Trash and exports those that belong to
+        collections we're exporting.
+        """
+        try:
+            logger.info("Fetching archived items from Trash...")
+            logger.debug(f"Processed collections: {self._processed_collections}")
+
+            # First get the trash collection to get its ID
+            trash_collection = self.client.get_trash_collection()
+            trash_id = trash_collection.get("id")
+            logger.debug(f"Trash collection: {trash_collection}")
+            if not trash_id:
+                logger.warning("Could not get Trash collection ID")
+                return
+
+            params = {
+                "models": ["card", "dashboard", "dataset"],
+                "pinned_state": "all",
+            }
+            trash_response = self.client.get_collection_items(trash_id, params)
+            trash_items = trash_response.get("data", [])
+            logger.debug(f"Trash items response: {trash_response}")
+
+            if not trash_items:
+                logger.info("No archived items found in Trash.")
+                return
+
+            logger.info(f"Found {len(trash_items)} items in Trash, filtering by collection...")
+
+            exported_count = 0
+            for item in trash_items:
+                # For archived items, we need to check the original collection
+                # The item's collection_id might be the trash collection, so we need to
+                # fetch the full card/dashboard data to get the original collection_id
+                item_id = item.get("id")
+                model = item.get("model")
+                item_type = item.get("type")
+                logger.debug(f"Processing trash item: id={item_id}, model={model}, type={item_type}")
+
+                if model in ("card", "dataset"):
+                    # Fetch full card data to get original collection_id
+                    try:
+                        card_data = self.client.get_card(item_id)
+                        # In v58+, archived cards have collection_id set to Trash,
+                        # but the original collection is preserved in the nested "collection" object
+                        collection_obj = card_data.get("collection", {})
+                        original_collection_id = collection_obj.get("id") if collection_obj else card_data.get("collection_id")
+                        logger.debug(f"Card {item_id} original_collection_id: {original_collection_id} (from collection object: {bool(collection_obj)})")
+
+                        if original_collection_id not in self._processed_collections:
+                            logger.debug(f"Skipping card {item_id}: collection {original_collection_id} not in processed collections")
+                            continue
+
+                        base_path = self._collection_path_map.get(original_collection_id, "")
+                        if not base_path:
+                            logger.debug(f"Skipping card {item_id}: no base_path for collection {original_collection_id}")
+                            continue
+
+                        is_model_hint = model == "dataset" or item_type == "model"
+                        self._export_card_with_dependencies(
+                            item_id, base_path, is_model_hint=is_model_hint
+                        )
+                        exported_count += 1
+                    except MetabaseAPIError as e:
+                        logger.warning(f"Failed to fetch archived card {item_id}: {e}")
+
+                elif model == "dashboard" and self.config.include_dashboards:
+                    try:
+                        dashboard_data = self.client.get_dashboard(item_id)
+                        # In v58+, archived dashboards have collection_id set to Trash,
+                        # but the original collection is preserved in the nested "collection" object
+                        collection_obj = dashboard_data.get("collection", {})
+                        original_collection_id = collection_obj.get("id") if collection_obj else dashboard_data.get("collection_id")
+
+                        if original_collection_id not in self._processed_collections:
+                            continue
+
+                        base_path = self._collection_path_map.get(original_collection_id, "")
+                        if not base_path:
+                            continue
+
+                        self._export_dashboard(item_id, base_path)
+                        exported_count += 1
+                    except MetabaseAPIError as e:
+                        logger.warning(f"Failed to fetch archived dashboard {item_id}: {e}")
+
+            logger.info(f"Exported {exported_count} archived items from Trash")
+
+        except MetabaseAPIError as e:
+            logger.error(f"Failed to process archived items from Trash: {e}")
 
     @staticmethod
     def _extract_card_dependencies(card_data: dict) -> set[int]:

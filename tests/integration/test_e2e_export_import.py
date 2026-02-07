@@ -57,12 +57,19 @@ def get_metabase_version() -> MetabaseVersion:
     version_str = os.environ.get("MB_METABASE_VERSION", "").lower()
     if version_str == "v57":
         return MetabaseVersion.V57
+    if version_str == "v58":
+        return MetabaseVersion.V58
     return DEFAULT_METABASE_VERSION
 
 
 def is_v57() -> bool:
     """Check if we're testing against v57."""
     return get_metabase_version() == MetabaseVersion.V57
+
+
+def is_v58() -> bool:
+    """Check if we're testing against v58."""
+    return get_metabase_version() == MetabaseVersion.V58
 
 
 def get_query_from_card(card: dict[str, Any]) -> dict[str, Any]:
@@ -355,9 +362,12 @@ def get_filter_clause(card: dict[str, Any]) -> list[Any] | None:
 def docker_compose_file():
     """Return path to docker-compose file based on MB_METABASE_VERSION.
 
-    Uses docker-compose.test.yml for v56 (default), docker-compose.test.v57.yml for v57.
+    Uses docker-compose.test.yml for v56 (default), docker-compose.test.v57.yml for v57,
+    docker-compose.test.v58.yml for v58.
     """
     base_path = Path(__file__).parent.parent.parent
+    if is_v58():
+        return base_path / "docker-compose.test.v58.yml"
     if is_v57():
         return base_path / "docker-compose.test.v57.yml"
     return base_path / "docker-compose.test.yml"
@@ -1899,8 +1909,8 @@ class TestComplexCardQueries:
         # Verify sorting and limit (using version-aware helper)
         card = target.get_card(sort_card["id"])
         query = get_query_from_card(card)
-        # In v57, order-by might be stored differently or may not be present if Metabase handles it differently
-        if not is_v57():
+        # In v57/v58 (MBQL 5), order-by might be stored differently or may not be present if Metabase handles it differently
+        if not is_v57() and not is_v58():
             assert has_order_by(card), "Order-by should be preserved"
         assert query.get("limit") == 5, "Limit should be preserved"
 

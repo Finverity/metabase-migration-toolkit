@@ -14,6 +14,7 @@ from lib.version import (
     MBQLConfig,
     V56Adapter,
     V57Adapter,
+    V58Adapter,
     get_version_adapter,
     get_version_config,
     validate_version_compatibility,
@@ -39,6 +40,14 @@ class TestMetabaseVersion:
         """Test V57 version string representation."""
         assert str(MetabaseVersion.V57) == "v57"
 
+    def test_v58_value(self):
+        """Test V58 version has correct value."""
+        assert MetabaseVersion.V58.value == "v58"
+
+    def test_v58_string(self):
+        """Test V58 version string representation."""
+        assert str(MetabaseVersion.V58) == "v58"
+
     def test_default_version(self):
         """Test default version is V56."""
         assert DEFAULT_METABASE_VERSION == MetabaseVersion.V56
@@ -47,7 +56,8 @@ class TestMetabaseVersion:
         """Test supported versions tuple."""
         assert "v56" in SUPPORTED_METABASE_VERSIONS
         assert "v57" in SUPPORTED_METABASE_VERSIONS
-        assert len(SUPPORTED_METABASE_VERSIONS) >= 2
+        assert "v58" in SUPPORTED_METABASE_VERSIONS
+        assert len(SUPPORTED_METABASE_VERSIONS) >= 3
 
 
 class TestParseMetabaseVersion:
@@ -401,3 +411,106 @@ class TestVersionCompatibility:
         """Test different versions raise error."""
         with pytest.raises(ValueError, match="Version mismatch"):
             validate_version_compatibility(MetabaseVersion.V56, MetabaseVersion.V57)
+
+
+class TestV58Adapter:
+    """Tests for V58 version adapter."""
+
+    def test_adapter_creation(self):
+        """Test creating V58 adapter."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        assert isinstance(adapter, V58Adapter)
+        assert adapter.version == MetabaseVersion.V58
+
+    def test_v58_inherits_from_v57(self):
+        """Test V58 adapter inherits from V57 adapter."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        assert isinstance(adapter, V57Adapter)
+
+    def test_v58_config_uses_stages(self):
+        """Test V58 config has uses_stages=True."""
+        config = get_version_config(MetabaseVersion.V58)
+        assert config.mbql_config.uses_stages is True
+
+    def test_v58_config_filter_key(self):
+        """Test V58 config has filters key (plural)."""
+        config = get_version_config(MetabaseVersion.V58)
+        assert config.mbql_config.filter_key == "filters"
+
+    def test_transform_card_for_create(self):
+        """Test card transformation for v58 create."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "id": 123,
+            "name": "Test Card V58",
+            "database_id": 1,
+            "created_at": "2024-01-01",
+        }
+        result = adapter.transform_card_for_create(card_data)
+
+        assert "id" not in result
+        assert "created_at" not in result
+        assert result["name"] == "Test Card V58"
+        assert result["table_id"] is None
+
+    def test_transform_dashboard_for_create(self):
+        """Test dashboard transformation for v58 create."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        dashboard_data = {
+            "id": 456,
+            "name": "Test Dashboard V58",
+            "dashcards": [{"id": 1}],
+            "tabs": [{"id": 1}],
+        }
+        result = adapter.transform_dashboard_for_create(dashboard_data)
+
+        assert "id" not in result
+        assert "dashcards" not in result
+        assert "tabs" not in result
+        assert result["name"] == "Test Dashboard V58"
+
+    def test_extract_card_dependencies_v58_stages(self):
+        """Test extracting card dependencies from v58 stages."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "stages": [
+                    {"source-table": "card__123"},
+                    {"joins": [{"source-table": "card__456"}]},
+                ],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {123, 456}
+
+    def test_extract_card_dependencies_v58_native(self):
+        """Test extracting card dependencies from v58 native queries."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "template-tags": {"60-model": {"type": "card", "card-id": 60}},
+                    }
+                ],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {60}
+
+    def test_same_version_compatible_v58(self):
+        """Test same versions are compatible (v58)."""
+        validate_version_compatibility(MetabaseVersion.V58, MetabaseVersion.V58)
+
+    def test_v58_incompatible_with_v56(self):
+        """Test v58 is incompatible with v56."""
+        with pytest.raises(ValueError, match="Version mismatch"):
+            validate_version_compatibility(MetabaseVersion.V58, MetabaseVersion.V56)
+
+    def test_v58_incompatible_with_v57(self):
+        """Test v58 is incompatible with v57."""
+        with pytest.raises(ValueError, match="Version mismatch"):
+            validate_version_compatibility(MetabaseVersion.V58, MetabaseVersion.V57)

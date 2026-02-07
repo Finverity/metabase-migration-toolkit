@@ -19,13 +19,14 @@ The integration tests use Docker Compose to spin up:
 
 ## Metabase Version Support
 
-The integration tests support both Metabase v56 and v57. The version determines which Docker Compose file and query
+The integration tests support Metabase v56, v57, and v58. The version determines which Docker Compose file and query
 format is used.
 
 | Version | Docker Compose File           | Metabase Image                  | Query Format     |
 |---------|-------------------------------|---------------------------------|------------------|
 | `v56`   | `docker-compose.test.yml`     | `metabase/metabase:v0.56.1`     | MBQL 4           |
 | `v57`   | `docker-compose.test.v57.yml` | `metabase/metabase:v0.57.2`     | MBQL 5 (stages)  |
+| `v58`   | `docker-compose.test.v58.yml` | `metabase/metabase:v0.58.5`     | MBQL 5 (stages)  |
 
 ### Running Tests with Different Versions
 
@@ -36,8 +37,12 @@ make test-integration
 # Run with v57
 MB_METABASE_VERSION=v57 make test-integration
 
+# Run with v58
+MB_METABASE_VERSION=v58 make test-integration
+
 # Or directly with pytest
 MB_METABASE_VERSION=v57 pytest tests/integration/ -v -s
+MB_METABASE_VERSION=v58 pytest tests/integration/ -v -s
 ```
 
 ## Running Integration Tests

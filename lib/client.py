@@ -214,6 +214,10 @@ class MetabaseClient:
         """Fetches the full details for a single collection."""
         return self._request("get", f"/collection/{collection_id}").json()
 
+    def get_trash_collection(self) -> Any:
+        """Fetches the trash collection metadata (Metabase v58+)."""
+        return self._request("get", "/collection/trash").json()
+
     def get_collection_items(self, collection_id: int | str, params: dict | None = None) -> Any:
         """Fetches items within a specific collection."""
         return self._request(

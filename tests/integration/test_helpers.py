@@ -286,7 +286,7 @@ class MetabaseTestHelper:
     # =========================================================================
 
     def create_collection(
-        self, name: str, description: str = "", parent_id: int | None = None
+        self, name: str, description: str | None = None, parent_id: int | None = None
     ) -> int | None:
         """
         Create a collection.
@@ -295,9 +295,9 @@ class MetabaseTestHelper:
             Collection ID if successful, None otherwise
         """
         try:
-            collection_data: dict[str, str | int] = {
+            collection_data: dict[str, str | int | None] = {
                 "name": name,
-                "description": description,
+                "description": description if description else None,  # v58+ requires None, not empty string
                 "color": "#509EE3",
             }
 
@@ -2135,15 +2135,26 @@ class MetabaseTestHelper:
             logger.error(f"Card {card_id} has no filter clause")
             return False
 
-        # Extract field ID from filter (format: [op, ["field", id, opts], value])
-        field_ref = filter_clause[1] if len(filter_clause) > 1 else None
+        # Extract field ID from filter
+        # v56 format: [op, ["field", id, opts], value]
+        # v57/v58 format: [op, {lib/uuid}, ["field", {metadata}, id], value]
+        field_ref = None
+        if len(filter_clause) > 1:
+            # Check if filter_clause[1] is a UUID dict (v57/v58)
+            if isinstance(filter_clause[1], dict) and "lib/uuid" in filter_clause[1]:
+                # In v57/v58, field ref is at index 2
+                field_ref = filter_clause[2] if len(filter_clause) > 2 else None
+            else:
+                # In v56, field ref is at index 1
+                field_ref = filter_clause[1]
+
         if not isinstance(field_ref, list) or len(field_ref) < 2:
             logger.error(f"Card {card_id} has unexpected filter format: {filter_clause}")
             return False
 
         # v56: field_id at index 1
         actual_field_id = field_ref[1] if isinstance(field_ref[1], int) else None
-        # v57: field_id might be at index 2 if index 1 is metadata dict
+        # v57/v58: field_id might be at index 2 if index 1 is metadata dict
         if actual_field_id is None and isinstance(field_ref[1], dict) and len(field_ref) >= 3:
             actual_field_id = field_ref[2]
 
@@ -2195,7 +2206,17 @@ class MetabaseTestHelper:
             # count aggregation has no field
             return True
 
-        field_ref = agg[1]
+        # Extract field ref
+        # v56 format: [op, ["field", id, opts]]
+        # v57/v58 format: [op, {lib/uuid}, ["field", {metadata}, id]]
+        field_ref = None
+        if isinstance(agg[1], dict) and "lib/uuid" in agg[1]:
+            # In v57/v58, field ref is at index 2
+            field_ref = agg[2] if len(agg) > 2 else None
+        else:
+            # In v56, field ref is at index 1
+            field_ref = agg[1]
+
         if not isinstance(field_ref, list) or field_ref[0] != "field":
             logger.error(f"Card {card_id} has unexpected aggregation format: {agg}")
             return False

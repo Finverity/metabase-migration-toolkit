@@ -493,6 +493,23 @@ class V57Adapter(VersionAdapter):
 
 
 # =============================================================================
+# Version 58 Adapter Implementation
+# =============================================================================
+
+
+class V58Adapter(V57Adapter):
+    """Version adapter for Metabase v58.
+
+    Implements version-specific behaviors for Metabase version 58.
+    v58 uses the same MBQL 5 format as v57 (stages array structure).
+    New features in v58 (Agent API, Data Studio) do not affect migration logic.
+    """
+
+    # V58 inherits all methods from V57Adapter since MBQL format is identical
+    pass
+
+
+# =============================================================================
 # Version Adapter Factory
 # =============================================================================
 
@@ -507,6 +524,15 @@ _VERSION_CONFIGS: dict[MetabaseVersion, VersionConfig] = {
     ),
     MetabaseVersion.V57: VersionConfig(
         version=MetabaseVersion.V57,
+        api_endpoints=APIEndpoints(),
+        mbql_config=MBQLConfig(
+            uses_stages=True,
+            filter_key="filters",
+        ),
+        dashboard_config=DashboardConfig(),
+    ),
+    MetabaseVersion.V58: VersionConfig(
+        version=MetabaseVersion.V58,
         api_endpoints=APIEndpoints(),
         mbql_config=MBQLConfig(
             uses_stages=True,
@@ -553,6 +579,9 @@ def get_version_adapter(version: MetabaseVersion) -> VersionAdapter:
 
     if version == MetabaseVersion.V57:
         return V57Adapter(config)
+
+    if version == MetabaseVersion.V58:
+        return V58Adapter(config)
 
     raise ValueError(f"No adapter implementation for version: {version}")
 

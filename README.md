@@ -48,6 +48,7 @@ The toolkit supports the following Metabase versions:
 |---------|------------------|---------------------|--------------------------|
 | `v56`   | v0.56.x          | MBQL 4              | Default, fully supported |
 | `v57`   | v0.57.x          | MBQL 5 (stages)     | Fully supported          |
+| `v58`   | v0.58.x          | MBQL 5 (stages)     | Fully supported          |
 
 ### Key Differences Between Versions
 
@@ -64,10 +65,16 @@ The toolkit supports the following Metabase versions:
 - Card references: `source-card: 123` (integer)
 - Template tags use `#` prefix: `#123-model-name`
 
+**v58 (MBQL 5):**
+
+- Same MBQL 5 format as v57 (no query structure changes)
+- Additional features: Agent API and Data Studio (not relevant to migration)
+- Fully compatible with toolkit using v57's query handling
+
 ### Version Compatibility
 
 **Important:** Source and target Metabase instances must be the same version. Cross-version migration (e.g., v56 to
-v57) is not supported.
+v57, v57 to v58) is not supported.
 
 ### Specifying Version
 
