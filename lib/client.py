@@ -83,10 +83,10 @@ class MetabaseClient:
     def _prepare_headers(self) -> dict[str, str]:
         """Prepares headers for an API request, authenticating if necessary."""
         if not self._session.headers.get("X-Metabase-Session") and not self._session.headers.get(
-            "X-Metabase-API-Key"
+            "X-API-KEY"
         ):
             if self._personal_token:
-                self._session.headers.update({"X-Metabase-API-Key": self._personal_token})
+                self._session.headers.update({"X-API-KEY": self._personal_token})
             elif self._session_token:
                 self._session.headers.update({"X-Metabase-Session": self._session_token})
             else:
@@ -98,8 +98,8 @@ class MetabaseClient:
         headers = {}
         if "X-Metabase-Session" in self._session.headers:
             headers["X-Metabase-Session"] = str(self._session.headers["X-Metabase-Session"])
-        if "X-Metabase-API-Key" in self._session.headers:
-            headers["X-Metabase-API-Key"] = str(self._session.headers["X-Metabase-API-Key"])
+        if "X-API-KEY" in self._session.headers:
+            headers["X-API-KEY"] = str(self._session.headers["X-API-KEY"])
         return headers
 
     def _should_retry(self, exception: BaseException) -> bool:

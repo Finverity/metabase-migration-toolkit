@@ -179,7 +179,7 @@ class TestMetabaseClientPrepareHeaders:
 
         headers = client._prepare_headers()
 
-        assert headers["X-Metabase-API-Key"] == "personal-token"
+        assert headers["X-API-KEY"] == "personal-token"
 
     @patch("lib.client.requests.Session.post")
     def test_prepare_headers_without_token(self, mock_post):
