@@ -9,6 +9,13 @@ from tqdm import tqdm
 
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ExportConfig
+from lib.constants import (
+    CARD_REF_PREFIX,
+    JOINS_KEY,
+    SOURCE_TABLE_KEY,
+    STAGES_KEY,
+    V57_SOURCE_CARD_KEY,
+)
 from lib.models import Card, Collection, Dashboard, Manifest, ManifestMeta, PermissionGroup
 from lib.utils import (
     TOOL_VERSION,
@@ -292,7 +299,12 @@ class ExportService:
 
     @staticmethod
     def _extract_card_dependencies(card_data: dict) -> set[int]:
-        """Extracts card IDs that this card depends on (references in source-table).
+        """Extracts card IDs that this card depends on.
+
+        Handles both v56 (MBQL 4) and v57 (pMBQL) query formats:
+        - v56: "source-table": "card__123" string refs
+        - v57: "source-card": 123 integer refs (in stages and joins)
+        - v57: ["metric", {metadata}, card_id] aggregation refs (saved metrics)
 
         Args:
             card_data: The card data dictionary.
@@ -300,33 +312,69 @@ class ExportService:
         Returns:
             A set of card IDs that must be exported before this card.
         """
-        dependencies = set()
+        dependencies: set[int] = set()
 
-        # Check for card references in dataset_query
         dataset_query = card_data.get("dataset_query", {})
-        query = dataset_query.get("query", {})
 
-        # Check source-table for card references (format: "card__123")
-        source_table = query.get("source-table")
-        if isinstance(source_table, str) and source_table.startswith("card__"):
+        # v57 pMBQL format: iterate over stages
+        stages = dataset_query.get(STAGES_KEY, [])
+        if stages and isinstance(stages, list):
+            for stage in stages:
+                if isinstance(stage, dict):
+                    ExportService._extract_mbql_stage_deps(stage, dependencies)
+        else:
+            # v56 MBQL 4 format
+            query = dataset_query.get("query", {})
+            if query:
+                ExportService._extract_mbql_stage_deps(query, dependencies)
+
+        return dependencies
+
+    @staticmethod
+    def _extract_mbql_stage_deps(stage: dict, dependencies: set[int]) -> None:
+        """Extracts card dependencies from a single MBQL stage or v56 query dict."""
+        # source-table: "card__N" (v56)
+        source_table = stage.get(SOURCE_TABLE_KEY)
+        if isinstance(source_table, str) and source_table.startswith(CARD_REF_PREFIX):
             try:
-                card_id = int(source_table.replace("card__", ""))
-                dependencies.add(card_id)
+                dependencies.add(int(source_table.replace(CARD_REF_PREFIX, "")))
             except ValueError:
                 logger.warning(f"Invalid card reference format: {source_table}")
 
-        # Recursively check joins for card references
-        joins = query.get("joins", [])
-        for join in joins:
-            join_source_table = join.get("source-table")
-            if isinstance(join_source_table, str) and join_source_table.startswith("card__"):
+        # source-card: N (v57 pMBQL)
+        source_card = stage.get(V57_SOURCE_CARD_KEY)
+        if isinstance(source_card, int):
+            dependencies.add(source_card)
+
+        # joins
+        for join in stage.get(JOINS_KEY, []):
+            # v57: source-card in join
+            join_source_card = join.get(V57_SOURCE_CARD_KEY)
+            if isinstance(join_source_card, int):
+                dependencies.add(join_source_card)
+            # v56: source-table in join
+            join_source_table = join.get(SOURCE_TABLE_KEY)
+            if isinstance(join_source_table, str) and join_source_table.startswith(CARD_REF_PREFIX):
                 try:
-                    card_id = int(join_source_table.replace("card__", ""))
-                    dependencies.add(card_id)
+                    dependencies.add(int(join_source_table.replace(CARD_REF_PREFIX, "")))
                 except ValueError:
                     logger.warning(f"Invalid card reference in join: {join_source_table}")
 
-        return dependencies
+        # v57 pMBQL metric refs: ["metric", {metadata}, card_id]
+        for agg in stage.get("aggregation", []):
+            ExportService._extract_metric_deps_from_clause(agg, dependencies)
+
+    @staticmethod
+    def _extract_metric_deps_from_clause(clause: Any, dependencies: set[int]) -> None:
+        """Recursively extracts card IDs from pMBQL metric references in a clause."""
+        if not isinstance(clause, list) or len(clause) == 0:
+            return
+        if clause[0] == "metric" and len(clause) >= 3 and isinstance(clause[2], int):
+            dependencies.add(clause[2])
+        else:
+            for item in clause:
+                if isinstance(item, list):
+                    ExportService._extract_metric_deps_from_clause(item, dependencies)
 
     def _export_card_with_dependencies(
         self,
