@@ -21,7 +21,7 @@ from lib.constants import (
     TEMPLATE_TAGS_KEY,
     V57_SOURCE_CARD_KEY,
 )
-from lib.handlers.base import BaseHandler, ImportContext
+from lib.handlers.base import BaseHandler, ImportContext, _CARD_TYPE_TO_MODEL
 from lib.models import Card
 from lib.utils import clean_for_create, read_json_file
 
@@ -152,7 +152,8 @@ class CardHandler(BaseHandler):
             logger.debug(f"Updated {item_type} '{card.name}' (ID: {updated_card['id']})")
 
         elif strategy == CONFLICT_RENAME:
-            new_name = self._generate_unique_card_name(card.name, target_collection_id)
+            card_type = card_data.get("type", "question")
+            new_name = self._generate_unique_card_name(card.name, target_collection_id, card_type)
             card_data["name"] = new_name
             logger.info(f"Renamed card '{card.name}' to '{new_name}' to avoid conflict")
             self._create_card(card, card_data)
@@ -177,10 +178,8 @@ class CardHandler(BaseHandler):
         is_model = card_data.get("dataset", False)
         if is_model:
             cache_model = "dataset"
-        elif card_type == "metric":
-            cache_model = "metric"
         else:
-            cache_model = "card"
+            cache_model = _CARD_TYPE_TO_MODEL.get(card_type, "card")
         self.context.add_to_collection_cache(
             card_data.get("collection_id"),
             {
@@ -196,7 +195,9 @@ class CardHandler(BaseHandler):
             f"{card.id} -> {new_card['id']}"
         )
 
-    def _generate_unique_card_name(self, base_name: str, collection_id: int | None) -> str:
+    def _generate_unique_card_name(
+        self, base_name: str, collection_id: int | None, card_type: str = "question"
+    ) -> str:
         """Generates a unique card name by appending a number.
 
         Uses cached collection items for O(1) lookup.
@@ -204,6 +205,8 @@ class CardHandler(BaseHandler):
         Args:
             base_name: The original name.
             collection_id: The collection ID.
+            card_type: The card type ("question", "metric", "model") used to narrow
+                the collision check to the same model type.
 
         Returns:
             A unique name.
@@ -211,7 +214,7 @@ class CardHandler(BaseHandler):
         counter = 1
         while True:
             new_name = f"{base_name} ({counter})"
-            if not self.context.find_existing_card(new_name, collection_id):
+            if not self.context.find_existing_card(new_name, collection_id, card_type=card_type):
                 return new_name
             counter += 1
 
