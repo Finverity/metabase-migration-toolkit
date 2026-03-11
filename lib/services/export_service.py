@@ -270,7 +270,7 @@ class ExportService:
             # Use pinned_state="all" to get both pinned and non-pinned items
             archived_str = "true" if self.config.include_archived else "false"
             params = {
-                "models": ["card", "dashboard", "dataset"],
+                "models": ["card", "dashboard", "dataset", "metric"],
                 "archived": archived_str,
                 "pinned_state": "all",
             }
@@ -284,7 +284,7 @@ class ExportService:
                 model = item.get("model")
                 item_type = item.get("type")
                 # Both 'card' and 'dataset' (models) are exported as cards
-                if model in ("card", "dataset"):
+                if model in ("card", "dataset", "metric"):
                     # Determine if this is a model from collection listing
                     # Check both 'model' field (dataset) and 'type' field (model)
                     is_model_hint = model == "dataset" or item_type == "model"
