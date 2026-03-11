@@ -17,6 +17,13 @@ logger = logging.getLogger("metabase_migration")
 # Default number of parallel workers for prefetching
 DEFAULT_PREFETCH_WORKERS = 5
 
+# Map from card data 'type' field to Metabase collection API 'model' field
+_CARD_TYPE_TO_MODEL: dict[str, str] = {
+    "question": "card",
+    "metric": "metric",
+    "model": "dataset",
+}
+
 
 @dataclass
 class ImportContext:
@@ -109,12 +116,18 @@ class ImportContext:
             f"Pre-fetched {total_items} items from {len(self._collection_items_cache)} collections"
         )
 
-    def find_existing_card(self, name: str, collection_id: int | None) -> dict[str, Any] | None:
+    def find_existing_card(
+        self, name: str, collection_id: int | None, card_type: str | None = None
+    ) -> dict[str, Any] | None:
         """Finds an existing card by name in a collection using cached data.
 
         Args:
             name: Card name to find.
             collection_id: Target collection ID.
+            card_type: Optional card type ("question", "metric", "model") to narrow
+                the match. When provided, only cards with the corresponding Metabase
+                model type are matched. This prevents metric cards from colliding
+                with question cards that share the same name.
 
         Returns:
             The existing card dict or None.
@@ -135,9 +148,16 @@ class ImportContext:
         else:
             items = self._collection_items_cache.get(cache_key, [])
 
+        # Determine which model values to match
+        if card_type and card_type in _CARD_TYPE_TO_MODEL:
+            allowed_models = {_CARD_TYPE_TO_MODEL[card_type]}
+        else:
+            # Backward compatible: match any card-like model
+            allowed_models = {"card", "dataset", "metric"}
+
         for item in items:
-            if item.get("model") in ("card", "dataset") and item.get("name") == name:
-                return item  # type: ignore[no-any-return]
+            if item.get("model") in allowed_models and item.get("name") == name:
+                return item
         return None
 
     def find_existing_dashboard(
