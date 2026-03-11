@@ -92,7 +92,10 @@ class CardHandler(BaseHandler):
             card_data["collection_id"] = target_collection_id
 
             # Handle conflicts using cached collection items lookup
-            existing_card = self.context.find_existing_card(card.name, target_collection_id)
+            card_type = card_data.get("type", "question")
+            existing_card = self.context.find_existing_card(
+                card.name, target_collection_id, card_type=card_type
+            )
 
             if existing_card:
                 self._handle_existing_card(card, card_data, existing_card, target_collection_id)
@@ -169,13 +172,21 @@ class CardHandler(BaseHandler):
         )
 
         # Add to collection cache to keep it up-to-date for conflict detection
+        # Use the correct Metabase model type so metrics and questions don't collide
+        card_type = card_data.get("type", "question")
         is_model = card_data.get("dataset", False)
+        if is_model:
+            cache_model = "dataset"
+        elif card_type == "metric":
+            cache_model = "metric"
+        else:
+            cache_model = "card"
         self.context.add_to_collection_cache(
             card_data.get("collection_id"),
             {
                 "id": new_card["id"],
                 "name": card_data.get("name", card.name),
-                "model": "dataset" if is_model else "card",
+                "model": cache_model,
             },
         )
 
