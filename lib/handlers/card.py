@@ -19,6 +19,7 @@ from lib.constants import (
     SOURCE_TABLE_KEY,
     STAGES_KEY,
     TEMPLATE_TAGS_KEY,
+    V57_SOURCE_CARD_KEY,
 )
 from lib.handlers.base import BaseHandler, ImportContext
 from lib.models import Card
@@ -373,7 +374,7 @@ class CardHandler(BaseHandler):
             query: The query dictionary (either v56 query or v57 stage).
             dependencies: Set to add found card IDs to.
         """
-        # Check source-table for card references
+        # Check source-table for card references (v56 legacy MBQL string format: "card__53")
         source_table = query.get(SOURCE_TABLE_KEY)
         if isinstance(source_table, str) and source_table.startswith(CARD_REF_PREFIX):
             try:
@@ -381,6 +382,14 @@ class CardHandler(BaseHandler):
                 dependencies.add(card_id)
             except ValueError:
                 logger.warning(f"Invalid card reference format: {source_table}")
+
+        # Check source-card for card references (v57 pMBQL integer format: 53)
+        # In pMBQL queries (lib/type: "mbql/query"), card sources use "source-card": <int>
+        # rather than "source-table": "card__<int>". The remapper already handles this
+        # correctly; this ensures the topological sort also sees the dependency.
+        source_card = query.get(V57_SOURCE_CARD_KEY)
+        if isinstance(source_card, int):
+            dependencies.add(source_card)
 
         # Check joins for card references
         for join in query.get(JOINS_KEY, []):
@@ -391,6 +400,11 @@ class CardHandler(BaseHandler):
                     dependencies.add(card_id)
                 except ValueError:
                     logger.warning(f"Invalid card reference in join: {join_source_table}")
+
+            # v57 pMBQL integer format in joins
+            join_source_card = join.get(V57_SOURCE_CARD_KEY)
+            if isinstance(join_source_card, int):
+                dependencies.add(join_source_card)
 
     @staticmethod
     def _extract_native_sql_deps(sql: str, dependencies: set[int]) -> None:
