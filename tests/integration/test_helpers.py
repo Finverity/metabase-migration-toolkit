@@ -286,7 +286,7 @@ class MetabaseTestHelper:
     # =========================================================================
 
     def create_collection(
-        self, name: str, description: str = "", parent_id: int | None = None
+        self, name: str, description: str | None = None, parent_id: int | None = None
     ) -> int | None:
         """
         Create a collection.
@@ -297,12 +297,14 @@ class MetabaseTestHelper:
         try:
             collection_data: dict[str, str | int] = {
                 "name": name,
-                "description": description,
                 "color": "#509EE3",
             }
 
             if parent_id is not None:
                 collection_data["parent_id"] = parent_id
+
+            if description is not None:
+                collection_data["description"] = description
 
             response = requests.post(
                 f"{self.api_url}/collection",
