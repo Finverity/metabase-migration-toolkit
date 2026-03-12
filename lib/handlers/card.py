@@ -199,7 +199,7 @@ class CardHandler(BaseHandler):
         )
 
     def _generate_unique_card_name(
-        self, base_name: str, collection_id: int | None, card_type: str | None
+        self, base_name: str, collection_id: int | None, card_type: str | None = None
     ) -> str:
         """Generates a unique card name by appending a number.
 
