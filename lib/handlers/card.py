@@ -92,9 +92,11 @@ class CardHandler(BaseHandler):
             card_data["collection_id"] = target_collection_id
 
             # Handle conflicts using cached collection items lookup
-            card_type = card_data.get("type", "question")
+            card_type = card_data.get("type")
+            # If card_type is None, all types are searched
+            # If a "type" exists, then look only for the specified type
             existing_card = self.context.find_existing_card(
-                card.name, target_collection_id, card_type=card_type
+                card.name, target_collection_id, card_type
             )
 
             if existing_card:
@@ -152,7 +154,7 @@ class CardHandler(BaseHandler):
             logger.debug(f"Updated {item_type} '{card.name}' (ID: {updated_card['id']})")
 
         elif strategy == CONFLICT_RENAME:
-            card_type = card_data.get("type", "question")
+            card_type = card_data.get("type")
             new_name = self._generate_unique_card_name(card.name, target_collection_id, card_type)
             card_data["name"] = new_name
             logger.info(f"Renamed card '{card.name}' to '{new_name}' to avoid conflict")
@@ -174,6 +176,7 @@ class CardHandler(BaseHandler):
 
         # Add to collection cache to keep it up-to-date for conflict detection
         # Use the correct Metabase model type so metrics and questions don't collide
+        # Need default to satisfy arg type check on _CARD_TYPE_TO_MODEL
         card_type = card_data.get("type", "question")
         is_model = card_data.get("dataset", False)
         if is_model:
@@ -196,7 +199,7 @@ class CardHandler(BaseHandler):
         )
 
     def _generate_unique_card_name(
-        self, base_name: str, collection_id: int | None, card_type: str = "question"
+        self, base_name: str, collection_id: int | None, card_type: str | None
     ) -> str:
         """Generates a unique card name by appending a number.
 
@@ -214,7 +217,7 @@ class CardHandler(BaseHandler):
         counter = 1
         while True:
             new_name = f"{base_name} ({counter})"
-            if not self.context.find_existing_card(new_name, collection_id, card_type=card_type):
+            if not self.context.find_existing_card(new_name, collection_id, card_type):
                 return new_name
             counter += 1
 
@@ -397,10 +400,7 @@ class CardHandler(BaseHandler):
             except ValueError:
                 logger.warning(f"Invalid card reference format: {source_table}")
 
-        # Check source-card for card references (v57 pMBQL integer format: 53)
-        # In pMBQL queries (lib/type: "mbql/query"), card sources use "source-card": <int>
-        # rather than "source-table": "card__<int>". The remapper already handles this
-        # correctly; this ensures the topological sort also sees the dependency.
+        # Check source-card for card references (v57 MBQL 5 integer format: 53)
         source_card = query.get(V57_SOURCE_CARD_KEY)
         if isinstance(source_card, int):
             dependencies.add(source_card)
@@ -418,9 +418,12 @@ class CardHandler(BaseHandler):
             # v57 pMBQL integer format in joins
             join_source_card = join.get(V57_SOURCE_CARD_KEY)
             if isinstance(join_source_card, int):
-                dependencies.add(join_source_card)
+                try:
+                    dependencies.add(join_source_card)
+                except ValueError:
+                    logger.warning(f"Invalid card reference in join: {join_source_table}")
 
-        # Check aggregation clauses for v57 pMBQL metric references:
+        # Check aggregation clauses for v57 MBQL metric references:
         # ["metric", {"lib/uuid": "...", ...}, <card_id>]
         # Saved metrics are stored as cards of type "metric" and referenced by ID.
         for agg in query.get("aggregation", []):
@@ -430,7 +433,7 @@ class CardHandler(BaseHandler):
     def _extract_metric_deps_from_clause(clause: Any, dependencies: set[int]) -> None:
         """Recursively extracts card IDs from pMBQL metric references in a clause.
 
-        In v57 pMBQL, saved metrics are referenced in aggregation clauses as:
+        In v57 MBQL, saved metrics are referenced in aggregation clauses as:
           ["metric", {"lib/uuid": "...", "effective-type": "..."}, <card_id>]
         where the third element is the integer ID of a card of type "metric".
 

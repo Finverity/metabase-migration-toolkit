@@ -301,7 +301,7 @@ class ExportService:
     def _extract_card_dependencies(card_data: dict) -> set[int]:
         """Extracts card IDs that this card depends on.
 
-        Handles both v56 (MBQL 4) and v57 (pMBQL) query formats:
+        Handles both v56 (MBQL 4) and v57 (MBQL 5) query formats:
         - v56: "source-table": "card__123" string refs
         - v57: "source-card": 123 integer refs (in stages and joins)
         - v57: ["metric", {metadata}, card_id] aggregation refs (saved metrics)
@@ -314,9 +314,10 @@ class ExportService:
         """
         dependencies: set[int] = set()
 
+        # Check for card references in dataset query
         dataset_query = card_data.get("dataset_query", {})
 
-        # v57 pMBQL format: iterate over stages
+        # v57 MBQL 5 format: iterate over stages
         stages = dataset_query.get(STAGES_KEY, [])
         if stages and isinstance(stages, list):
             for stage in stages:
@@ -341,17 +342,23 @@ class ExportService:
             except ValueError:
                 logger.warning(f"Invalid card reference format: {source_table}")
 
-        # source-card: N (v57 pMBQL)
+        # source-card: N (v57 MBQL)
         source_card = stage.get(V57_SOURCE_CARD_KEY)
         if isinstance(source_card, int):
-            dependencies.add(source_card)
+            try:
+                dependencies.add(source_card)
+            except ValueError:
+                logger.warning(f"Invalid card reference format: {source_table}")
 
         # joins
         for join in stage.get(JOINS_KEY, []):
             # v57: source-card in join
             join_source_card = join.get(V57_SOURCE_CARD_KEY)
             if isinstance(join_source_card, int):
-                dependencies.add(join_source_card)
+                try:
+                    dependencies.add(join_source_card)
+                except ValueError:
+                    logger.warning(f"Invalid card reference in join: {join_source_card}")
             # v56: source-table in join
             join_source_table = join.get(SOURCE_TABLE_KEY)
             if isinstance(join_source_table, str) and join_source_table.startswith(CARD_REF_PREFIX):
@@ -360,13 +367,13 @@ class ExportService:
                 except ValueError:
                     logger.warning(f"Invalid card reference in join: {join_source_table}")
 
-        # v57 pMBQL metric refs: ["metric", {metadata}, card_id]
+        # v57 MBQL metric refs: ["metric", {metadata}, card_id]
         for agg in stage.get("aggregation", []):
             ExportService._extract_metric_deps_from_clause(agg, dependencies)
 
     @staticmethod
     def _extract_metric_deps_from_clause(clause: Any, dependencies: set[int]) -> None:
-        """Recursively extracts card IDs from pMBQL metric references in a clause."""
+        """Recursively extracts card IDs from MBQL metric references in a clause."""
         if not isinstance(clause, list) or len(clause) == 0:
             return
         if clause[0] == "metric" and len(clause) >= 3 and isinstance(clause[2], int):

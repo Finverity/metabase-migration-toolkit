@@ -452,10 +452,8 @@ class QueryRemapper:
                     )
             return data
 
-        # v57 pMBQL metric reference: ["metric", {metadata_dict}, card_id]
+        # v57 MBQL metric reference: ["metric", {metadata_dict}, card_id]
         # Saved metrics are cards of type "metric" referenced by integer ID in aggregations.
-        # Must be handled before the general recursive fallthrough so the card ID is remapped
-        # rather than treated as an opaque integer inside a nested list.
         if (
             len(data) >= 3
             and data[0] == "metric"
