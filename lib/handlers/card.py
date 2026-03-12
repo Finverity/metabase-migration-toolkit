@@ -21,7 +21,7 @@ from lib.constants import (
     TEMPLATE_TAGS_KEY,
     V57_SOURCE_CARD_KEY,
 )
-from lib.handlers.base import BaseHandler, ImportContext, _CARD_TYPE_TO_MODEL
+from lib.handlers.base import _CARD_TYPE_TO_MODEL, BaseHandler, ImportContext
 from lib.models import Card
 from lib.utils import clean_for_create, read_json_file
 

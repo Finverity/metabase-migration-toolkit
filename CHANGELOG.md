@@ -30,6 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Permissions Import 409 Conflict**: Fixed revision number conflict when applying permissions
   - Now fetches current revision from target instance before applying
   - Prevents "someone else edited the permissions" errors
+- **v57 pMBQL `source-card` dependency extraction**: Metabase v57 changed query format from
+  `"source-table": "card__123"` (string) to `"source-card": 123` (integer). The topological
+  sort only looked for the string format, causing cards with v57 references to be imported in
+  wrong order.
+- **v57 pMBQL metric card references in export**: The export service did not discover
+  `source-card` integer dependencies during dependency traversal, and the query remapper did
+  not remap metric card IDs in the pMBQL `["metric", N, {...}]` tuple format.
+- **Metric/question card conflict resolution**: Metric cards (`type: "metric"`) and question
+  cards (`type: "question"`) can share the same name. During import with `--conflict overwrite`,
+  the toolkit matched by name only, so importing a metric card would overwrite a same-named
+  question card. Fixed by adding `card_type` parameter to `find_existing_card()` and filtering
+  by Metabase model type.
+- **Metric cards excluded from collection listing during export**: The export collection listing
+  only requested `model: "card"` and `model: "dashboard"`, missing `model: "metric"`. Metric
+  cards were silently dropped from exports.
 
 ## [1.0.0] - 2025-10-07
 

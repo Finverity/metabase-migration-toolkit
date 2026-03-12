@@ -467,9 +467,7 @@ class QueryRemapper:
             if target_card_id:
                 result = list(data)
                 result[2] = target_card_id
-                logger.debug(
-                    f"Remapped metric card ID from {source_card_id} to {target_card_id}"
-                )
+                logger.debug(f"Remapped metric card ID from {source_card_id} to {target_card_id}")
                 return result
             else:
                 logger.warning(
