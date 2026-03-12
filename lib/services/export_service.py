@@ -90,9 +90,7 @@ class ExportService:
             self._fetch_and_store_databases()
 
             logger.info("Fetching collection tree...")
-            # Metabase API expects lowercase string "true"/"false" for archived param
-            archived_str = "true" if self.config.include_archived else "false"
-            collection_tree = self.client.get_collections_tree(params={"archived": archived_str})
+            collection_tree = self.client.get_collections_tree()
 
             # Filter tree if root_collection_ids are specified
             if self.config.root_collection_ids:
