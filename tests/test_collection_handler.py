@@ -300,8 +300,6 @@ class TestHandleExistingCollection:
     def test_rename_strategy(self, import_context, mock_client, mock_id_mapper):
         """Test rename conflict strategy maps to existing collection (renaming applies to items)."""
         import_context.get_conflict_strategy.return_value = "rename"
-        mock_client.get_collections_tree.return_value = []
-
         handler = CollectionHandler(import_context)
         collection = Collection(
             id=1,
@@ -359,43 +357,6 @@ class TestCreateCollection:
 
         call_args = mock_client.create_collection.call_args[0][0]
         assert call_args["parent_id"] == 100
-
-
-class TestGenerateUniqueCollectionName:
-    """Tests for unique collection name generation."""
-
-    def test_generate_unique_name(self, import_context, mock_client):
-        """Test generating unique name when conflict exists."""
-        # First call returns existing collection, second call returns empty
-        mock_client.get_collections_tree.side_effect = [
-            [{"name": "Test (1)", "parent_id": None}],
-            [],
-        ]
-
-        handler = CollectionHandler(import_context)
-        result = handler._generate_unique_collection_name("Test", None)
-
-        assert result == "Test (2)"
-
-    def test_generate_unique_name_first_try(self, import_context, mock_client):
-        """Test when first unique name works."""
-        mock_client.get_collections_tree.return_value = []
-
-        handler = CollectionHandler(import_context)
-        result = handler._generate_unique_collection_name("Test", None)
-
-        assert result == "Test (1)"
-
-    def test_generate_unique_name_with_parent(self, import_context, mock_client):
-        """Test generating unique name with parent."""
-        mock_client.get_collections_tree.return_value = [
-            {"name": "Test (1)", "parent_id": 100},
-        ]
-
-        handler = CollectionHandler(import_context)
-        result = handler._generate_unique_collection_name("Test", 100)
-
-        assert result == "Test (2)"
 
 
 class TestImportSingleCollection:

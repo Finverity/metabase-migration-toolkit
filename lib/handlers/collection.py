@@ -167,29 +167,6 @@ class CollectionHandler(BaseHandler):
         self._add_report_item("collection", "created", collection.id, new_coll["id"], name)
         logger.debug(f"Created collection '{name}' (ID: {new_coll['id']})")
 
-    def _generate_unique_collection_name(self, base_name: str, parent_id: int | None) -> str:
-        """Generates a unique collection name by appending a number.
-
-        Args:
-            base_name: The original name.
-            parent_id: The parent collection ID.
-
-        Returns:
-            A unique name.
-        """
-        counter = 1
-        while True:
-            new_name = f"{base_name} ({counter})"
-            # Check if this name exists
-            name_exists = False
-            for tc in self.client.get_collections_tree(params={"archived": True}):
-                if tc["name"] == new_name and tc.get("parent_id") == parent_id:
-                    name_exists = True
-                    break
-            if not name_exists:
-                return new_name
-            counter += 1
-
     def _flatten_collection_tree(
         self, collections: list[dict[str, Any]], parent_id: int | None = None
     ) -> list[dict[str, Any]]:
