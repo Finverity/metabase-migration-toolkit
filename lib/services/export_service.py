@@ -108,6 +108,12 @@ class ExportService:
             # Process collections recursively
             self._traverse_collections(collection_tree)
 
+            # If include_archived, fetch archived cards separately.
+            # Metabase removes archived cards from collection item listings;
+            # they must be retrieved via the /api/card?f=archived endpoint.
+            if self.config.include_archived:
+                self._export_archived_cards()
+
             # Export permissions if requested
             if self.config.include_permissions:
                 logger.info("Exporting permissions...")
@@ -264,12 +270,12 @@ class ExportService:
         """
         try:
             # Include 'dataset' to fetch models (Metabase models are returned as model='dataset')
-            # Metabase API expects lowercase string "true"/"false" for archived param
-            # Use pinned_state="all" to get both pinned and non-pinned items
-            archived_str = "true" if self.config.include_archived else "false"
+            # Use pinned_state="all" to get both pinned and non-pinned items.
+            # Note: archived items never appear in collection item listings — they are
+            # fetched separately via _export_archived_cards() when include_archived=True.
             params = {
                 "models": ["card", "dashboard", "dataset", "metric"],
-                "archived": archived_str,
+                "archived": "false",
                 "pinned_state": "all",
             }
             items_response = self.client.get_collection_items(collection_id, params)
@@ -294,6 +300,40 @@ class ExportService:
 
         except MetabaseAPIError as e:
             logger.error(f"Failed to process items for collection {collection_id}: {e}")
+
+    def _export_archived_cards(self) -> None:
+        """Fetches all archived cards and exports those belonging to processed collections.
+
+        Metabase moves archived cards out of collection item listings — they no longer
+        appear in /api/collection/{id}/items even with archived=true. The only way to
+        retrieve them is via /api/card?f=archived. This method handles that case when
+        include_archived=True.
+        """
+        try:
+            archived_cards = self.client.get_archived_cards()
+        except MetabaseAPIError as e:
+            logger.error(f"Failed to fetch archived cards: {e}")
+            return
+
+        for card in archived_cards:
+            card_id = card.get("id")
+            collection_id = card.get("collection_id")
+            if card_id is None:
+                continue
+            # Only export archived cards that belong to one of the collections we traversed
+            if collection_id in self._processed_collections:
+                base_path = self._collection_path_map.get(collection_id, "")
+                logger.info(
+                    f"Exporting archived card '{card.get('name')}' (ID: {card_id}) "
+                    f"from collection {collection_id}"
+                )
+                self._export_card_with_dependencies(card_id, base_path)
+            elif collection_id is None:
+                # Cards in the root collection
+                logger.debug(
+                    f"Skipping archived card '{card.get('name')}' (ID: {card_id}): "
+                    "no collection_id (root collection)"
+                )
 
     @staticmethod
     def _extract_card_dependencies(card_data: dict) -> set[int]:

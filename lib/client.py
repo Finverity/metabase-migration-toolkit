@@ -224,6 +224,13 @@ class MetabaseClient:
         """Fetches the full details for a single card."""
         return self._request("get", f"/card/{card_id}").json()
 
+    def get_archived_cards(self) -> list[dict]:
+        """Fetches all archived cards using the f=archived filter."""
+        response = self._request("get", "/card", params={"f": "archived"}).json()
+        if isinstance(response, list):
+            return response
+        return []
+
     def get_dashboard(self, dashboard_id: int) -> Any:
         """Fetches the full details for a single dashboard."""
         return self._request("get", f"/dashboard/{dashboard_id}").json()
