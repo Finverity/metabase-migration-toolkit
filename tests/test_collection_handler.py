@@ -298,10 +298,9 @@ class TestHandleExistingCollection:
         mock_id_mapper.set_collection_mapping.assert_called_once_with(1, 999)
 
     def test_rename_strategy(self, import_context, mock_client, mock_id_mapper):
-        """Test rename conflict strategy."""
+        """Test rename conflict strategy maps to existing collection (renaming applies to items)."""
         import_context.get_conflict_strategy.return_value = "rename"
         mock_client.get_collections_tree.return_value = []
-        mock_client.create_collection.return_value = {"id": 1000, "name": "Test (1)"}
 
         handler = CollectionHandler(import_context)
         collection = Collection(
@@ -316,7 +315,8 @@ class TestHandleExistingCollection:
 
         handler._handle_existing_collection(collection, existing, None)
 
-        mock_client.create_collection.assert_called_once()
+        mock_client.create_collection.assert_not_called()
+        mock_id_mapper.set_collection_mapping.assert_called_once_with(1, 999)
 
 
 class TestCreateCollection:
