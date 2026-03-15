@@ -627,6 +627,36 @@ class TestRunExport:
             assert len(exporter.manifest.permission_groups) == 1
 
 
+class TestRunExportCollectionTree:
+    """Test suite for collection tree fetching behavior in run_export."""
+
+    def test_get_collections_tree_called_without_archived_param_when_include_archived(
+        self, tmp_path
+    ):
+        """Regression test: get_collections_tree() must be called with no arguments
+        even when include_archived=True. Previously a bug passed params={"archived": "true"}
+        which caused the Metabase API to return only archived collections instead of the
+        full tree.
+        """
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+            include_archived=True,
+        )
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_databases.return_value = []
+            mock_client.get_collections_tree.return_value = []
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter.run_export()
+
+            mock_client.get_collections_tree.assert_called_once_with()
+
+
 class TestFetchDatabasesMetadata:
     """Test suite for database metadata fetching."""
 

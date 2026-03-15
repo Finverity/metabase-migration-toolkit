@@ -906,7 +906,12 @@ class TestConflictResolution:
     def test_collection_conflict_rename_strategy(
         self, sample_import_config, manifest_file, db_map_file
     ):
-        """Test collection import with rename conflict strategy."""
+        """Test collection import with rename conflict strategy.
+
+        With the rename strategy, the existing collection is reused and the ID is mapped.
+        Renaming happens at the card/dashboard level within the collection, not at the
+        collection level itself.
+        """
         from lib.handlers.base import ImportContext
 
         config = ImportConfig(
@@ -924,13 +929,9 @@ class TestConflictResolution:
             # Mock existing collection with same name
             existing_collections = [{"id": 100, "name": "Test Collection", "parent_id": None}]
 
-            # First call: initial fetch for _target_collections
-            # Second call: check for "Test Collection (1)" (doesn't exist)
             mock_client.get_collections_tree.side_effect = [
                 existing_collections,
-                existing_collections,  # Still only has original collection
             ]
-            mock_client.create_collection.return_value = {"id": 101, "name": "Test Collection (1)"}
 
             importer = MetabaseImporter(config)
             importer._load_export_package()
@@ -948,14 +949,13 @@ class TestConflictResolution:
             )
             importer._import_collections()
 
-            # Should create with renamed collection
-            assert importer.report.summary["collections"]["created"] == 1
-            assert importer.report.summary["collections"]["skipped"] == 0
+            # Rename strategy reuses the existing collection — no new collection is created.
+            # The existing collection ID is mapped for use when importing cards/dashboards.
+            assert importer.report.summary["collections"]["created"] == 0
+            assert importer.report.summary["collections"]["skipped"] == 1
 
-            # Should call create_collection with renamed name
-            mock_client.create_collection.assert_called_once()
-            call_args = mock_client.create_collection.call_args[0][0]
-            assert call_args["name"] == "Test Collection (1)"
+            # Should NOT call create_collection; existing collection is reused
+            mock_client.create_collection.assert_not_called()
 
 
 class TestModelImport:

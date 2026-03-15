@@ -19,10 +19,12 @@ from lib.constants import (
     SOURCE_TABLE_KEY,
     STAGES_KEY,
     TEMPLATE_TAGS_KEY,
+    V57_SOURCE_CARD_KEY,
 )
-from lib.handlers.base import BaseHandler, ImportContext
+from lib.handlers.base import _CARD_TYPE_TO_MODEL, BaseHandler, ImportContext
 from lib.models import Card
 from lib.utils import clean_for_create, read_json_file
+from lib.utils.query import extract_metric_deps_from_clause
 
 logger = logging.getLogger("metabase_migration")
 
@@ -91,7 +93,12 @@ class CardHandler(BaseHandler):
             card_data["collection_id"] = target_collection_id
 
             # Handle conflicts using cached collection items lookup
-            existing_card = self.context.find_existing_card(card.name, target_collection_id)
+            card_type = card_data.get("type")
+            # If card_type is None, all types are searched
+            # If a "type" exists, then look only for the specified type
+            existing_card = self.context.find_existing_card(
+                card.name, target_collection_id, card_type
+            )
 
             if existing_card:
                 self._handle_existing_card(card, card_data, existing_card, target_collection_id)
@@ -148,7 +155,8 @@ class CardHandler(BaseHandler):
             logger.debug(f"Updated {item_type} '{card.name}' (ID: {updated_card['id']})")
 
         elif strategy == CONFLICT_RENAME:
-            new_name = self._generate_unique_card_name(card.name, target_collection_id)
+            card_type = card_data.get("type")
+            new_name = self._generate_unique_card_name(card.name, target_collection_id, card_type)
             card_data["name"] = new_name
             logger.info(f"Renamed card '{card.name}' to '{new_name}' to avoid conflict")
             self._create_card(card, card_data)
@@ -168,13 +176,20 @@ class CardHandler(BaseHandler):
         )
 
         # Add to collection cache to keep it up-to-date for conflict detection
+        # Use the correct Metabase model type so metrics and questions don't collide
+        # Need default to satisfy arg type check on _CARD_TYPE_TO_MODEL
+        card_type = card_data.get("type", "question")
         is_model = card_data.get("dataset", False)
+        if is_model:
+            cache_model = "dataset"
+        else:
+            cache_model = _CARD_TYPE_TO_MODEL.get(card_type, "card")
         self.context.add_to_collection_cache(
             card_data.get("collection_id"),
             {
                 "id": new_card["id"],
                 "name": card_data.get("name", card.name),
-                "model": "dataset" if is_model else "card",
+                "model": cache_model,
             },
         )
 
@@ -184,7 +199,9 @@ class CardHandler(BaseHandler):
             f"{card.id} -> {new_card['id']}"
         )
 
-    def _generate_unique_card_name(self, base_name: str, collection_id: int | None) -> str:
+    def _generate_unique_card_name(
+        self, base_name: str, collection_id: int | None, card_type: str | None = None
+    ) -> str:
         """Generates a unique card name by appending a number.
 
         Uses cached collection items for O(1) lookup.
@@ -192,6 +209,8 @@ class CardHandler(BaseHandler):
         Args:
             base_name: The original name.
             collection_id: The collection ID.
+            card_type: The card type ("question", "metric", "model") used to narrow
+                the collision check to the same model type.
 
         Returns:
             A unique name.
@@ -199,7 +218,7 @@ class CardHandler(BaseHandler):
         counter = 1
         while True:
             new_name = f"{base_name} ({counter})"
-            if not self.context.find_existing_card(new_name, collection_id):
+            if not self.context.find_existing_card(new_name, collection_id, card_type):
                 return new_name
             counter += 1
 
@@ -373,7 +392,7 @@ class CardHandler(BaseHandler):
             query: The query dictionary (either v56 query or v57 stage).
             dependencies: Set to add found card IDs to.
         """
-        # Check source-table for card references
+        # Check source-table for card references (v56 legacy MBQL string format: "card__53")
         source_table = query.get(SOURCE_TABLE_KEY)
         if isinstance(source_table, str) and source_table.startswith(CARD_REF_PREFIX):
             try:
@@ -381,6 +400,11 @@ class CardHandler(BaseHandler):
                 dependencies.add(card_id)
             except ValueError:
                 logger.warning(f"Invalid card reference format: {source_table}")
+
+        # Check source-card for card references (v57 MBQL 5 integer format: 53)
+        source_card = query.get(V57_SOURCE_CARD_KEY)
+        if isinstance(source_card, int):
+            dependencies.add(source_card)
 
         # Check joins for card references
         for join in query.get(JOINS_KEY, []):
@@ -391,6 +415,17 @@ class CardHandler(BaseHandler):
                     dependencies.add(card_id)
                 except ValueError:
                     logger.warning(f"Invalid card reference in join: {join_source_table}")
+
+            # v57 pMBQL integer format in joins
+            join_source_card = join.get(V57_SOURCE_CARD_KEY)
+            if isinstance(join_source_card, int):
+                dependencies.add(join_source_card)
+
+        # Check aggregation clauses for v57 MBQL metric references:
+        # ["metric", {"lib/uuid": "...", ...}, <card_id>]
+        # Saved metrics are stored as cards of type "metric" and referenced by ID.
+        for agg in query.get("aggregation", []):
+            extract_metric_deps_from_clause(agg, dependencies)
 
     @staticmethod
     def _extract_native_sql_deps(sql: str, dependencies: set[int]) -> None:

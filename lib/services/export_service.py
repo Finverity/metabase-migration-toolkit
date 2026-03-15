@@ -9,6 +9,13 @@ from tqdm import tqdm
 
 from lib.client import MetabaseAPIError, MetabaseClient
 from lib.config import ExportConfig
+from lib.constants import (
+    CARD_REF_PREFIX,
+    JOINS_KEY,
+    SOURCE_TABLE_KEY,
+    STAGES_KEY,
+    V57_SOURCE_CARD_KEY,
+)
 from lib.models import Card, Collection, Dashboard, Manifest, ManifestMeta, PermissionGroup
 from lib.utils import (
     TOOL_VERSION,
@@ -16,6 +23,7 @@ from lib.utils import (
     sanitize_filename,
     write_json_file,
 )
+from lib.utils.query import extract_metric_deps_from_clause
 
 logger = logging.getLogger("metabase_migration")
 
@@ -83,9 +91,7 @@ class ExportService:
             self._fetch_and_store_databases()
 
             logger.info("Fetching collection tree...")
-            # Metabase API expects lowercase string "true"/"false" for archived param
-            archived_str = "true" if self.config.include_archived else "false"
-            collection_tree = self.client.get_collections_tree(params={"archived": archived_str})
+            collection_tree = self.client.get_collections_tree()
 
             # Filter tree if root_collection_ids are specified
             if self.config.root_collection_ids:
@@ -102,6 +108,12 @@ class ExportService:
 
             # Process collections recursively
             self._traverse_collections(collection_tree)
+
+            # If include_archived, fetch archived cards separately.
+            # Metabase removes archived cards from collection item listings;
+            # they must be retrieved via the /api/card?f=archived endpoint.
+            if self.config.include_archived:
+                self._export_archived_cards()
 
             # Export permissions if requested
             if self.config.include_permissions:
@@ -259,12 +271,12 @@ class ExportService:
         """
         try:
             # Include 'dataset' to fetch models (Metabase models are returned as model='dataset')
-            # Metabase API expects lowercase string "true"/"false" for archived param
-            # Use pinned_state="all" to get both pinned and non-pinned items
-            archived_str = "true" if self.config.include_archived else "false"
+            # Use pinned_state="all" to get both pinned and non-pinned items.
+            # Note: archived items never appear in collection item listings — they are
+            # fetched separately via _export_archived_cards() when include_archived=True.
             params = {
-                "models": ["card", "dashboard", "dataset"],
-                "archived": archived_str,
+                "models": ["card", "dashboard", "dataset", "metric"],
+                "archived": "false",
                 "pinned_state": "all",
             }
             items_response = self.client.get_collection_items(collection_id, params)
@@ -277,7 +289,7 @@ class ExportService:
                 model = item.get("model")
                 item_type = item.get("type")
                 # Both 'card' and 'dataset' (models) are exported as cards
-                if model in ("card", "dataset"):
+                if model in ("card", "dataset", "metric"):
                     # Determine if this is a model from collection listing
                     # Check both 'model' field (dataset) and 'type' field (model)
                     is_model_hint = model == "dataset" or item_type == "model"
@@ -290,9 +302,48 @@ class ExportService:
         except MetabaseAPIError as e:
             logger.error(f"Failed to process items for collection {collection_id}: {e}")
 
+    def _export_archived_cards(self) -> None:
+        """Fetches all archived cards and exports those belonging to processed collections.
+
+        Metabase moves archived cards out of collection item listings — they no longer
+        appear in /api/collection/{id}/items even with archived=true. The only way to
+        retrieve them is via /api/card?f=archived. This method handles that case when
+        include_archived=True.
+        """
+        try:
+            archived_cards = self.client.get_archived_cards()
+        except MetabaseAPIError as e:
+            logger.error(f"Failed to fetch archived cards: {e}")
+            return
+
+        for card in archived_cards:
+            card_id = card.get("id")
+            collection_id = card.get("collection_id")
+            if card_id is None:
+                continue
+            # Only export archived cards that belong to one of the collections we traversed
+            if collection_id in self._processed_collections:
+                base_path = self._collection_path_map.get(collection_id, "")
+                logger.info(
+                    f"Exporting archived card '{card.get('name')}' (ID: {card_id}) "
+                    f"from collection {collection_id}"
+                )
+                self._export_card_with_dependencies(card_id, base_path)
+            elif collection_id is None:
+                # Cards in the root collection
+                logger.debug(
+                    f"Skipping archived card '{card.get('name')}' (ID: {card_id}): "
+                    "no collection_id (root collection)"
+                )
+
     @staticmethod
     def _extract_card_dependencies(card_data: dict) -> set[int]:
-        """Extracts card IDs that this card depends on (references in source-table).
+        """Extracts card IDs that this card depends on.
+
+        Handles both v56 (MBQL 4) and v57 (MBQL 5) query formats:
+        - v56: "source-table": "card__123" string refs
+        - v57: "source-card": 123 integer refs (in stages and joins)
+        - v57: ["metric", {metadata}, card_id] aggregation refs (saved metrics)
 
         Args:
             card_data: The card data dictionary.
@@ -300,33 +351,58 @@ class ExportService:
         Returns:
             A set of card IDs that must be exported before this card.
         """
-        dependencies = set()
+        dependencies: set[int] = set()
 
-        # Check for card references in dataset_query
+        # Check for card references in dataset query
         dataset_query = card_data.get("dataset_query", {})
-        query = dataset_query.get("query", {})
 
-        # Check source-table for card references (format: "card__123")
-        source_table = query.get("source-table")
-        if isinstance(source_table, str) and source_table.startswith("card__"):
+        # v57 MBQL 5 format: iterate over stages
+        stages = dataset_query.get(STAGES_KEY, [])
+        if stages and isinstance(stages, list):
+            for stage in stages:
+                if isinstance(stage, dict):
+                    ExportService._extract_mbql_stage_deps(stage, dependencies)
+        else:
+            # v56 MBQL 4 format
+            query = dataset_query.get("query", {})
+            if query:
+                ExportService._extract_mbql_stage_deps(query, dependencies)
+
+        return dependencies
+
+    @staticmethod
+    def _extract_mbql_stage_deps(stage: dict, dependencies: set[int]) -> None:
+        """Extracts card dependencies from a single MBQL stage or v56 query dict."""
+        # source-table: "card__N" (v56)
+        source_table = stage.get(SOURCE_TABLE_KEY)
+        if isinstance(source_table, str) and source_table.startswith(CARD_REF_PREFIX):
             try:
-                card_id = int(source_table.replace("card__", ""))
-                dependencies.add(card_id)
+                dependencies.add(int(source_table.replace(CARD_REF_PREFIX, "")))
             except ValueError:
                 logger.warning(f"Invalid card reference format: {source_table}")
 
-        # Recursively check joins for card references
-        joins = query.get("joins", [])
-        for join in joins:
-            join_source_table = join.get("source-table")
-            if isinstance(join_source_table, str) and join_source_table.startswith("card__"):
+        # source-card: N (v57 MBQL)
+        source_card = stage.get(V57_SOURCE_CARD_KEY)
+        if isinstance(source_card, int):
+            dependencies.add(source_card)
+
+        # joins
+        for join in stage.get(JOINS_KEY, []):
+            # v57: source-card in join
+            join_source_card = join.get(V57_SOURCE_CARD_KEY)
+            if isinstance(join_source_card, int):
+                dependencies.add(join_source_card)
+            # v56: source-table in join
+            join_source_table = join.get(SOURCE_TABLE_KEY)
+            if isinstance(join_source_table, str) and join_source_table.startswith(CARD_REF_PREFIX):
                 try:
-                    card_id = int(join_source_table.replace("card__", ""))
-                    dependencies.add(card_id)
+                    dependencies.add(int(join_source_table.replace(CARD_REF_PREFIX, "")))
                 except ValueError:
                     logger.warning(f"Invalid card reference in join: {join_source_table}")
 
-        return dependencies
+        # v57 MBQL metric refs: ["metric", {metadata}, card_id]
+        for agg in stage.get("aggregation", []):
+            extract_metric_deps_from_clause(agg, dependencies)
 
     def _export_card_with_dependencies(
         self,
