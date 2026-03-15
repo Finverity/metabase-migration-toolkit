@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code quality tools (black, ruff, mypy)
 - Community guidelines and contribution documentation
 
+### Changed
+
+- **Collection rename strategy behavior**: `--conflict rename` now reuses the existing
+  target collection and applies renaming at the card/dashboard level only. Previously,
+  a new collection with a unique name (e.g., "My Collection (1)") was created alongside
+  the existing one.
+
 ### Fixed
 
 - **Permissions Import 409 Conflict**: Fixed revision number conflict when applying permissions
