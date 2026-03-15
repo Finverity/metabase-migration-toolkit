@@ -17,6 +17,7 @@ from lib.handlers.card import CardHandler
 from lib.models_core import Card, ImportReport, Manifest
 from lib.remapping.id_mapper import IDMapper
 from lib.remapping.query_remapper import QueryRemapper
+from lib.utils.query import extract_metric_deps_from_clause
 
 
 @pytest.fixture
@@ -1050,18 +1051,18 @@ class TestMetricCardConflictResolution:
 
 
 class TestExtractMetricDepsFromClause:
-    """Tests for _extract_metric_deps_from_clause."""
+    """Tests for extract_metric_deps_from_clause from lib.utils.query."""
 
     def test_simple_metric_reference(self):
         """A well-formed metric clause extracts the integer ID."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause(["metric", {"lib/uuid": "abc"}, 70], deps)
+        extract_metric_deps_from_clause(["metric", {"lib/uuid": "abc"}, 70], deps)
         assert deps == {70}
 
     def test_nested_metrics_in_expression(self):
         """Metric IDs in nested clauses are all collected."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause(
+        extract_metric_deps_from_clause(
             ["/", {}, ["metric", {}, 70], ["metric", {}, 71]], deps
         )
         assert deps == {70, 71}
@@ -1069,43 +1070,43 @@ class TestExtractMetricDepsFromClause:
     def test_empty_list(self):
         """An empty list does not crash and yields no dependencies."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause([], deps)
+        extract_metric_deps_from_clause([], deps)
         assert deps == set()
 
     def test_non_list_input_string(self):
         """A string input does not crash and yields no dependencies."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause("not_a_list", deps)
+        extract_metric_deps_from_clause("not_a_list", deps)
         assert deps == set()
 
     def test_non_list_input_int(self):
         """An integer input does not crash and yields no dependencies."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause(42, deps)
+        extract_metric_deps_from_clause(42, deps)
         assert deps == set()
 
     def test_non_list_input_none(self):
         """None input does not crash and yields no dependencies."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause(None, deps)
+        extract_metric_deps_from_clause(None, deps)
         assert deps == set()
 
     def test_metric_with_non_int_third_element(self):
         """A metric clause whose third element is not an int is ignored."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause(["metric", {}, "not-an-int"], deps)
+        extract_metric_deps_from_clause(["metric", {}, "not-an-int"], deps)
         assert deps == set()
 
     def test_metric_with_fewer_than_three_elements(self):
         """A metric clause with fewer than 3 elements is ignored."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause(["metric", {}], deps)
+        extract_metric_deps_from_clause(["metric", {}], deps)
         assert deps == set()
 
     def test_deeply_nested_metric(self):
         """A metric clause nested several levels deep is still found."""
         deps = set()
-        CardHandler._extract_metric_deps_from_clause(
+        extract_metric_deps_from_clause(
             ["+", {}, ["/", {}, ["metric", {}, 42]]], deps
         )
         assert deps == {42}
@@ -1115,7 +1116,7 @@ class TestExtractMetricDepsFromClause:
         # If a hypothetical 4th+ element contained nested structures, they are NOT recursed
         # into (the if-branch returns without recursing). This is intentional.
         deps = set()
-        CardHandler._extract_metric_deps_from_clause(
+        extract_metric_deps_from_clause(
             ["metric", {"lib/uuid": "abc"}, 70, ["metric", {}, 99]],
             deps,
         )

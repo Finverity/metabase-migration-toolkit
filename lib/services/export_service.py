@@ -23,6 +23,7 @@ from lib.utils import (
     sanitize_filename,
     write_json_file,
 )
+from lib.utils.query import extract_metric_deps_from_clause
 
 logger = logging.getLogger("metabase_migration")
 
@@ -401,19 +402,7 @@ class ExportService:
 
         # v57 MBQL metric refs: ["metric", {metadata}, card_id]
         for agg in stage.get("aggregation", []):
-            ExportService._extract_metric_deps_from_clause(agg, dependencies)
-
-    @staticmethod
-    def _extract_metric_deps_from_clause(clause: Any, dependencies: set[int]) -> None:
-        """Recursively extracts card IDs from MBQL metric references in a clause."""
-        if not isinstance(clause, list) or len(clause) == 0:
-            return
-        if clause[0] == "metric" and len(clause) >= 3 and isinstance(clause[2], int):
-            dependencies.add(clause[2])
-        else:
-            for item in clause:
-                if isinstance(item, list):
-                    ExportService._extract_metric_deps_from_clause(item, dependencies)
+            extract_metric_deps_from_clause(agg, dependencies)
 
     def _export_card_with_dependencies(
         self,

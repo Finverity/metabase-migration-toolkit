@@ -23,6 +23,7 @@ from lib.constants import (
 )
 from lib.handlers.base import _CARD_TYPE_TO_MODEL, BaseHandler, ImportContext
 from lib.models import Card
+from lib.utils.query import extract_metric_deps_from_clause
 from lib.utils import clean_for_create, read_json_file
 
 logger = logging.getLogger("metabase_migration")
@@ -424,29 +425,7 @@ class CardHandler(BaseHandler):
         # ["metric", {"lib/uuid": "...", ...}, <card_id>]
         # Saved metrics are stored as cards of type "metric" and referenced by ID.
         for agg in query.get("aggregation", []):
-            CardHandler._extract_metric_deps_from_clause(agg, dependencies)
-
-    @staticmethod
-    def _extract_metric_deps_from_clause(clause: Any, dependencies: set[int]) -> None:
-        """Recursively extracts card IDs from pMBQL metric references in a clause.
-
-        In v57 MBQL, saved metrics are referenced in aggregation clauses as:
-          ["metric", {"lib/uuid": "...", "effective-type": "..."}, <card_id>]
-        where the third element is the integer ID of a card of type "metric".
-
-        Args:
-            clause: A single aggregation clause (list) or nested structure.
-            dependencies: Set to add found card IDs to.
-        """
-        if not isinstance(clause, list) or len(clause) == 0:
-            return
-        if clause[0] == "metric" and len(clause) >= 3 and isinstance(clause[2], int):
-            dependencies.add(clause[2])
-        else:
-            # Recurse into nested clauses (e.g. ["/", {}, ["metric", {}, 70], [...]])
-            for item in clause:
-                if isinstance(item, list):
-                    CardHandler._extract_metric_deps_from_clause(item, dependencies)
+            extract_metric_deps_from_clause(agg, dependencies)
 
     @staticmethod
     def _extract_native_sql_deps(sql: str, dependencies: set[int]) -> None:
