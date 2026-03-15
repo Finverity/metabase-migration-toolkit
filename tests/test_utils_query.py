@@ -19,9 +19,7 @@ class TestExtractMetricDepsFromClause:
     def test_nested_metrics_in_expression(self):
         """Metric IDs in nested clauses are all collected."""
         deps = set()
-        extract_metric_deps_from_clause(
-            ["/", {}, ["metric", {}, 70], ["metric", {}, 71]], deps
-        )
+        extract_metric_deps_from_clause(["/", {}, ["metric", {}, 70], ["metric", {}, 71]], deps)
         assert deps == {70, 71}
 
     def test_empty_list(self):
@@ -63,9 +61,7 @@ class TestExtractMetricDepsFromClause:
     def test_deeply_nested_metric(self):
         """A metric clause nested several levels deep is still found."""
         deps = set()
-        extract_metric_deps_from_clause(
-            ["+", {}, ["/", {}, ["metric", {}, 42]]], deps
-        )
+        extract_metric_deps_from_clause(["+", {}, ["/", {}, ["metric", {}, 42]]], deps)
         assert deps == {42}
 
     def test_metric_clause_does_not_recurse_into_extra_elements(self):

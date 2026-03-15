@@ -139,7 +139,7 @@ class ImportContext:
             logger.debug(f"Cache miss for collection {cache_key}, falling back to API call")
             try:
                 response = self.client.get_collection_items(cache_key)
-                items = response.get("data", [])
+                items: list[dict[str, Any]] = response.get("data", [])
                 # Cache the result for future lookups
                 self._collection_items_cache[cache_key] = items
             except Exception as e:
