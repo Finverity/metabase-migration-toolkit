@@ -23,8 +23,8 @@ from lib.constants import (
 )
 from lib.handlers.base import _CARD_TYPE_TO_MODEL, BaseHandler, ImportContext
 from lib.models import Card
-from lib.utils.query import extract_metric_deps_from_clause
 from lib.utils import clean_for_create, read_json_file
+from lib.utils.query import extract_metric_deps_from_clause
 
 logger = logging.getLogger("metabase_migration")
 
