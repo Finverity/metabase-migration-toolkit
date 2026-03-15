@@ -418,10 +418,7 @@ class CardHandler(BaseHandler):
             # v57 pMBQL integer format in joins
             join_source_card = join.get(V57_SOURCE_CARD_KEY)
             if isinstance(join_source_card, int):
-                try:
-                    dependencies.add(join_source_card)
-                except ValueError:
-                    logger.warning(f"Invalid card reference in join: {join_source_table}")
+                dependencies.add(join_source_card)
 
         # Check aggregation clauses for v57 MBQL metric references:
         # ["metric", {"lib/uuid": "...", ...}, <card_id>]

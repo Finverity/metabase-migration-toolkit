@@ -383,20 +383,14 @@ class ExportService:
         # source-card: N (v57 MBQL)
         source_card = stage.get(V57_SOURCE_CARD_KEY)
         if isinstance(source_card, int):
-            try:
-                dependencies.add(source_card)
-            except ValueError:
-                logger.warning(f"Invalid card reference format: {source_table}")
+            dependencies.add(source_card)
 
         # joins
         for join in stage.get(JOINS_KEY, []):
             # v57: source-card in join
             join_source_card = join.get(V57_SOURCE_CARD_KEY)
             if isinstance(join_source_card, int):
-                try:
-                    dependencies.add(join_source_card)
-                except ValueError:
-                    logger.warning(f"Invalid card reference in join: {join_source_card}")
+                dependencies.add(join_source_card)
             # v56: source-table in join
             join_source_table = join.get(SOURCE_TABLE_KEY)
             if isinstance(join_source_table, str) and join_source_table.startswith(CARD_REF_PREFIX):

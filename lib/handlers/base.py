@@ -152,10 +152,9 @@ class ImportContext:
         if card_type and card_type in _CARD_TYPE_TO_MODEL:
             allowed_models = {_CARD_TYPE_TO_MODEL[card_type]}
         else:
-            # Compatability: match any card-like model
+            # Compatibility: match any card-like model
             allowed_models = {"card", "dataset", "metric"}
 
-        item: dict[str, Any] = {}
         for item in items:
             if item.get("model") in allowed_models and item.get("name") == name:
                 return item
