@@ -11,6 +11,7 @@ from lib.utils.file_io import (
 )
 from lib.utils.logging import setup_logging
 from lib.utils.payload import clean_dashboard_for_update, clean_for_create
+from lib.utils.query import extract_metric_deps_from_clause
 from lib.utils.sanitization import sanitize_filename
 
 # Re-export TOOL_VERSION for backward compatibility
@@ -32,6 +33,8 @@ __all__ = [
     # Payload cleaning
     "clean_for_create",
     "clean_dashboard_for_update",
+    # Query utilities
+    "extract_metric_deps_from_clause",
     # Version
     "TOOL_VERSION",
 ]

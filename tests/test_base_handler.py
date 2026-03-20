@@ -253,6 +253,55 @@ class TestImportContextFindExisting:
         assert result is not None
         context.client.get_collection_items.assert_called_with(100)
 
+    def test_find_existing_card_distinguishes_metric_from_question(self):
+        """Test that find_existing_card can distinguish metric from question cards with same name."""
+        context = create_test_context()
+        context._collection_items_cache[100] = [
+            {"id": 1, "name": "Revenue", "model": "card"},
+            {"id": 2, "name": "Revenue", "model": "metric"},
+        ]
+        context._collection_items_prefetched = True
+
+        # Without card_type, returns first match (backward compatible)
+        result = context.find_existing_card("Revenue", 100)
+        assert result is not None
+        assert result["id"] == 1  # First match
+
+        # With card_type="question", matches model="card"
+        result = context.find_existing_card("Revenue", 100, card_type="question")
+        assert result is not None
+        assert result["id"] == 1
+        assert result["model"] == "card"
+
+        # With card_type="metric", matches model="metric"
+        result = context.find_existing_card("Revenue", 100, card_type="metric")
+        assert result is not None
+        assert result["id"] == 2
+        assert result["model"] == "metric"
+
+    def test_find_existing_card_metric_not_found_when_only_question_exists(self):
+        """Test that searching for a metric doesn't find a question with the same name."""
+        context = create_test_context()
+        context._collection_items_cache[100] = [
+            {"id": 1, "name": "Revenue", "model": "card"},
+        ]
+        context._collection_items_prefetched = True
+
+        result = context.find_existing_card("Revenue", 100, card_type="metric")
+        assert result is None
+
+    def test_find_existing_card_model_type(self):
+        """Test that find_existing_card correctly matches model (dataset) cards."""
+        context = create_test_context()
+        context._collection_items_cache[100] = [
+            {"id": 1, "name": "Revenue", "model": "dataset"},
+        ]
+        context._collection_items_prefetched = True
+
+        result = context.find_existing_card("Revenue", 100, card_type="model")
+        assert result is not None
+        assert result["id"] == 1
+
 
 class TestImportContextCacheManagement:
     """Tests for cache management methods."""

@@ -962,6 +962,93 @@ class TestImportSingleCard:
         import_context.report.add.assert_called()
 
 
+class TestMetricCardConflictResolution:
+    """Tests that metric and question cards with the same name don't collide."""
+
+    def test_metric_card_does_not_overwrite_question_card(self, import_context, mock_id_mapper):
+        """A metric card should not match a same-named question card."""
+        handler = CardHandler(import_context)
+
+        # Pre-populate cache with a question card named "Revenue"
+        import_context._collection_items_cache[100] = [
+            {"id": 999, "name": "Revenue", "model": "card"},
+        ]
+        import_context._collection_items_prefetched = True
+
+        # Write a metric card file with the same name
+        metric_card_data = {
+            "id": 2,
+            "name": "Revenue",
+            "type": "metric",
+            "display": "scalar",
+            "dataset": False,
+            "collection_id": 100,
+            "database_id": 1,
+            "dataset_query": {"type": "query", "database": 1, "query": {"source-table": 5}},
+        }
+        card_file = import_context.export_dir / "cards" / "card_2_Revenue.json"
+        card_file.parent.mkdir(parents=True, exist_ok=True)
+        card_file.write_text(json.dumps(metric_card_data))
+
+        card = Card(
+            id=2,
+            name="Revenue",
+            collection_id=1,
+            database_id=1,
+            file_path="cards/card_2_Revenue.json",
+        )
+
+        # The remapper returns the full card data including type="metric"
+        import_context.query_remapper.remap_card_data.return_value = (metric_card_data, True)
+        import_context.client.create_card.return_value = {"id": 1000}
+
+        handler._import_single_card(card)
+
+        # The metric card should have been CREATED, not matched to the question card
+        import_context.client.create_card.assert_called_once()
+        import_context.client.update_card.assert_not_called()
+
+    def test_metric_card_cached_as_metric_model(self, import_context, mock_id_mapper):
+        """Newly created metric cards should be cached with model='metric'."""
+        handler = CardHandler(import_context)
+
+        # Empty collection cache — no pre-existing cards
+        import_context._collection_items_cache[100] = []
+        import_context._collection_items_prefetched = True
+
+        metric_card_data = {
+            "id": 3,
+            "name": "Revenue Metric",
+            "type": "metric",
+            "display": "scalar",
+            "dataset": False,
+            "collection_id": 100,
+            "database_id": 1,
+            "dataset_query": {"type": "query", "database": 1, "query": {"source-table": 5}},
+        }
+        card_file = import_context.export_dir / "cards" / "card_3_Revenue-Metric.json"
+        card_file.parent.mkdir(parents=True, exist_ok=True)
+        card_file.write_text(json.dumps(metric_card_data))
+
+        card = Card(
+            id=3,
+            name="Revenue Metric",
+            collection_id=1,
+            database_id=1,
+            file_path="cards/card_3_Revenue-Metric.json",
+        )
+
+        import_context.query_remapper.remap_card_data.return_value = (metric_card_data, True)
+        import_context.client.create_card.return_value = {"id": 1001}
+
+        handler._import_single_card(card)
+
+        # The cache entry for collection 100 should have model="metric"
+        cached = import_context._collection_items_cache[100]
+        assert len(cached) == 1
+        assert cached[0]["model"] == "metric"
+
+
 class TestImportCards:
     """Tests for importing multiple cards."""
 

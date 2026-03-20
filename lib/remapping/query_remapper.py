@@ -452,6 +452,28 @@ class QueryRemapper:
                     )
             return data
 
+        # v57 MBQL metric reference: ["metric", {metadata_dict}, card_id]
+        # Saved metrics are cards of type "metric" referenced by integer ID in aggregations.
+        if (
+            len(data) >= 3
+            and data[0] == "metric"
+            and isinstance(data[1], dict)
+            and isinstance(data[2], int)
+        ):
+            source_card_id = data[2]
+            target_card_id = self.id_mapper.resolve_card_id(source_card_id)
+            if target_card_id:
+                result = list(data)
+                result[2] = target_card_id
+                logger.debug(f"Remapped metric card ID from {source_card_id} to {target_card_id}")
+                return result
+            else:
+                logger.warning(
+                    f"No card ID mapping found for metric source card {source_card_id}. "
+                    f"Keeping original ID."
+                )
+            return data
+
         # Recursively process all items in the list
         return [self.remap_field_ids_recursively(item, source_db_id) for item in data]
 

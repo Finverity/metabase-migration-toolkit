@@ -127,10 +127,21 @@ class CollectionHandler(BaseHandler):
             logger.debug(f"Updated collection '{collection.name}' (ID: {updated_coll['id']})")
 
         elif strategy == CONFLICT_RENAME:
-            # Generate unique name and create new collection
-            new_name = self._generate_unique_collection_name(collection.name, target_parent_id)
-            logger.info(f"Renamed collection '{collection.name}' to '{new_name}' to avoid conflict")
-            self._create_collection(collection, new_name, target_parent_id)
+            # For rename strategy, reuse the existing collection container.
+            # Renaming happens at the card/dashboard level within this collection.
+            self.id_mapper.set_collection_mapping(collection.id, existing_coll["id"])
+            self._add_report_item(
+                "collection",
+                "skipped",
+                collection.id,
+                existing_coll["id"],
+                collection.name,
+                "Already exists (mapped for rename)",
+            )
+            logger.debug(
+                f"Mapped collection '{collection.name}' to existing ID {existing_coll['id']} "
+                f"(rename strategy applies to items within collection)"
+            )
 
     def _create_collection(
         self,
@@ -155,29 +166,6 @@ class CollectionHandler(BaseHandler):
         self.id_mapper.set_collection_mapping(collection.id, new_coll["id"])
         self._add_report_item("collection", "created", collection.id, new_coll["id"], name)
         logger.debug(f"Created collection '{name}' (ID: {new_coll['id']})")
-
-    def _generate_unique_collection_name(self, base_name: str, parent_id: int | None) -> str:
-        """Generates a unique collection name by appending a number.
-
-        Args:
-            base_name: The original name.
-            parent_id: The parent collection ID.
-
-        Returns:
-            A unique name.
-        """
-        counter = 1
-        while True:
-            new_name = f"{base_name} ({counter})"
-            # Check if this name exists
-            name_exists = False
-            for tc in self.client.get_collections_tree(params={"archived": True}):
-                if tc["name"] == new_name and tc.get("parent_id") == parent_id:
-                    name_exists = True
-                    break
-            if not name_exists:
-                return new_name
-            counter += 1
 
     def _flatten_collection_tree(
         self, collections: list[dict[str, Any]], parent_id: int | None = None
