@@ -24,10 +24,12 @@ class MetabaseVersion(str, Enum):
     Version differences:
     - V56: Legacy MBQL 4 format with `:type` field, `:native.query` structure
     - V57: MBQL 5 format with `:lib/type`, `:stages` array structure
+    - V58: MBQL 5 format (same as V57) with nullable card fields (dashboard_tab_id, entity_id, parameter_mappings)
     """
 
     V56 = "v56"
     V57 = "v57"
+    V58 = "v58"
 
     def __str__(self) -> str:
         """Return the version string for display."""
@@ -41,7 +43,7 @@ DEFAULT_METABASE_VERSION = MetabaseVersion.V56
 SUPPORTED_METABASE_VERSIONS: tuple[str, ...] = tuple(v.value for v in MetabaseVersion)
 
 # Type alias for version literals
-MetabaseVersionLiteral = Literal["v56", "v57"]
+MetabaseVersionLiteral = Literal["v56", "v57", "v58"]
 
 
 # =============================================================================

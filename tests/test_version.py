@@ -14,6 +14,7 @@ from lib.version import (
     MBQLConfig,
     V56Adapter,
     V57Adapter,
+    V58Adapter,
     get_version_adapter,
     get_version_config,
     validate_version_compatibility,
@@ -43,11 +44,20 @@ class TestMetabaseVersion:
         """Test default version is V56."""
         assert DEFAULT_METABASE_VERSION == MetabaseVersion.V56
 
+    def test_v58_value(self):
+        """Test V58 version has correct value."""
+        assert MetabaseVersion.V58.value == "v58"
+
+    def test_v58_string(self):
+        """Test V58 version string representation."""
+        assert str(MetabaseVersion.V58) == "v58"
+
     def test_supported_versions(self):
         """Test supported versions tuple."""
         assert "v56" in SUPPORTED_METABASE_VERSIONS
         assert "v57" in SUPPORTED_METABASE_VERSIONS
-        assert len(SUPPORTED_METABASE_VERSIONS) >= 2
+        assert "v58" in SUPPORTED_METABASE_VERSIONS
+        assert len(SUPPORTED_METABASE_VERSIONS) >= 3
 
 
 class TestParseMetabaseVersion:
@@ -72,6 +82,11 @@ class TestParseMetabaseVersion:
         """Test parsing None returns default version."""
         version = _parse_metabase_version(None)
         assert version == DEFAULT_METABASE_VERSION
+
+    def test_parse_v58(self):
+        """Test parsing v58 version string."""
+        version = _parse_metabase_version("v58")
+        assert version == MetabaseVersion.V58
 
     def test_parse_invalid_version_raises(self):
         """Test parsing invalid version raises ValueError."""
@@ -184,6 +199,13 @@ class TestVersionConfig:
         assert isinstance(config.api_endpoints, APIEndpoints)
         assert isinstance(config.mbql_config, MBQLConfig)
         assert isinstance(config.dashboard_config, DashboardConfig)
+
+    def test_get_v58_config(self):
+        """Test getting V58 configuration."""
+        config = get_version_config(MetabaseVersion.V58)
+        assert config.version == MetabaseVersion.V58
+        assert config.mbql_config.uses_stages is True
+        assert config.mbql_config.filter_key == "filters"
 
     def test_immutable_fields(self):
         """Test immutable fields are defined."""
@@ -386,6 +408,126 @@ class TestV57Adapter:
         assert deps == {789}
 
 
+class TestV58Adapter:
+    """Tests for V58 version adapter."""
+
+    def test_adapter_creation(self):
+        """Test creating V58 adapter."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        assert isinstance(adapter, V58Adapter)
+        assert adapter.version == MetabaseVersion.V58
+
+    def test_transform_card_for_create(self):
+        """Test card transformation for v58 create — nulls new nullable fields."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "id": 123,
+            "name": "Test Card",
+            "database_id": 1,
+            "created_at": "2024-01-01",
+            "dashboard_tab_id": 5,
+            "entity_id": "abc-123",
+            "parameter_mappings": [{"id": "p1"}],
+        }
+        result = adapter.transform_card_for_create(card_data)
+
+        assert "id" not in result
+        assert "created_at" not in result
+        assert result["name"] == "Test Card"
+        assert result["table_id"] is None
+        assert result["dashboard_tab_id"] is None
+        assert result["entity_id"] is None
+        assert result["parameter_mappings"] is None
+
+    def test_transform_card_nulls_only_present_fields(self):
+        """Test that nullable fields are not inserted if absent from source card."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {"id": 1, "name": "Minimal Card"}
+        result = adapter.transform_card_for_create(card_data)
+
+        assert "dashboard_tab_id" not in result
+        assert "entity_id" not in result
+        assert "parameter_mappings" not in result
+
+    def test_transform_dashboard_for_create(self):
+        """Test dashboard transformation for v58 create."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        dashboard_data = {
+            "id": 456,
+            "name": "Test Dashboard",
+            "dashcards": [{"id": 1}],
+            "tabs": [{"id": 1}],
+            "ordered_cards": [{"id": 2}],
+        }
+        result = adapter.transform_dashboard_for_create(dashboard_data)
+
+        assert "id" not in result
+        assert "dashcards" not in result
+        assert "tabs" not in result
+        assert "ordered_cards" not in result
+        assert result["name"] == "Test Dashboard"
+
+    def test_extract_deps_stages(self):
+        """Test extracting card dependencies from v58 stages."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "stages": [
+                    {"source-table": "card__123"},
+                    {"joins": [{"source-table": "card__456"}]},
+                ],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {123, 456}
+
+    def test_extract_deps_native(self):
+        """Test extracting card dependencies from native stage template-tags."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "template-tags": {"my-model": {"type": "card", "card-id": 99}},
+                    }
+                ],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {99}
+
+    def test_extract_deps_measure_ignored(self):
+        """Test that measure aggregation clauses do not produce card dependencies.
+
+        measure clause structure: ["measure", options, measure_id(int)]
+        Measure IDs reference Measure entities, not cards.
+        """
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "stages": [
+                    {
+                        "source-table": 1,
+                        "aggregation": [["measure", {}, 42]],
+                    }
+                ],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_extract_deps_fallback(self):
+        """Test v58 adapter falls back to v56 style if no stages."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {"dataset_query": {"query": {"source-table": "card__789"}}}
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {789}
+
+
 class TestVersionCompatibility:
     """Tests for version compatibility validation."""
 
@@ -397,7 +539,16 @@ class TestVersionCompatibility:
         """Test same versions are compatible (v57)."""
         validate_version_compatibility(MetabaseVersion.V57, MetabaseVersion.V57)
 
+    def test_same_version_compatible_v58(self):
+        """Test same versions are compatible (v58)."""
+        validate_version_compatibility(MetabaseVersion.V58, MetabaseVersion.V58)
+
     def test_different_versions_incompatible(self):
         """Test different versions raise error."""
         with pytest.raises(ValueError, match="Version mismatch"):
             validate_version_compatibility(MetabaseVersion.V56, MetabaseVersion.V57)
+
+    def test_v58_incompatible_with_v57(self):
+        """Test v58 is incompatible with v57."""
+        with pytest.raises(ValueError, match="Version mismatch"):
+            validate_version_compatibility(MetabaseVersion.V58, MetabaseVersion.V57)
