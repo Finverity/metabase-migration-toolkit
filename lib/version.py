@@ -520,9 +520,9 @@ class V58Adapter(VersionAdapter):
         result["table_id"] = None
 
         # v58 specific: These fields are now nullable — null them out only if present
-        for field in ("dashboard_tab_id", "entity_id", "parameter_mappings"):
-            if field in result:
-                result[field] = None
+        for nullable_field in ("dashboard_tab_id", "entity_id", "parameter_mappings"):
+            if nullable_field in result:
+                result[nullable_field] = None
 
         return result
 
