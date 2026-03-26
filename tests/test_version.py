@@ -528,6 +528,203 @@ class TestV58Adapter:
         assert deps == {789}
 
 
+class TestAdapterProperties:
+    """Tests for VersionAdapter base properties."""
+
+    def test_config_property(self):
+        """Test config property returns full VersionConfig."""
+        adapter = get_version_adapter(MetabaseVersion.V56)
+        config = adapter.config
+        assert config.version == MetabaseVersion.V56
+
+    def test_endpoints_property(self):
+        """Test endpoints property returns APIEndpoints."""
+        adapter = get_version_adapter(MetabaseVersion.V56)
+        assert adapter.endpoints.card == "/card"
+
+    def test_dashboard_property(self):
+        """Test dashboard property returns DashboardConfig."""
+        adapter = get_version_adapter(MetabaseVersion.V56)
+        assert adapter.dashboard.supports_tabs is True
+
+
+class TestV56AdapterEdgeCases:
+    """Tests for V56 adapter edge cases (ValueError branches)."""
+
+    def test_invalid_source_table_card_ref(self):
+        """Test invalid card reference format in source-table logs warning."""
+        adapter = get_version_adapter(MetabaseVersion.V56)
+        card_data = {"dataset_query": {"query": {"source-table": "card__not_a_number"}}}
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_invalid_join_card_ref(self):
+        """Test invalid card reference format in join logs warning."""
+        adapter = get_version_adapter(MetabaseVersion.V56)
+        card_data = {
+            "dataset_query": {
+                "query": {
+                    "source-table": 1,
+                    "joins": [{"source-table": "card__bad"}],
+                }
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+
+class TestV57AdapterEdgeCases:
+    """Tests for V57 adapter edge cases."""
+
+    def test_invalid_stage_source_card_ref(self):
+        """Test invalid card reference in stages source-table."""
+        adapter = get_version_adapter(MetabaseVersion.V57)
+        card_data = {
+            "dataset_query": {
+                "stages": [{"source-table": "card__xyz"}],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_invalid_stage_join_card_ref(self):
+        """Test invalid card reference in stages join."""
+        adapter = get_version_adapter(MetabaseVersion.V57)
+        card_data = {
+            "dataset_query": {
+                "stages": [
+                    {"joins": [{"source-table": "card__bad"}]},
+                ],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_fallback_joins(self):
+        """Test v57 fallback path extracts join dependencies."""
+        adapter = get_version_adapter(MetabaseVersion.V57)
+        card_data = {
+            "dataset_query": {
+                "query": {
+                    "source-table": 1,
+                    "joins": [{"source-table": "card__200"}],
+                }
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {200}
+
+    def test_fallback_invalid_source_card_ref(self):
+        """Test v57 fallback with invalid source-table card ref."""
+        adapter = get_version_adapter(MetabaseVersion.V57)
+        card_data = {"dataset_query": {"query": {"source-table": "card__abc"}}}
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_fallback_invalid_join_card_ref(self):
+        """Test v57 fallback with invalid join card ref."""
+        adapter = get_version_adapter(MetabaseVersion.V57)
+        card_data = {
+            "dataset_query": {
+                "query": {
+                    "source-table": 1,
+                    "joins": [{"source-table": "card__bad"}],
+                }
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_fallback_native_template_tags(self):
+        """Test v57 fallback extracts native template-tag card deps."""
+        adapter = get_version_adapter(MetabaseVersion.V57)
+        card_data = {
+            "dataset_query": {
+                "native": {
+                    "template-tags": {"t": {"type": "card", "card-id": 55}},
+                }
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {55}
+
+
+class TestV58AdapterEdgeCases:
+    """Tests for V58 adapter edge cases."""
+
+    def test_invalid_stage_source_card_ref(self):
+        """Test invalid card reference in stages source-table."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "stages": [{"source-table": "card__xyz"}],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_invalid_stage_join_card_ref(self):
+        """Test invalid card reference in stages join."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "stages": [
+                    {"joins": [{"source-table": "card__bad"}]},
+                ],
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_fallback_invalid_source_card_ref(self):
+        """Test v58 fallback with invalid source-table card ref."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {"dataset_query": {"query": {"source-table": "card__abc"}}}
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_fallback_joins(self):
+        """Test v58 fallback path extracts join dependencies."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "query": {
+                    "source-table": 1,
+                    "joins": [{"source-table": "card__300"}],
+                }
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {300}
+
+    def test_fallback_invalid_join_card_ref(self):
+        """Test v58 fallback with invalid join card ref."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "query": {
+                    "source-table": 1,
+                    "joins": [{"source-table": "card__bad"}],
+                }
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == set()
+
+    def test_fallback_native_template_tags(self):
+        """Test v58 fallback extracts native template-tag card deps."""
+        adapter = get_version_adapter(MetabaseVersion.V58)
+        card_data = {
+            "dataset_query": {
+                "native": {
+                    "template-tags": {"t": {"type": "card", "card-id": 77}},
+                }
+            }
+        }
+        deps = adapter.extract_card_dependencies(card_data)
+        assert deps == {77}
+
+
 class TestVersionCompatibility:
     """Tests for version compatibility validation."""
 
