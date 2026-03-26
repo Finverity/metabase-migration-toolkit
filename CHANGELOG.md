@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-03-20
+
 ### Added
 
+- **Metabase v58 support**: Full support for Metabase v0.58.x
+  - New `V58` enum value and `V58Adapter` implementation
+  - Handles nullable card fields introduced in v58: `dashboard_tab_id`, `entity_id`, `parameter_mappings`
+  - Same MBQL 5 (stages) query format as v57
+  - New `docker-compose.test.v58.yml` for integration testing
+  - Run with `MB_METABASE_VERSION=v58` or `--metabase-version v58`
 - **Permissions Migration**: Export and import permission groups and access control settings
   - Export permission groups with `--include-permissions` flag
   - Import and apply permissions with `--apply-permissions` flag
@@ -79,5 +87,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Passwords and tokens masked in logs and export files
 - No sensitive data exposed in error messages
 
-[Unreleased]: https://github.com/yourusername/metabase-migration-toolkit/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/yourusername/metabase-migration-toolkit/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/yourusername/metabase-migration-toolkit/compare/v1.0.0...v1.2.0
 [1.0.0]: https://github.com/yourusername/metabase-migration-toolkit/releases/tag/v1.0.0

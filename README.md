@@ -48,6 +48,7 @@ The toolkit supports the following Metabase versions:
 |---------|------------------|---------------------|--------------------------|
 | `v56`   | v0.56.x          | MBQL 4              | Default, fully supported |
 | `v57`   | v0.57.x          | MBQL 5 (stages)     | Fully supported          |
+| `v58`   | v0.58.x          | MBQL 5 (stages)     | Fully supported          |
 
 ### Key Differences Between Versions
 
@@ -64,6 +65,12 @@ The toolkit supports the following Metabase versions:
 - Card references: `source-card: 123` (integer)
 - Template tags use `#` prefix: `#123-model-name`
 
+**v58 (MBQL 5):**
+
+- Same query format as v57 (`:stages` array)
+- Card fields `dashboard_tab_id`, `entity_id`, `parameter_mappings` are now nullable
+- New MBQL clauses: `measure` (aggregation reference) and `collate` (SQL collation)
+
 ### Version Compatibility
 
 **Important:** Source and target Metabase instances must be the same version. Cross-version migration (e.g., v56 to
@@ -75,12 +82,12 @@ Use the `--metabase-version` flag or `MB_METABASE_VERSION` environment variable:
 
 ```bash
 # Via CLI flag
-metabase-export --metabase-version v57 ...
-metabase-import --metabase-version v57 ...
-metabase-sync --metabase-version v57 ...
+metabase-export --metabase-version v58 ...
+metabase-import --metabase-version v58 ...
+metabase-sync --metabase-version v58 ...
 
 # Via environment variable
-export MB_METABASE_VERSION=v57
+export MB_METABASE_VERSION=v58
 ```
 
 ## Prerequisites

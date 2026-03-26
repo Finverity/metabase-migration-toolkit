@@ -493,6 +493,138 @@ class V57Adapter(VersionAdapter):
 
 
 # =============================================================================
+# Version 58 Adapter Implementation
+# =============================================================================
+
+
+class V58Adapter(VersionAdapter):
+    """Version adapter for Metabase v58.
+
+    Implements version-specific behaviors for Metabase version 58.
+    v58 uses the same MBQL 5 format as v57 (stages array) but introduces
+    nullable card fields: dashboard_tab_id, entity_id, parameter_mappings.
+    """
+
+    def transform_card_for_create(self, card_data: dict[str, Any]) -> dict[str, Any]:
+        """Transform card data for v58 creation.
+
+        Args:
+            card_data: Raw card data from export.
+
+        Returns:
+            Transformed card data ready for v58 API creation.
+        """
+        result = self.clean_for_create(card_data.copy())
+
+        # v58 specific: Set table_id to null (auto-populated by Metabase)
+        result["table_id"] = None
+
+        # v58 specific: These fields are now nullable — null them out only if present
+        for nullable_field in ("dashboard_tab_id", "entity_id", "parameter_mappings"):
+            if nullable_field in result:
+                result[nullable_field] = None
+
+        return result
+
+    def transform_dashboard_for_create(self, dashboard_data: dict[str, Any]) -> dict[str, Any]:
+        """Transform dashboard data for v58 creation.
+
+        Args:
+            dashboard_data: Raw dashboard data from export.
+
+        Returns:
+            Transformed dashboard data ready for v58 API creation.
+        """
+        result = self.clean_for_create(dashboard_data.copy())
+
+        # v58 specific: Remove dashcards and tabs from initial creation
+        # They are handled separately via PUT
+        result.pop("dashcards", None)
+        result.pop("tabs", None)
+        result.pop("ordered_cards", None)
+
+        return result
+
+    def extract_card_dependencies(self, card_data: dict[str, Any]) -> set[int]:
+        """Extract card dependencies for v58.
+
+        In v58 (MBQL 5), card references appear in the same places as v57:
+        - dataset_query.stages[].source-table as "card__123"
+        - dataset_query.stages[].joins[].source-table as "card__123"
+        - Native queries: template-tags with type "card"
+
+        Note: The new `measure` clause references Measure entities (not cards),
+        so measure IDs are not extracted as card dependencies.
+
+        Args:
+            card_data: Card data to analyze.
+
+        Returns:
+            Set of card IDs this card references.
+        """
+        dependencies: set[int] = set()
+        prefix = self.mbql.card_ref_prefix
+
+        dataset_query = card_data.get("dataset_query", {})
+
+        stages = dataset_query.get(self.mbql.stages_key, [])
+        if stages:
+            for stage in stages:
+                source_table = stage.get(self.mbql.source_table_key)
+                if isinstance(source_table, str) and source_table.startswith(prefix):
+                    try:
+                        dependencies.add(int(source_table.replace(prefix, "")))
+                    except ValueError:
+                        logger.warning(f"Invalid card reference format: {source_table}")
+
+                joins = stage.get(self.mbql.joins_key, [])
+                for join in joins:
+                    join_source = join.get(self.mbql.source_table_key)
+                    if isinstance(join_source, str) and join_source.startswith(prefix):
+                        try:
+                            dependencies.add(int(join_source.replace(prefix, "")))
+                        except ValueError:
+                            logger.warning(f"Invalid card reference in join: {join_source}")
+
+                template_tags = stage.get(self.mbql.template_tags_key, {})
+                for _tag_name, tag_data in template_tags.items():
+                    if isinstance(tag_data, dict) and tag_data.get("type") == "card":
+                        card_id_value = tag_data.get("card-id")
+                        if isinstance(card_id_value, int):
+                            dependencies.add(card_id_value)
+        else:
+            # Fallback to v56-style query structure
+            query = dataset_query.get(self.mbql.query_key, {})
+
+            source_table = query.get(self.mbql.source_table_key)
+            if isinstance(source_table, str) and source_table.startswith(prefix):
+                try:
+                    dependencies.add(int(source_table.replace(prefix, "")))
+                except ValueError:
+                    logger.warning(f"Invalid card reference format: {source_table}")
+
+            joins = query.get(self.mbql.joins_key, [])
+            for join in joins:
+                join_source = join.get(self.mbql.source_table_key)
+                if isinstance(join_source, str) and join_source.startswith(prefix):
+                    try:
+                        dependencies.add(int(join_source.replace(prefix, "")))
+                    except ValueError:
+                        logger.warning(f"Invalid card reference in join: {join_source}")
+
+            native = dataset_query.get(self.mbql.native_query_key, {})
+            if isinstance(native, dict):
+                template_tags = native.get(self.mbql.template_tags_key, {})
+                for _tag_name, tag_data in template_tags.items():
+                    if isinstance(tag_data, dict) and tag_data.get("type") == "card":
+                        card_id_value = tag_data.get("card-id")
+                        if isinstance(card_id_value, int):
+                            dependencies.add(card_id_value)
+
+        return dependencies
+
+
+# =============================================================================
 # Version Adapter Factory
 # =============================================================================
 
@@ -507,6 +639,15 @@ _VERSION_CONFIGS: dict[MetabaseVersion, VersionConfig] = {
     ),
     MetabaseVersion.V57: VersionConfig(
         version=MetabaseVersion.V57,
+        api_endpoints=APIEndpoints(),
+        mbql_config=MBQLConfig(
+            uses_stages=True,
+            filter_key="filters",
+        ),
+        dashboard_config=DashboardConfig(),
+    ),
+    MetabaseVersion.V58: VersionConfig(
+        version=MetabaseVersion.V58,
         api_endpoints=APIEndpoints(),
         mbql_config=MBQLConfig(
             uses_stages=True,
@@ -553,6 +694,9 @@ def get_version_adapter(version: MetabaseVersion) -> VersionAdapter:
 
     if version == MetabaseVersion.V57:
         return V57Adapter(config)
+
+    if version == MetabaseVersion.V58:
+        return V58Adapter(config)
 
     raise ValueError(f"No adapter implementation for version: {version}")
 
