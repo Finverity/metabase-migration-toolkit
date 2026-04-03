@@ -894,6 +894,269 @@ class TestQueryRemapperV57Advanced:
         assert result["dataset_query"]["stages"][0]["expressions"][0][2][1] == 10200
 
 
+class TestDimensionTemplateTagRemapping:
+    """Tests for dimension-type template-tag field ID remapping.
+
+    Dimension-type template tags contain field references like
+    ["field", field_id, null] (v56) or ["field", {metadata}, field_id] (v57)
+    that need to be remapped during import.
+
+    See: https://github.com/Finverity/metabase-migration-toolkit/issues/56
+    """
+
+    @pytest.fixture
+    def id_mapper(self):
+        """Create an ID mapper with db, card, and field mappings."""
+        mapper = create_test_id_mapper(
+            db_mapping={1: 100},
+            card_mapping={50: 500},
+        )
+        # Add field mappings keyed by (source_db_id, source_field_id)
+        mapper._field_map[(1, 3000)] = 9000
+        mapper._field_map[(1, 3001)] = 9001
+        return mapper
+
+    @pytest.fixture
+    def remapper(self, id_mapper):
+        """Create a query remapper."""
+        return QueryRemapper(id_mapper)
+
+    def test_remap_v57_dimension_template_tag_field_id(self, remapper):
+        """Test that a v57 dimension template-tag has its field ID remapped."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM venues [[AND {{venue_type_label}}]]",
+                        "template-tags": {
+                            "venue_type_label": {
+                                "type": "dimension",
+                                "name": "venue_type_label",
+                                "id": "abc-123",
+                                "display-name": "Venue Type Label",
+                                "widget-type": "category",
+                                "dimension": [
+                                    "field",
+                                    {"base-type": "type/Text", "lib/uuid": "uuid-1"},
+                                    3000,
+                                ],
+                            }
+                        },
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        stage = result["dataset_query"]["stages"][0]
+        tag = stage["template-tags"]["venue_type_label"]
+        # The field ID in the dimension array should be remapped
+        assert tag["dimension"][2] == 9000
+
+    def test_remap_v57_dimension_template_tag_without_base_type(self, remapper):
+        """Test dimension tags with only lib/uuid in metadata dict."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM venues [[AND {{venue_region}}]]",
+                        "template-tags": {
+                            "venue_region": {
+                                "type": "dimension",
+                                "name": "venue_region",
+                                "id": "def-456",
+                                "display-name": "Venue Region",
+                                "widget-type": "category",
+                                "dimension": [
+                                    "field",
+                                    {"lib/uuid": "uuid-2"},
+                                    3001,
+                                ],
+                            }
+                        },
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        stage = result["dataset_query"]["stages"][0]
+        tag = stage["template-tags"]["venue_region"]
+        assert tag["dimension"][2] == 9001
+
+    def test_remap_v57_dimension_tag_preserves_non_dimension_fields(self, remapper):
+        """Test that other fields in a dimension tag are preserved unchanged."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM venues [[AND {{venue_type_label}}]]",
+                        "template-tags": {
+                            "venue_type_label": {
+                                "type": "dimension",
+                                "name": "venue_type_label",
+                                "id": "abc-123",
+                                "display-name": "Venue Type Label",
+                                "widget-type": "category",
+                                "dimension": [
+                                    "field",
+                                    {"base-type": "type/Text", "lib/uuid": "uuid-1"},
+                                    3000,
+                                ],
+                            }
+                        },
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        stage = result["dataset_query"]["stages"][0]
+        tag = stage["template-tags"]["venue_type_label"]
+        # Non-dimension fields must be preserved
+        assert tag["type"] == "dimension"
+        assert tag["name"] == "venue_type_label"
+        assert tag["id"] == "abc-123"
+        assert tag["display-name"] == "Venue Type Label"
+        assert tag["widget-type"] == "category"
+
+    def test_remap_v57_full_native_query_with_dimension_tags(self, remapper):
+        """End-to-end test: v57 native query with both card and dimension tags."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM {{#50-my-model}} [[AND {{venue_type_label}}]]",
+                        "template-tags": {
+                            "#50-my-model": {
+                                "type": "card",
+                                "card-id": 50,
+                                "name": "#50-my-model",
+                                "display-name": "#50 My Model",
+                                "id": "card-tag-uuid",
+                            },
+                            "venue_type_label": {
+                                "type": "dimension",
+                                "name": "venue_type_label",
+                                "id": "dim-tag-uuid",
+                                "display-name": "Venue Type Label",
+                                "widget-type": "category",
+                                "dimension": [
+                                    "field",
+                                    {"base-type": "type/Text", "lib/uuid": "uuid-1"},
+                                    3000,
+                                ],
+                            },
+                        },
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        stage = result["dataset_query"]["stages"][0]
+
+        # Card-type tag should be remapped
+        assert "#500-my-model" in stage["template-tags"]
+        assert stage["template-tags"]["#500-my-model"]["card-id"] == 500
+
+        # Dimension-type tag should have its field ID remapped
+        dim_tag = stage["template-tags"]["venue_type_label"]
+        assert dim_tag["dimension"][2] == 9000
+
+    def test_remap_v56_dimension_template_tag(self, remapper):
+        """Test that v56-format dimension tags are remapped correctly."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "type": "native",
+                "database": 1,
+                "native": {
+                    "query": "SELECT * FROM venues [[AND {{venue_type_label}}]]",
+                    "template-tags": {
+                        "venue_type_label": {
+                            "type": "dimension",
+                            "name": "venue_type_label",
+                            "id": "abc-123",
+                            "display-name": "Venue Type Label",
+                            "widget-type": "category",
+                            "dimension": ["field", 3000, None],
+                        }
+                    },
+                },
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        tag = result["dataset_query"]["native"]["template-tags"]["venue_type_label"]
+        # v56 format: ["field", field_id, options] — field_id at index 1
+        assert tag["dimension"][1] == 9000
+
+    def test_remap_dimension_tag_unmapped_field(self, remapper):
+        """Test graceful degradation when a field ID has no mapping."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM venues [[AND {{unknown_field}}]]",
+                        "template-tags": {
+                            "unknown_field": {
+                                "type": "dimension",
+                                "name": "unknown_field",
+                                "id": "xyz-789",
+                                "display-name": "Unknown Field",
+                                "widget-type": "category",
+                                "dimension": [
+                                    "field",
+                                    {"base-type": "type/Integer", "lib/uuid": "uuid-3"},
+                                    99999,  # Not in field map
+                                ],
+                            }
+                        },
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        stage = result["dataset_query"]["stages"][0]
+        tag = stage["template-tags"]["unknown_field"]
+        # Unmapped field should be preserved with original ID
+        assert tag["dimension"][2] == 99999
+
+
 class TestQueryRemapperEdgeCases:
     """Tests for edge cases in query remapping."""
 
