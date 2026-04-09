@@ -90,7 +90,7 @@ class QueryRemapper:
 
         if is_native_query:
             # Remap native query card references (SQL and template-tags)
-            self._remap_native_query_in_place(query)
+            self._remap_native_query_in_place(query, source_db_id)
         else:
             # Remap MBQL query (source-table, joins, field IDs)
             self._remap_mbql_query(query, source_db_id)
@@ -159,19 +159,22 @@ class QueryRemapper:
                 self._remap_joins(inner_query, source_db_id)
                 self._remap_query_clauses(inner_query, source_db_id)
 
-    def _remap_native_query_in_place(self, dataset_query: dict[str, Any]) -> None:
+    def _remap_native_query_in_place(
+        self, dataset_query: dict[str, Any], source_db_id: int
+    ) -> None:
         """Remaps native query card references in place.
 
         Args:
             dataset_query: The dataset_query dictionary to modify in place.
+            source_db_id: The source database ID for field lookups.
         """
         # Check query format (v57 uses lib/type and stages, v56 uses type)
         if LIB_TYPE_KEY in dataset_query or STAGES_KEY in dataset_query:
             # v57 MBQL 5 format with stages
-            self._remap_native_query_v57(dataset_query)
+            self._remap_native_query_v57(dataset_query, source_db_id)
         else:
             # v56 MBQL 4 format
-            self._remap_native_query_v56(dataset_query)
+            self._remap_native_query_v56(dataset_query, source_db_id)
 
     def _remap_card_table_id(self, data: dict[str, Any], source_db_id: int) -> None:
         """Remaps the table_id field at the card level."""
@@ -595,6 +598,7 @@ class QueryRemapper:
         Handles both v56 (MBQL 4) and v57 (MBQL 5) query formats:
         - SQL query text: {{#123-model-name}} -> {{#456-model-name}}
         - Template tags with type "card": card-id remapping
+        - Template tags with type "dimension": field ID remapping
 
         Args:
             card_data: The card data dictionary with dataset_query.
@@ -604,18 +608,19 @@ class QueryRemapper:
         """
         data = copy.deepcopy(card_data)
         dataset_query = data.get("dataset_query", {})
+        source_db_id = data.get("database_id") or dataset_query.get("database") or 0
 
         # Check query format (v57 uses lib/type and stages, v56 uses type)
         if LIB_TYPE_KEY in dataset_query:
             # v57 MBQL 5 format with stages
-            self._remap_native_query_v57(dataset_query)
+            self._remap_native_query_v57(dataset_query, source_db_id)
         else:
             # v56 MBQL 4 format
-            self._remap_native_query_v56(dataset_query)
+            self._remap_native_query_v56(dataset_query, source_db_id)
 
         return data
 
-    def _remap_native_query_v56(self, dataset_query: dict[str, Any]) -> None:
+    def _remap_native_query_v56(self, dataset_query: dict[str, Any], source_db_id: int) -> None:
         """Remaps native query card references in v56 (MBQL 4) format.
 
         v56 structure:
@@ -644,9 +649,9 @@ class QueryRemapper:
         # Remap template-tags
         template_tags = native.get(TEMPLATE_TAGS_KEY)
         if isinstance(template_tags, dict):
-            native[TEMPLATE_TAGS_KEY] = self._remap_template_tags(template_tags)
+            native[TEMPLATE_TAGS_KEY] = self._remap_template_tags(template_tags, source_db_id)
 
-    def _remap_native_query_v57(self, dataset_query: dict[str, Any]) -> None:
+    def _remap_native_query_v57(self, dataset_query: dict[str, Any], source_db_id: int) -> None:
         """Remaps native query card references in v57 (MBQL 5) format.
 
         v57 structure:
@@ -682,7 +687,7 @@ class QueryRemapper:
             # Remap template-tags at stage level
             template_tags = stage.get(TEMPLATE_TAGS_KEY)
             if isinstance(template_tags, dict):
-                stage[TEMPLATE_TAGS_KEY] = self._remap_template_tags(template_tags)
+                stage[TEMPLATE_TAGS_KEY] = self._remap_template_tags(template_tags, source_db_id)
 
     def _remap_sql_card_references(self, sql: str) -> str:
         """Remaps card references in a SQL query string.
@@ -716,13 +721,17 @@ class QueryRemapper:
 
         return re.sub(NATIVE_CARD_REF_FULL_PATTERN, replace_card_ref, sql)
 
-    def _remap_template_tags(self, template_tags: dict[str, Any]) -> dict[str, Any]:
-        """Remaps card references in template-tags.
+    def _remap_template_tags(
+        self, template_tags: dict[str, Any], source_db_id: int = 0
+    ) -> dict[str, Any]:
+        """Remaps card and dimension references in template-tags.
 
-        Updates both the tag names and the card-id values for card-type tags.
+        Updates both the tag names and the card-id values for card-type tags,
+        and remaps field IDs in dimension-type tags.
 
         Args:
             template_tags: The template-tags dictionary.
+            source_db_id: The source database ID for field lookups.
 
         Returns:
             A new dictionary with remapped template tags.
@@ -773,7 +782,17 @@ class QueryRemapper:
                             f"with card-id {source_card_id}. Keeping original."
                         )
 
-            # Non-card tags or unmapped card tags - keep as-is
+            elif tag_data.get("type") == "dimension":
+                # Handle dimension-type template tags with field references
+                dimension = tag_data.get("dimension")
+                if isinstance(dimension, list):
+                    tag_data_copy = copy.deepcopy(tag_data)
+                    tag_data_copy["dimension"] = self._remap_list(dimension, source_db_id)
+                    remapped_tags[tag_name] = tag_data_copy
+                    logger.debug(f"Remapped dimension template tag '{tag_name}' field reference")
+                    continue
+
+            # Non-card/non-dimension tags or unmapped card tags - keep as-is
             remapped_tags[tag_name] = tag_data
 
         return remapped_tags
