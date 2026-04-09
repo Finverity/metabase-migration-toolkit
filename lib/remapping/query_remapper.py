@@ -159,7 +159,9 @@ class QueryRemapper:
                 self._remap_joins(inner_query, source_db_id)
                 self._remap_query_clauses(inner_query, source_db_id)
 
-    def _remap_native_query_in_place(self, dataset_query: dict[str, Any], source_db_id: int) -> None:
+    def _remap_native_query_in_place(
+        self, dataset_query: dict[str, Any], source_db_id: int
+    ) -> None:
         """Remaps native query card references in place.
 
         Args:
@@ -719,7 +721,9 @@ class QueryRemapper:
 
         return re.sub(NATIVE_CARD_REF_FULL_PATTERN, replace_card_ref, sql)
 
-    def _remap_template_tags(self, template_tags: dict[str, Any], source_db_id: int = 0) -> dict[str, Any]:
+    def _remap_template_tags(
+        self, template_tags: dict[str, Any], source_db_id: int = 0
+    ) -> dict[str, Any]:
         """Remaps card and dimension references in template-tags.
 
         Updates both the tag names and the card-id values for card-type tags,
@@ -785,9 +789,7 @@ class QueryRemapper:
                     tag_data_copy = copy.deepcopy(tag_data)
                     tag_data_copy["dimension"] = self._remap_list(dimension, source_db_id)
                     remapped_tags[tag_name] = tag_data_copy
-                    logger.debug(
-                        f"Remapped dimension template tag '{tag_name}' field reference"
-                    )
+                    logger.debug(f"Remapped dimension template tag '{tag_name}' field reference")
                     continue
 
             # Non-card/non-dimension tags or unmapped card tags - keep as-is
