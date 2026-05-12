@@ -369,8 +369,19 @@ MB_METABASE_VERSION=v56
 2. Falls back to `by_name` for name-based mapping
 3. Fails if no mapping found
 
+Only `by_id` and `by_name` are read from this file — table, field, and collection IDs are remapped
+automatically using the Metabase metadata API, so JOINs work without any extra configuration as long as
+every source database referenced by an exported card has an entry here.
+
+**Finding database IDs:**
+
+- *UI:* open *Admin settings → Databases* in Metabase and click the database; the URL contains its numeric ID
+  (e.g., `/admin/databases/7`).
+- *API:* run `GET /api/database` against both instances and map source `id` → target `id`.
+
 For concrete examples, see the sample mapping files in the repository:
 
+- `db_map.example.json` – minimal copy-and-edit template at the project root
 - `samples/db_map/db_map.single_db.json` – minimal single-database mapping
 - `samples/db_map/db_map.multi_db.json` – multi-database mapping, useful for complex environments
 

@@ -148,8 +148,26 @@ pip install --index-url https://test.pypi.org/simple/ \
     # Edit db_map.json with your mappings
     ```
 
+    If you need richer starting points, see also `samples/db_map/db_map.single_db.json` and
+    `samples/db_map/db_map.multi_db.json`.
+
     **This is the most critical step for a successful import.** You must map every source database ID used by an
     exported card to a valid target database ID.
+
+    Only `by_id` and `by_name` are read from `db_map.json`. Table, field, and collection IDs are remapped
+    automatically by the importer using the Metabase metadata API, so you do not need to (and cannot) configure
+    `table_map`/`field_map`/`collection_map` in this file.
+
+    **How to find database IDs:**
+
+    - In the Metabase UI, open *Admin settings → Databases* and click a database — the URL contains its ID
+      (e.g., `/admin/databases/7` means database ID `7`).
+    - Or query the API: `GET /api/database` returns every database with its `id` and `name` on each instance.
+      Run it once against the source and once against the target, then map source `id` → target `id`.
+
+    If JOINs fail after import with errors about missing table or field IDs, it almost always means a source
+    database has no entry (by ID or by name) in `db_map.json` — the importer cannot derive table/field mappings
+    for an unmapped database.
 
 ## Usage
 
@@ -378,6 +396,7 @@ metabase-import --export-dir "./export" --db-map "./db_map.json" --apply-permiss
 
 The repository includes a `samples/` directory with ready-to-use templates:
 
+- `db_map.example.json` – minimal `db_map.json` template at the project root (copy-and-edit starter)
 - `samples/db_map/db_map.single_db.json` – minimal single-database mapping example
 - `samples/db_map/db_map.multi_db.json` – example mapping for multiple databases
 - `samples/flows/export_import_basic.sh` – basic end-to-end export/import flow using `.env`
