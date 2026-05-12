@@ -1,0 +1,10 @@
+{
+  "by_id": {
+    "1": 10,
+    "2": 20
+  },
+  "by_name": {
+    "Production DB": 10,
+    "Analytics DB": 20
+  }
+}

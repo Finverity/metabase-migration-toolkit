@@ -110,6 +110,13 @@ cp db_map.example.json db_map.json
 **This is the most critical step for a successful import.** You must map every source database ID used by an
 exported card to a valid target database ID.
 
+Only `by_id` and `by_name` are read from `db_map.json` — `by_id` is checked first, with `by_name` as a
+fallback. Table and field IDs are remapped automatically via the Metabase metadata API, and collection IDs
+are remapped as collections are created during import.
+
+To find database IDs, open *Admin settings → Databases* in Metabase and read the ID from the URL, or call
+`GET /api/database` against the source and target instances and map source `id` → target `id`.
+
 ## Usage
 
 ### Exporting from Source
