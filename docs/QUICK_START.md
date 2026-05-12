@@ -369,9 +369,10 @@ MB_METABASE_VERSION=v56
 2. Falls back to `by_name` for name-based mapping
 3. Fails if no mapping found
 
-Only `by_id` and `by_name` are read from this file — table, field, and collection IDs are remapped
-automatically using the Metabase metadata API, so JOINs work without any extra configuration as long as
-every source database referenced by an exported card has an entry here.
+Only `by_id` and `by_name` are read from this file (see the precedence rules above). Table and field IDs
+are remapped automatically using the Metabase metadata API, and collection IDs are remapped as collections
+are created during import — so JOINs work without any extra configuration as long as every source database
+referenced by an exported card has an entry here.
 
 **Finding database IDs:**
 
