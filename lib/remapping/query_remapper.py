@@ -42,7 +42,11 @@ class QueryRemapper:
         """
         self.id_mapper = id_mapper
 
-    def remap_card_data(self, card_data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    def remap_card_data(
+        self,
+        card_data: dict[str, Any],
+        manifest_cards: list[Any] | None = None,
+    ) -> tuple[dict[str, Any], bool]:
         """Remaps database, table, field, and card IDs in card data.
 
         Handles both MBQL and native SQL queries, including:
@@ -52,9 +56,11 @@ class QueryRemapper:
         - Card references in MBQL (card__123 format)
         - Card references in native SQL ({{#123-model-name}} format)
         - Template tags with card-id remapping
+        - Parameter value sources (values_source_config.card_id)
 
         Args:
             card_data: The original card data dictionary.
+            manifest_cards: Optional manifest cards for parameter field remapping.
 
         Returns:
             A tuple of (remapped_data, success). Success is False if the
@@ -105,6 +111,13 @@ class QueryRemapper:
         if "visualization_settings" in data:
             data["visualization_settings"] = self.remap_field_ids_recursively(
                 data["visualization_settings"], source_db_id
+            )
+
+        # Remap card-level filter parameters that source values from another card
+        if data.get("parameters"):
+            data["parameters"] = self.remap_dashboard_parameters(
+                data["parameters"],
+                manifest_cards or [],
             )
 
         return data, True
@@ -483,10 +496,10 @@ class QueryRemapper:
     def remap_dashboard_parameters(
         self, parameters: list[dict[str, Any]], manifest_cards: list[Any]
     ) -> list[dict[str, Any]]:
-        """Remaps card and field IDs in dashboard parameters.
+        """Remaps card and field IDs in dashboard or card parameters.
 
         Args:
-            parameters: List of dashboard parameter dictionaries.
+            parameters: List of parameter dictionaries.
             manifest_cards: List of cards from the manifest for database ID lookup.
 
         Returns:
@@ -537,7 +550,7 @@ class QueryRemapper:
         else:
             # Card not found, remove values_source_config
             logger.warning(
-                f"Dashboard parameter '{param.get('name')}' references missing "
+                f"Parameter '{param.get('name')}' references missing "
                 f"card {source_card_id}. Importing without values_source_config."
             )
             del param["values_source_config"]

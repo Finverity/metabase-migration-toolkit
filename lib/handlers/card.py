@@ -24,7 +24,7 @@ from lib.constants import (
 from lib.handlers.base import _CARD_TYPE_TO_MODEL, BaseHandler, ImportContext
 from lib.models import Card
 from lib.utils import clean_for_create, read_json_file
-from lib.utils.query import extract_metric_deps_from_clause
+from lib.utils.query import extract_metric_deps_from_clause, extract_parameter_card_dependencies
 
 logger = logging.getLogger("metabase_migration")
 
@@ -84,7 +84,10 @@ class CardHandler(BaseHandler):
                 return
 
             # Remap database and card references
-            card_data, remapped = self.query_remapper.remap_card_data(card_data)
+            card_data, remapped = self.query_remapper.remap_card_data(
+                card_data,
+                self.context.manifest.cards,
+            )
             if not remapped:
                 raise ValueError("Card does not have a database reference.")
 
@@ -335,6 +338,7 @@ class CardHandler(BaseHandler):
         - MBQL: card__123 references in source-table and joins
         - Native SQL: {{#123-model-name}} references in SQL and template-tags
         - v57 MBQL 5 format with stages
+        - Parameter value sources (values_source_config.card_id)
 
         Args:
             card_data: The card data dictionary.
@@ -342,7 +346,7 @@ class CardHandler(BaseHandler):
         Returns:
             Set of card IDs this card depends on.
         """
-        dependencies: set[int] = set()
+        dependencies = extract_parameter_card_dependencies(card_data)
 
         dataset_query = card_data.get("dataset_query", {})
 
