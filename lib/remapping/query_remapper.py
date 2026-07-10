@@ -740,7 +740,7 @@ class QueryRemapper:
         """Remaps card and dimension references in template-tags.
 
         Updates both the tag names and the card-id values for card-type tags,
-        and remaps field IDs in dimension-type tags.
+        and remaps field IDs in dimension-type and temporal-unit tags.
 
         Args:
             template_tags: The template-tags dictionary.
@@ -795,17 +795,19 @@ class QueryRemapper:
                             f"with card-id {source_card_id}. Keeping original."
                         )
 
-            elif tag_data.get("type") == "dimension":
-                # Handle dimension-type template tags with field references
+            elif tag_data.get("type") in ("dimension", "temporal-unit"):
+                # Handle field-filter and time-grouping template tags with field references
                 dimension = tag_data.get("dimension")
                 if isinstance(dimension, list):
                     tag_data_copy = copy.deepcopy(tag_data)
                     tag_data_copy["dimension"] = self._remap_list(dimension, source_db_id)
                     remapped_tags[tag_name] = tag_data_copy
-                    logger.debug(f"Remapped dimension template tag '{tag_name}' field reference")
+                    logger.debug(
+                        f"Remapped {tag_data.get('type')} template tag '{tag_name}' field reference"
+                    )
                     continue
 
-            # Non-card/non-dimension tags or unmapped card tags - keep as-is
+            # Non-card/non-field tags or unmapped card tags - keep as-is
             remapped_tags[tag_name] = tag_data
 
         return remapped_tags

@@ -1,4 +1,4 @@
-"""Tests for card-level parameter value source remapping."""
+"""Tests for card-level parameter and temporal-unit template-tag remapping."""
 
 from lib.handlers.card import CardHandler
 from lib.models import Card, DatabaseMap, Manifest, ManifestMeta
@@ -152,3 +152,43 @@ class TestCardParameterRemapping:
         client_param = remapped_data["parameters"][0]
         assert "values_source_config" not in client_param
         assert "values_source_type" not in client_param
+
+
+class TestTemporalUnitTemplateTagRemapping:
+    """Tests for remapping temporal-unit template-tag field references."""
+
+    def test_remap_card_data_remaps_temporal_unit_template_tag(self):
+        id_mapper = _create_test_id_mapper(db_mapping={2: 2})
+        id_mapper._field_map[(2, 159)] = 301
+
+        remapper = QueryRemapper(id_mapper)
+        card_data = {
+            "database_id": 2,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 2,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": 'SELECT {{date_grouping}} AS "Date" GROUP BY {{date_grouping}}',
+                        "template-tags": {
+                            "date_grouping": {
+                                "type": "temporal-unit",
+                                "name": "date_grouping",
+                                "display-name": "Date Grouping",
+                                "default": "day",
+                                "dimension": ["field", {"lib/uuid": "abc"}, 159],
+                            }
+                        },
+                    }
+                ],
+            },
+        }
+
+        remapped_data, success = remapper.remap_card_data(card_data)
+
+        assert success is True
+        tag_dimension = remapped_data["dataset_query"]["stages"][0]["template-tags"][
+            "date_grouping"
+        ]["dimension"]
+        assert tag_dimension[2] == 301
