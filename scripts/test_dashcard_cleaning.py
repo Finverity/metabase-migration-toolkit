@@ -5,13 +5,14 @@ Test script to verify dashcard cleaning logic removes problematic fields.
 
 import json
 from pathlib import Path
+from typing import Any
 
 
-def clean_dashcard_for_import(dashcard, card_map):
-    """
-    Simulates the dashcard cleaning logic from import_metabase.py
-    """
-    clean_dashcard = {}
+def clean_dashcard_for_import(
+    dashcard: dict[str, Any], card_map: dict[int, int]
+) -> dict[str, Any] | None:
+    """Simulate the dashcard cleaning logic from import_metabase.py."""
+    clean_dashcard: dict[str, Any] = {}
 
     # Fields to explicitly exclude
     excluded_fields = {
@@ -71,8 +72,8 @@ def clean_dashcard_for_import(dashcard, card_map):
     return clean_dashcard
 
 
-def test_dashboard_cleaning():
-    """Test the dashcard cleaning with the actual exported dashboard"""
+def test_dashboard_cleaning() -> bool:
+    """Test the dashcard cleaning with the actual exported dashboard."""
 
     # Load the dashboard file
     dashboard_file = Path(

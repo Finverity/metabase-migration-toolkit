@@ -1,3 +1,5 @@
+"""Helpers for extracting card dependencies from Metabase query structures."""
+
 from typing import Any
 
 

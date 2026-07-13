@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Card parameter value source remapping**: Card filters that source dropdown values from
+  another card (`parameters[].values_source_config.card_id`) kept staging card IDs on import,
+  causing `parameter_card` foreign key failures. These references are now treated as card
+  dependencies during export and remapped on import (or dropped if the source card is missing).
+- **Temporal-unit template-tag field remapping**: Time-grouping variables (e.g. `date_grouping`)
+  use template-tag type `temporal-unit` and were left with staging field IDs while `dimension`
+  tags remapped correctly. Field IDs in `temporal-unit` tags are now remapped as well.
+
 ## [1.2.0] - 2026-03-20
 
 ### Added

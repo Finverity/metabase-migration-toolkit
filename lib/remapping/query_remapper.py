@@ -649,6 +649,7 @@ class QueryRemapper:
 
         Args:
             dataset_query: The dataset_query dictionary to modify in place.
+            source_db_id: Source database ID used for field remapping in tags.
         """
         native = dataset_query.get(NATIVE_KEY)
         if not isinstance(native, dict):
@@ -683,6 +684,7 @@ class QueryRemapper:
 
         Args:
             dataset_query: The dataset_query dictionary to modify in place.
+            source_db_id: Source database ID used for field remapping in tags.
         """
         stages = dataset_query.get(STAGES_KEY, [])
         if not isinstance(stages, list):
