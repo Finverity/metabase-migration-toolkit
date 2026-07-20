@@ -4,11 +4,12 @@ Test script to verify card dependency extraction and topological sorting.
 """
 import json
 from pathlib import Path
+from typing import Any
 
 
-def extract_card_dependencies(card_data):
+def extract_card_dependencies(card_data: dict[str, Any]) -> set[int]:
     """Extract card IDs that this card depends on."""
-    dependencies = set()
+    dependencies: set[int] = set()
 
     dataset_query = card_data.get("dataset_query", {})
     query = dataset_query.get("query", {})
@@ -36,7 +37,7 @@ def extract_card_dependencies(card_data):
     return dependencies
 
 
-def main():
+def main() -> None:
     """Test dependency extraction on exported cards."""
     export_dir = Path("../metabase_export")
 
@@ -51,8 +52,8 @@ def main():
     print()
 
     # Analyze each card
-    cards_with_deps = []
-    missing_deps = {}
+    cards_with_deps: list[tuple[int, str, set[int]]] = []
+    missing_deps: dict[int, dict[str, Any]] = {}
 
     for card_info in manifest["cards"]:
         card_id = card_info["id"]
@@ -107,7 +108,7 @@ def main():
     print()
 
     # Build reverse dependency map (who depends on whom)
-    reverse_deps = {}
+    reverse_deps: dict[int, list[tuple[int, str]]] = {}
     for card_id, card_name, deps in cards_with_deps:
         for dep_id in deps:
             if dep_id not in reverse_deps:

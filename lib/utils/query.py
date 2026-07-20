@@ -1,4 +1,29 @@
+"""Helpers for extracting card dependencies from Metabase query structures."""
+
 from typing import Any
+
+
+def extract_parameter_card_dependencies(card_data: dict[str, Any]) -> set[int]:
+    """Extract card IDs referenced by parameter value sources.
+
+    Native SQL and other cards can source filter dropdown values from another
+    saved question/model via parameters[].values_source_config.card_id.
+    """
+    dependencies: set[int] = set()
+
+    for param in card_data.get("parameters") or []:
+        if not isinstance(param, dict):
+            continue
+
+        config = param.get("values_source_config")
+        if not isinstance(config, dict):
+            continue
+
+        card_id = config.get("card_id")
+        if isinstance(card_id, int):
+            dependencies.add(card_id)
+
+    return dependencies
 
 
 def extract_metric_deps_from_clause(clause: Any, dependencies: set[int]) -> None:

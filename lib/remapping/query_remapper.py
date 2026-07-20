@@ -42,7 +42,11 @@ class QueryRemapper:
         """
         self.id_mapper = id_mapper
 
-    def remap_card_data(self, card_data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    def remap_card_data(
+        self,
+        card_data: dict[str, Any],
+        manifest_cards: list[Any] | None = None,
+    ) -> tuple[dict[str, Any], bool]:
         """Remaps database, table, field, and card IDs in card data.
 
         Handles both MBQL and native SQL queries, including:
@@ -52,9 +56,11 @@ class QueryRemapper:
         - Card references in MBQL (card__123 format)
         - Card references in native SQL ({{#123-model-name}} format)
         - Template tags with card-id remapping
+        - Parameter value sources (values_source_config.card_id)
 
         Args:
             card_data: The original card data dictionary.
+            manifest_cards: Optional manifest cards for parameter field remapping.
 
         Returns:
             A tuple of (remapped_data, success). Success is False if the
@@ -105,6 +111,13 @@ class QueryRemapper:
         if "visualization_settings" in data:
             data["visualization_settings"] = self.remap_field_ids_recursively(
                 data["visualization_settings"], source_db_id
+            )
+
+        # Remap card-level filter parameters that source values from another card
+        if data.get("parameters"):
+            data["parameters"] = self.remap_dashboard_parameters(
+                data["parameters"],
+                manifest_cards or [],
             )
 
         return data, True
@@ -483,10 +496,10 @@ class QueryRemapper:
     def remap_dashboard_parameters(
         self, parameters: list[dict[str, Any]], manifest_cards: list[Any]
     ) -> list[dict[str, Any]]:
-        """Remaps card and field IDs in dashboard parameters.
+        """Remaps card and field IDs in dashboard or card parameters.
 
         Args:
-            parameters: List of dashboard parameter dictionaries.
+            parameters: List of parameter dictionaries.
             manifest_cards: List of cards from the manifest for database ID lookup.
 
         Returns:
@@ -537,7 +550,7 @@ class QueryRemapper:
         else:
             # Card not found, remove values_source_config
             logger.warning(
-                f"Dashboard parameter '{param.get('name')}' references missing "
+                f"Parameter '{param.get('name')}' references missing "
                 f"card {source_card_id}. Importing without values_source_config."
             )
             del param["values_source_config"]
@@ -636,6 +649,7 @@ class QueryRemapper:
 
         Args:
             dataset_query: The dataset_query dictionary to modify in place.
+            source_db_id: Source database ID used for field remapping in tags.
         """
         native = dataset_query.get(NATIVE_KEY)
         if not isinstance(native, dict):
@@ -670,6 +684,7 @@ class QueryRemapper:
 
         Args:
             dataset_query: The dataset_query dictionary to modify in place.
+            source_db_id: Source database ID used for field remapping in tags.
         """
         stages = dataset_query.get(STAGES_KEY, [])
         if not isinstance(stages, list):
@@ -727,7 +742,7 @@ class QueryRemapper:
         """Remaps card and dimension references in template-tags.
 
         Updates both the tag names and the card-id values for card-type tags,
-        and remaps field IDs in dimension-type tags.
+        and remaps field IDs in dimension-type and temporal-unit tags.
 
         Args:
             template_tags: The template-tags dictionary.
@@ -782,17 +797,19 @@ class QueryRemapper:
                             f"with card-id {source_card_id}. Keeping original."
                         )
 
-            elif tag_data.get("type") == "dimension":
-                # Handle dimension-type template tags with field references
+            elif tag_data.get("type") in ("dimension", "temporal-unit"):
+                # Handle field-filter and time-grouping template tags with field references
                 dimension = tag_data.get("dimension")
                 if isinstance(dimension, list):
                     tag_data_copy = copy.deepcopy(tag_data)
                     tag_data_copy["dimension"] = self._remap_list(dimension, source_db_id)
                     remapped_tags[tag_name] = tag_data_copy
-                    logger.debug(f"Remapped dimension template tag '{tag_name}' field reference")
+                    logger.debug(
+                        f"Remapped {tag_data.get('type')} template tag '{tag_name}' field reference"
+                    )
                     continue
 
-            # Non-card/non-dimension tags or unmapped card tags - keep as-is
+            # Non-card/non-field tags or unmapped card tags - keep as-is
             remapped_tags[tag_name] = tag_data
 
         return remapped_tags
