@@ -23,7 +23,7 @@ from lib.utils import (
     sanitize_filename,
     write_json_file,
 )
-from lib.utils.query import extract_metric_deps_from_clause
+from lib.utils.query import extract_metric_deps_from_clause, extract_parameter_card_dependencies
 
 logger = logging.getLogger("metabase_migration")
 
@@ -344,6 +344,7 @@ class ExportService:
         - v56: "source-table": "card__123" string refs
         - v57: "source-card": 123 integer refs (in stages and joins)
         - v57: ["metric", {metadata}, card_id] aggregation refs (saved metrics)
+        - Parameter value sources (values_source_config.card_id)
 
         Args:
             card_data: The card data dictionary.
@@ -351,7 +352,7 @@ class ExportService:
         Returns:
             A set of card IDs that must be exported before this card.
         """
-        dependencies: set[int] = set()
+        dependencies = extract_parameter_card_dependencies(card_data)
 
         # Check for card references in dataset query
         dataset_query = card_data.get("dataset_query", {})
