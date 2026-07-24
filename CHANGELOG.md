@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`--exclude-databases` export flag**: Skip every card whose database is in a comma-separated
+  list of database IDs (e.g. `--exclude-databases "4,24,39"`). Useful for legacy instances with
+  questions pointing to databases that no longer exist (such as the removed Google Analytics
+  driver), which previously forced manual edits to `manifest.json` to get the import past
+  database-mapping validation. Skipped cards are logged and counted in the export summary;
+  dashboards still export in full, and dashcards referencing excluded cards are dropped
+  gracefully on import. Also available on `metabase-sync`.
+
 ### Fixed
 
 - **Card parameter value source remapping**: Card filters that source dropdown values from

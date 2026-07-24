@@ -60,6 +60,7 @@ class TestExportConfig:
         assert config.include_dashboards is False
         assert config.include_archived is False
         assert config.root_collection_ids is None
+        assert config.exclude_database_ids is None
         assert config.log_level == "INFO"
 
     def test_export_config_with_session_token(self):
@@ -242,6 +243,52 @@ class TestExportConfigValidation:
         )
 
         assert config.root_collection_ids is None
+
+    def test_exclude_database_ids_accepted(self):
+        """Test that valid excluded database IDs are accepted."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir="./export",
+            source_session_token="token123",
+            exclude_database_ids=[4, 24, 39],
+        )
+
+        assert config.exclude_database_ids == [4, 24, 39]
+
+    def test_negative_exclude_database_ids(self):
+        """Test that negative excluded database IDs are rejected."""
+        with pytest.raises(ValidationError) as exc_info:
+            ExportConfig(
+                source_url="https://example.com",
+                export_dir="./export",
+                source_session_token="token123",
+                exclude_database_ids=[4, -24],
+            )
+
+        assert "positive" in str(exc_info.value).lower()
+
+    def test_zero_exclude_database_id(self):
+        """Test that zero excluded database IDs are rejected."""
+        with pytest.raises(ValidationError) as exc_info:
+            ExportConfig(
+                source_url="https://example.com",
+                export_dir="./export",
+                source_session_token="token123",
+                exclude_database_ids=[0],
+            )
+
+        assert "positive" in str(exc_info.value).lower()
+
+    def test_empty_exclude_database_ids_becomes_none(self):
+        """Test that empty excluded database IDs list becomes None."""
+        config = ExportConfig(
+            source_url="https://example.com",
+            export_dir="./export",
+            source_session_token="token123",
+            exclude_database_ids=[],
+        )
+
+        assert config.exclude_database_ids is None
 
     def test_extra_fields_rejected(self):
         """Test that extra fields are rejected."""
@@ -542,6 +589,54 @@ class TestGetExportArgs:
         assert config.source_url == "https://cli.example.com"
         # CLI session token should be used
         assert config.source_session_token == "session-token"
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch(
+        "sys.argv",
+        [
+            "export_metabase.py",
+            "--source-url",
+            "https://cli.example.com",
+            "--source-session",
+            "session-token",
+            "--export-dir",
+            "./cli_export",
+            "--exclude-databases",
+            "4,24,39",
+        ],
+    )
+    def test_get_export_args_exclude_databases(self):
+        """Test parsing --exclude-databases into a list of integers."""
+        from lib.config import get_export_args
+
+        config = get_export_args()
+
+        assert config.exclude_database_ids == [4, 24, 39]
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch(
+        "sys.argv",
+        [
+            "export_metabase.py",
+            "--source-url",
+            "https://cli.example.com",
+            "--source-session",
+            "session-token",
+            "--export-dir",
+            "./cli_export",
+            "--exclude-databases",
+            "a,b",
+        ],
+    )
+    def test_get_export_args_exclude_databases_invalid(self, capsys):
+        """Test that non-integer --exclude-databases values exit with an error."""
+        from lib.config import get_export_args
+
+        with pytest.raises(SystemExit):
+            get_export_args()
+
+        captured = capsys.readouterr()
+        assert "--exclude-databases must be comma-separated integers" in captured.err
 
 
 class TestGetImportArgs:

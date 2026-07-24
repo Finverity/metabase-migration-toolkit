@@ -214,7 +214,19 @@ metabase-export \
 - `--include-archived` - Include archived items
 - `--include-permissions` - Include permissions (groups and access control) in export
 - `--root-collections` - Comma-separated collection IDs to export (optional)
+- `--exclude-databases` - Comma-separated database IDs whose cards are skipped during export (optional).
+  Useful when the source instance still has questions pointing to removed databases (e.g. the legacy
+  Google Analytics driver) that would otherwise block the import.
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+**Example excluding dead databases:**
+
+```bash
+metabase-export \
+    --export-dir "./metabase_export" \
+    --include-dashboards \
+    --exclude-databases "4,24,39"
+```
 
 ### 2. Importing to a Target Metabase
 
@@ -330,6 +342,7 @@ metabase-sync \
 - `--include-archived` - Include archived items
 - `--include-permissions` - Include permissions (groups and access control)
 - `--root-collections` - Comma-separated list of root collection IDs to export
+- `--exclude-databases` - Comma-separated list of database IDs whose cards are skipped during export
 
 *Import Options:*
 
