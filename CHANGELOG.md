@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dashboards still export in full, and dashcards referencing excluded cards are dropped
   gracefully on import. Also available on `metabase-sync`.
 
+### Changed
+
+- **Unit test coverage raised to 97.76%** (from 86.81%) and the enforced coverage threshold
+  raised from 85% to 95%. New suites cover the previously untested branches of
+  `lib/remapping/query_remapper.py` (64.79% → 99.86%), `lib/services/export_service.py`
+  (74.53% → 99.59%), `lib/remapping/id_mapper.py` and the `parser.error()` paths in
+  `lib/config.py`: `tests/test_query_remapper.py`, `tests/test_export_service_internals.py`,
+  `tests/test_id_mapper.py`, `tests/test_config_cli_errors.py` and
+  `tests/test_misc_coverage_gaps.py`.
+
 ### Fixed
 
 - **Card parameter value source remapping**: Card filters that source dropdown values from
