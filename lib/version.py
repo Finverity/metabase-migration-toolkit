@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from lib.constants import MetabaseVersion
+from lib.utils.query import iter_template_tags
 
 logger = logging.getLogger("metabase_migration")
 
@@ -450,10 +451,10 @@ class V57Adapter(VersionAdapter):
 
                 # Check template-tags for native stages (card references)
                 template_tags = stage.get(self.mbql.template_tags_key, {})
-                for _tag_name, tag_data in template_tags.items():
-                    if isinstance(tag_data, dict) and tag_data.get("type") == "card":
+                for _tag_name, tag_data in iter_template_tags(template_tags):
+                    if tag_data.get("type") == "card":
                         card_id_value = tag_data.get("card-id")
-                        if card_id_value is not None and isinstance(card_id_value, int):
+                        if isinstance(card_id_value, int):
                             dependencies.add(card_id_value)
         else:
             # Fallback to v56-style query structure
@@ -483,10 +484,10 @@ class V57Adapter(VersionAdapter):
             native = dataset_query.get(self.mbql.native_query_key, {})
             if isinstance(native, dict):
                 template_tags = native.get(self.mbql.template_tags_key, {})
-                for _tag_name, tag_data in template_tags.items():
-                    if isinstance(tag_data, dict) and tag_data.get("type") == "card":
+                for _tag_name, tag_data in iter_template_tags(template_tags):
+                    if tag_data.get("type") == "card":
                         card_id_value = tag_data.get("card-id")
-                        if card_id_value is not None and isinstance(card_id_value, int):
+                        if isinstance(card_id_value, int):
                             dependencies.add(card_id_value)
 
         return dependencies
@@ -587,8 +588,8 @@ class V58Adapter(VersionAdapter):
                             logger.warning(f"Invalid card reference in join: {join_source}")
 
                 template_tags = stage.get(self.mbql.template_tags_key, {})
-                for _tag_name, tag_data in template_tags.items():
-                    if isinstance(tag_data, dict) and tag_data.get("type") == "card":
+                for _tag_name, tag_data in iter_template_tags(template_tags):
+                    if tag_data.get("type") == "card":
                         card_id_value = tag_data.get("card-id")
                         if isinstance(card_id_value, int):
                             dependencies.add(card_id_value)
@@ -615,8 +616,8 @@ class V58Adapter(VersionAdapter):
             native = dataset_query.get(self.mbql.native_query_key, {})
             if isinstance(native, dict):
                 template_tags = native.get(self.mbql.template_tags_key, {})
-                for _tag_name, tag_data in template_tags.items():
-                    if isinstance(tag_data, dict) and tag_data.get("type") == "card":
+                for _tag_name, tag_data in iter_template_tags(template_tags):
+                    if tag_data.get("type") == "card":
                         card_id_value = tag_data.get("card-id")
                         if isinstance(card_id_value, int):
                             dependencies.add(card_id_value)

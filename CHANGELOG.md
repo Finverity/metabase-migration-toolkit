@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Temporal-unit template-tag field remapping**: Time-grouping variables (e.g. `date_grouping`)
   use template-tag type `temporal-unit` and were left with staging field IDs while `dimension`
   tags remapped correctly. Field IDs in `temporal-unit` tags are now remapped as well.
+- **List-form template-tags field remapping**: Metabase v0.63+ exports `template-tags` as a list
+  of tag objects rather than a name-keyed dict (PR
+  [metabase#77133](https://github.com/metabase/metabase/pull/77133)). Import only remapped the
+  dict shape, so field filters such as `date_range` (`dbo.DimDate.Date`) kept source field IDs
+  and resolved to unrelated fields on the target (e.g. `MonthDate`). List-form tags are now
+  remapped the same way as dict-form tags.
 
 ## [1.2.0] - 2026-03-20
 

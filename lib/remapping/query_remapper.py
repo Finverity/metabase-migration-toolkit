@@ -660,9 +660,9 @@ class QueryRemapper:
         if isinstance(query_str, str):
             native["query"] = self._remap_sql_card_references(query_str)
 
-        # Remap template-tags
+        # Remap template-tags (dict or list form)
         template_tags = native.get(TEMPLATE_TAGS_KEY)
-        if isinstance(template_tags, dict):
+        if isinstance(template_tags, dict | list):
             native[TEMPLATE_TAGS_KEY] = self._remap_template_tags(template_tags, source_db_id)
 
     def _remap_native_query_v57(self, dataset_query: dict[str, Any], source_db_id: int) -> None:
@@ -678,6 +678,8 @@ class QueryRemapper:
                     "template-tags": {
                         "123-model": {"type": "card", "card-id": 123, ...}
                     }
+                    # or, in v0.63+ exports, a list of tag objects:
+                    # "template-tags": [{"name": "date_range", "type": "dimension", ...}]
                 }
             ]
         }
@@ -699,9 +701,9 @@ class QueryRemapper:
             if isinstance(native_sql, str):
                 stage[NATIVE_KEY] = self._remap_sql_card_references(native_sql)
 
-            # Remap template-tags at stage level
+            # Remap template-tags at stage level (dict or list form)
             template_tags = stage.get(TEMPLATE_TAGS_KEY)
-            if isinstance(template_tags, dict):
+            if isinstance(template_tags, dict | list):
                 stage[TEMPLATE_TAGS_KEY] = self._remap_template_tags(template_tags, source_db_id)
 
     def _remap_sql_card_references(self, sql: str) -> str:
@@ -737,20 +739,43 @@ class QueryRemapper:
         return re.sub(NATIVE_CARD_REF_FULL_PATTERN, replace_card_ref, sql)
 
     def _remap_template_tags(
-        self, template_tags: dict[str, Any], source_db_id: int = 0
-    ) -> dict[str, Any]:
+        self, template_tags: dict[str, Any] | list[Any], source_db_id: int = 0
+    ) -> dict[str, Any] | list[Any]:
         """Remaps card and dimension references in template-tags.
 
         Updates both the tag names and the card-id values for card-type tags,
         and remaps field IDs in dimension-type and temporal-unit tags.
 
+        Accepts both dict (legacy / keyed-by-name) and list (v0.63+ export) forms
+        and returns the same container type.
+
         Args:
-            template_tags: The template-tags dictionary.
+            template_tags: The template-tags dictionary or list.
             source_db_id: The source database ID for field lookups.
 
         Returns:
-            A new dictionary with remapped template tags.
+            Remapped template tags in the same container type as the input.
         """
+        if isinstance(template_tags, list):
+            remapped_list: list[Any] = []
+            for tag_data in template_tags:
+                if not isinstance(tag_data, dict):
+                    remapped_list.append(tag_data)
+                    continue
+                tag_name = str(tag_data.get("name") or "")
+                remapped_as_dict = self._remap_template_tags_dict(
+                    {tag_name: tag_data}, source_db_id
+                )
+                # Card tags may change their key/name; take the remapped value.
+                remapped_list.append(next(iter(remapped_as_dict.values())))
+            return remapped_list
+
+        return self._remap_template_tags_dict(template_tags, source_db_id)
+
+    def _remap_template_tags_dict(
+        self, template_tags: dict[str, Any], source_db_id: int = 0
+    ) -> dict[str, Any]:
+        """Remaps template-tags stored as a name-keyed dictionary."""
         remapped_tags: dict[str, Any] = {}
 
         for tag_name, tag_data in template_tags.items():

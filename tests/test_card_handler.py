@@ -305,6 +305,35 @@ class TestExtractCardDependencies:
         deps = CardHandler._extract_card_dependencies(card_data)
         assert deps == set()
 
+    def test_extract_list_form_template_tags(self):
+        """v0.63+ list-form template-tags must still yield card dependencies."""
+        card_data = {
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM {{#50-my-model}}",
+                        "template-tags": [
+                            {
+                                "type": "card",
+                                "name": "50-my-model",
+                                "card-id": 50,
+                            },
+                            {
+                                "type": "dimension",
+                                "name": "date_range",
+                                "dimension": ["field", {"lib/uuid": "x"}, 159],
+                            },
+                        ],
+                    }
+                ],
+            }
+        }
+        deps = CardHandler._extract_card_dependencies(card_data)
+        assert deps == {50}
+
 
 class TestFindExistingCard:
     """Tests for finding existing cards via ImportContext."""

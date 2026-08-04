@@ -1,10 +1,38 @@
 """
 Unit tests for lib/utils/query.py
 
-Tests for extract_metric_deps_from_clause.
+Tests for extract_metric_deps_from_clause and iter_template_tags.
 """
 
-from lib.utils.query import extract_metric_deps_from_clause
+from lib.utils.query import extract_metric_deps_from_clause, iter_template_tags
+
+
+class TestIterTemplateTags:
+    """Tests for iter_template_tags supporting dict and list forms."""
+
+    def test_dict_form(self):
+        tags = {
+            "date_range": {"type": "dimension", "name": "date_range"},
+            "client": {"type": "text", "name": "client"},
+        }
+        assert list(iter_template_tags(tags)) == [
+            ("date_range", tags["date_range"]),
+            ("client", tags["client"]),
+        ]
+
+    def test_list_form(self):
+        tags = [
+            {"type": "dimension", "name": "date_range"},
+            {"type": "text", "name": "client"},
+        ]
+        assert list(iter_template_tags(tags)) == [
+            ("date_range", tags[0]),
+            ("client", tags[1]),
+        ]
+
+    def test_invalid_returns_empty(self):
+        assert list(iter_template_tags("invalid")) == []
+        assert list(iter_template_tags(None)) == []
 
 
 class TestExtractMetricDepsFromClause:
