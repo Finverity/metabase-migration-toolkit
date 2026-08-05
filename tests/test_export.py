@@ -480,6 +480,53 @@ class TestExcludeDatabases:
             assert exporter.manifest.cards == []
             assert 100 in exporter._excluded_cards
 
+    def test_kept_card_with_excluded_dependency(self, tmp_path):
+        """Test that a kept card exports even when its dependency is excluded."""
+        config = self._make_config(tmp_path, exclude_database_ids=[4])
+
+        kept_card = self._make_card(100, database_id=1)
+        kept_card["dataset_query"]["query"] = {"source-table": "card__55"}
+        excluded_dep = self._make_card(55, database_id=4)
+        cards = {100: kept_card, 55: excluded_dep}
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.side_effect = lambda card_id: cards[card_id]
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card_with_dependencies(100, "test-collection")
+
+            # The kept card is exported; its excluded dependency is omitted
+            assert [card.id for card in exporter.manifest.cards] == [100]
+            assert 55 in exporter._excluded_cards
+
+    def test_excluded_dependency_not_refetched(self, tmp_path):
+        """Test that a known-excluded dependency is not re-fetched by later cards."""
+        config = self._make_config(tmp_path, exclude_database_ids=[4])
+
+        first_card = self._make_card(100, database_id=1)
+        first_card["dataset_query"]["query"] = {"source-table": "card__55"}
+        second_card = self._make_card(101, database_id=1)
+        second_card["dataset_query"]["query"] = {"source-table": "card__55"}
+        excluded_dep = self._make_card(55, database_id=4)
+        cards = {100: first_card, 101: second_card, 55: excluded_dep}
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.side_effect = lambda card_id: cards[card_id]
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card_with_dependencies(100, "test-collection")
+            exporter._export_card_with_dependencies(101, "test-collection")
+
+            assert [card.id for card in exporter.manifest.cards] == [100, 101]
+            # Card 55 is fetched only during the first traversal (collection lookup
+            # + exclusion check); the second card's dependency loop skips it entirely
+            dep_fetches = [c for c in mock_client.get_card.call_args_list if c.args[0] == 55]
+            assert len(dep_fetches) == 2
+
     def test_dashboard_keeps_excluded_card_reference(self, tmp_path):
         """Test that dashboards export fully, listing excluded cards without exporting them."""
         config = self._make_config(tmp_path, exclude_database_ids=[4])

@@ -56,6 +56,54 @@ VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 VALID_CONFLICT_STRATEGIES = frozenset({"skip", "overwrite", "rename"})
 
 
+def _validate_positive_ids(v: list[int] | None, *, field: str, noun: str) -> list[int] | None:
+    """Validate that a list of IDs contains only positive integers.
+
+    Args:
+        v: The list of IDs to validate (or None).
+        field: The config field name reported in validation errors.
+        noun: Human-readable name for the IDs (e.g. "Collection IDs").
+
+    Returns:
+        The validated list, or None if the input was None or empty.
+    """
+    if v is None:
+        return v
+
+    if not v:
+        return None  # Empty list treated as None
+
+    for i, item_id in enumerate(v):
+        if item_id <= 0:
+            raise ConfigValidationError(
+                f"{noun} must be positive integers, got {item_id} at index {i}",
+                field=field,
+            )
+
+    return v
+
+
+def _parse_id_list_arg(
+    parser: argparse.ArgumentParser, flag: str, value: str | None
+) -> list[int] | None:
+    """Parse a comma-separated integer CLI argument value.
+
+    Args:
+        parser: The argument parser (used to report errors; parser.error() exits).
+        flag: The CLI flag name for error messages (e.g. "--root-collections").
+        value: The raw argument value.
+
+    Returns:
+        The parsed list of integers, or None if the value is empty.
+    """
+    if not value:
+        return None
+    try:
+        return [int(item.strip()) for item in value.split(",")]
+    except ValueError:
+        parser.error(f"{flag} must be comma-separated integers, got '{value}'")
+
+
 def _validate_url(url: str, field_name: str) -> str:
     """Validate that a URL uses http or https scheme.
 
@@ -176,39 +224,13 @@ class ExportConfig(BaseModel):
     @classmethod
     def validate_collection_ids(cls, v: list[int] | None) -> list[int] | None:
         """Validate that collection IDs are positive integers."""
-        if v is None:
-            return v
-
-        if not v:
-            return None  # Empty list treated as None (export all)
-
-        for i, collection_id in enumerate(v):
-            if collection_id <= 0:
-                raise ConfigValidationError(
-                    f"Collection IDs must be positive integers, got {collection_id} at index {i}",
-                    field="root_collection_ids",
-                )
-
-        return v
+        return _validate_positive_ids(v, field="root_collection_ids", noun="Collection IDs")
 
     @field_validator("exclude_database_ids")
     @classmethod
     def validate_database_ids(cls, v: list[int] | None) -> list[int] | None:
         """Validate that database IDs are positive integers."""
-        if v is None:
-            return v
-
-        if not v:
-            return None  # Empty list treated as None (exclude nothing)
-
-        for i, database_id in enumerate(v):
-            if database_id <= 0:
-                raise ConfigValidationError(
-                    f"Database IDs must be positive integers, got {database_id} at index {i}",
-                    field="exclude_database_ids",
-                )
-
-        return v
+        return _validate_positive_ids(v, field="exclude_database_ids", noun="Database IDs")
 
     @model_validator(mode="after")
     def validate_authentication(self) -> "ExportConfig":
@@ -380,27 +402,9 @@ def get_export_args() -> ExportConfig:
     except ValueError as e:
         parser.error(str(e))  # parser.error() raises SystemExit, never returns
 
-    # Parse root collection IDs
-    root_collection_ids: list[int] | None = None
-    if args.root_collections:
-        try:
-            root_collection_ids = [int(c_id.strip()) for c_id in args.root_collections.split(",")]
-        except ValueError:
-            parser.error(
-                f"--root-collections must be comma-separated integers, got '{args.root_collections}'"
-            )
-
-    # Parse excluded database IDs
-    exclude_database_ids: list[int] | None = None
-    if args.exclude_databases:
-        try:
-            exclude_database_ids = [
-                int(db_id.strip()) for db_id in args.exclude_databases.split(",")
-            ]
-        except ValueError:
-            parser.error(
-                f"--exclude-databases must be comma-separated integers, got '{args.exclude_databases}'"
-            )
+    # Parse root collection IDs and excluded database IDs
+    root_collection_ids = _parse_id_list_arg(parser, "--root-collections", args.root_collections)
+    exclude_database_ids = _parse_id_list_arg(parser, "--exclude-databases", args.exclude_databases)
 
     # Create config object with validation
     try:
@@ -623,39 +627,13 @@ class SyncConfig(BaseModel):
     @classmethod
     def validate_collection_ids(cls, v: list[int] | None) -> list[int] | None:
         """Validate that collection IDs are positive integers."""
-        if v is None:
-            return v
-
-        if not v:
-            return None  # Empty list treated as None (export all)
-
-        for i, collection_id in enumerate(v):
-            if collection_id <= 0:
-                raise ConfigValidationError(
-                    f"Collection IDs must be positive integers, got {collection_id} at index {i}",
-                    field="root_collection_ids",
-                )
-
-        return v
+        return _validate_positive_ids(v, field="root_collection_ids", noun="Collection IDs")
 
     @field_validator("exclude_database_ids")
     @classmethod
     def validate_database_ids(cls, v: list[int] | None) -> list[int] | None:
         """Validate that database IDs are positive integers."""
-        if v is None:
-            return v
-
-        if not v:
-            return None  # Empty list treated as None (exclude nothing)
-
-        for i, database_id in enumerate(v):
-            if database_id <= 0:
-                raise ConfigValidationError(
-                    f"Database IDs must be positive integers, got {database_id} at index {i}",
-                    field="exclude_database_ids",
-                )
-
-        return v
+        return _validate_positive_ids(v, field="exclude_database_ids", noun="Database IDs")
 
     @model_validator(mode="after")
     def validate_authentication(self) -> "SyncConfig":
@@ -852,27 +830,9 @@ def get_sync_args() -> SyncConfig:
     except ValueError as e:
         parser.error(str(e))  # parser.error() raises SystemExit, never returns
 
-    # Parse root collection IDs
-    root_collection_ids: list[int] | None = None
-    if args.root_collections:
-        try:
-            root_collection_ids = [int(c_id.strip()) for c_id in args.root_collections.split(",")]
-        except ValueError:
-            parser.error(
-                f"--root-collections must be comma-separated integers, got '{args.root_collections}'"
-            )
-
-    # Parse excluded database IDs
-    exclude_database_ids: list[int] | None = None
-    if args.exclude_databases:
-        try:
-            exclude_database_ids = [
-                int(db_id.strip()) for db_id in args.exclude_databases.split(",")
-            ]
-        except ValueError:
-            parser.error(
-                f"--exclude-databases must be comma-separated integers, got '{args.exclude_databases}'"
-            )
+    # Parse root collection IDs and excluded database IDs
+    root_collection_ids = _parse_id_list_arg(parser, "--root-collections", args.root_collections)
+    exclude_database_ids = _parse_id_list_arg(parser, "--exclude-databases", args.exclude_databases)
 
     # Create config object with validation
     try:

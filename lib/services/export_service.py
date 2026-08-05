@@ -51,6 +51,7 @@ class ExportService:
         self._processed_collections: set[int] = set()
         self._exported_cards: set[int] = set()  # Track exported cards to prevent duplicates
         self._excluded_cards: set[int] = set()  # Cards skipped due to excluded databases
+        self._excluded_db_ids: frozenset[int] = frozenset(config.exclude_database_ids or [])
         self._dependency_chain: list[int] = (
             []
         )  # Track current dependency chain for circular detection
@@ -85,10 +86,8 @@ class ExportService:
         logger.info(f"Starting Metabase export from {self.config.source_url}")
         logger.info(f"Export directory: {self.export_dir.resolve()}")
 
-        if self.config.exclude_database_ids:
-            logger.info(
-                f"Excluding cards from databases: {sorted(set(self.config.exclude_database_ids))}"
-            )
+        if self._excluded_db_ids:
+            logger.info(f"Excluding cards from databases: {sorted(self._excluded_db_ids)}")
 
         self.export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -136,7 +135,7 @@ class ExportService:
             logger.info("Export Summary:")
             logger.info(f"  Collections: {len(self.manifest.collections)}")
             logger.info(f"  Cards: {len(self.manifest.cards)}")
-            if self.config.exclude_database_ids:
+            if self._excluded_db_ids:
                 logger.info(f"  Cards skipped (excluded databases): {len(self._excluded_cards)}")
             logger.info(f"  Dashboards: {len(self.manifest.dashboards)}")
             logger.info(f"  Databases: {len(self.manifest.databases)}")
@@ -358,8 +357,11 @@ class ExportService:
             "database"
         )
 
-    def _is_card_excluded(self, card_id: int, card_data: dict) -> bool:
-        """Checks whether a card belongs to an excluded database.
+    def _check_and_mark_excluded(self, card_id: int, card_data: dict) -> bool:
+        """Checks whether a card belongs to an excluded database and marks it as excluded.
+
+        Not a pure query: on a hit, the card is recorded in ``self._excluded_cards``
+        (so later references skip it without re-fetching) and the skip is logged.
 
         Args:
             card_id: The ID of the card being checked.
@@ -368,11 +370,11 @@ class ExportService:
         Returns:
             True if the card's database is in the configured exclusion list.
         """
-        if not self.config.exclude_database_ids:
+        if not self._excluded_db_ids:
             return False
 
         db_id = self._resolve_card_database_id(card_data)
-        if db_id in self.config.exclude_database_ids:
+        if db_id in self._excluded_db_ids:
             self._excluded_cards.add(card_id)
             logger.info(
                 f"Skipping card '{card_data.get('name', 'Unknown')}' (ID: {card_id}): "
@@ -487,7 +489,7 @@ class ExportService:
             card_data = self.client.get_card(card_id)
 
             # Skip cards from excluded databases before traversing their dependencies
-            if self._is_card_excluded(card_id, card_data):
+            if self._check_and_mark_excluded(card_id, card_data):
                 return
 
             # Extract dependencies
@@ -500,7 +502,7 @@ class ExportService:
 
                 # Recursively export dependencies first
                 for dep_id in sorted(dependencies):
-                    if dep_id not in self._exported_cards:
+                    if dep_id not in self._exported_cards and dep_id not in self._excluded_cards:
                         logger.info(
                             f"  -> Exporting dependency: Card {dep_id} (required by Card {card_id})"
                         )
@@ -570,7 +572,7 @@ class ExportService:
             if card_data is None:
                 card_data = self.client.get_card(card_id)
 
-            if self._is_card_excluded(card_id, card_data):
+            if self._check_and_mark_excluded(card_id, card_data):
                 return
 
             if not card_data.get("dataset_query"):

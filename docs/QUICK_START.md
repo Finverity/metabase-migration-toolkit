@@ -326,6 +326,7 @@ MB_METABASE_VERSION=v56
 --include-dashboards  Include dashboards in export
 --include-archived    Include archived items
 --root-collections    Comma-separated collection IDs to export
+--exclude-databases   Comma-separated database IDs whose cards are skipped
 --log-level          Logging level: DEBUG, INFO, WARNING, ERROR
 ```
 
