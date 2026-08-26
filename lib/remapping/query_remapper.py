@@ -490,6 +490,27 @@ class QueryRemapper:
                 )
             return data
 
+        # v63 MBQL measure reference: ["measure", {metadata_dict}, measure_id]
+        # Measures are standalone table-scoped entities (not cards) referenced by ID.
+        if (
+            len(data) >= 3
+            and data[0] == "measure"
+            and isinstance(data[1], dict)
+            and isinstance(data[2], int)
+        ):
+            source_measure_id = data[2]
+            target_measure_id = self.id_mapper.resolve_measure_id(source_measure_id)
+            if target_measure_id:
+                result = list(data)
+                result[2] = target_measure_id
+                logger.debug(f"Remapped measure ID from {source_measure_id} to {target_measure_id}")
+                return result
+            logger.warning(
+                f"No measure ID mapping found for measure {source_measure_id}. "
+                f"Keeping original ID."
+            )
+            return data
+
         # Recursively process all items in the list
         return [self.remap_field_ids_recursively(item, source_db_id) for item in data]
 
@@ -535,17 +556,18 @@ class QueryRemapper:
             config["card_id"] = target_card_id
             logger.debug(f"Remapped parameter card_id {source_card_id} -> {target_card_id}")
 
-            # Remap field IDs in value_field
-            if "value_field" in config:
+            # Remap field IDs in value_field and label_field (v63 adds a separate
+            # "Column to supply the labels" stored as label_field)
+            field_keys = [key for key in ("value_field", "label_field") if key in config]
+            if field_keys:
                 source_db_id = self._find_card_database_id(source_card_id, manifest_cards)
                 if source_db_id:
-                    config["value_field"] = self.remap_field_ids_recursively(
-                        config["value_field"], source_db_id
-                    )
+                    for key in field_keys:
+                        config[key] = self.remap_field_ids_recursively(config[key], source_db_id)
                 else:
                     logger.warning(
                         f"Could not determine database ID for card {source_card_id}. "
-                        f"Field IDs in value_field will not be remapped."
+                        f"Field IDs in {', '.join(field_keys)} will not be remapped."
                     )
         else:
             # Card not found, remove values_source_config
@@ -762,15 +784,25 @@ class QueryRemapper:
                 if not isinstance(tag_data, dict):
                     remapped_list.append(tag_data)
                     continue
-                tag_name = str(tag_data.get("name") or "")
-                remapped_as_dict = self._remap_template_tags_dict(
-                    {tag_name: tag_data}, source_db_id
-                )
-                # Card tags may change their key/name; take the remapped value.
-                remapped_list.append(next(iter(remapped_as_dict.values())))
+                remapped_list.append(self._remap_single_tag(tag_data, source_db_id))
             return remapped_list
 
         return self._remap_template_tags_dict(template_tags, source_db_id)
+
+    def _remap_single_tag(self, tag_data: dict[str, Any], source_db_id: int) -> dict[str, Any]:
+        """Remaps one list-form template tag via the dict-based remapping logic."""
+        tag_name = str(tag_data.get("name") or "")
+        remapped_as_dict = self._remap_template_tags_dict({tag_name: tag_data}, source_db_id)
+        # The dict path must emit exactly one entry per input entry (card tags may
+        # change their key); if that invariant ever breaks, keep the original tag
+        # rather than raising StopIteration mid-import.
+        if len(remapped_as_dict) != 1:
+            logger.warning(
+                f"Template tag '{tag_name}' remapping produced "
+                f"{len(remapped_as_dict)} entries; keeping original tag."
+            )
+            return tag_data
+        return next(iter(remapped_as_dict.values()))
 
     def _remap_template_tags_dict(
         self, template_tags: dict[str, Any], source_db_id: int = 0
@@ -834,10 +866,67 @@ class QueryRemapper:
                     )
                     continue
 
+            elif tag_data.get("type") == "table":
+                # v63 Table Variables: the tag stores a raw source table ID in
+                # "table-id" and optional "source-filters" entries each holding
+                # a raw "field-id".
+                remapped_tags[tag_name] = self._remap_table_tag(tag_name, tag_data, source_db_id)
+                continue
+
             # Non-card/non-field tags or unmapped card tags - keep as-is
             remapped_tags[tag_name] = tag_data
 
         return remapped_tags
+
+    def _remap_table_tag(
+        self, tag_name: str, tag_data: dict[str, Any], source_db_id: int
+    ) -> dict[str, Any]:
+        """Remaps table and field IDs in a v63 "table" template tag (Table Variables).
+
+        Args:
+            tag_name: The tag name (for logging).
+            tag_data: The tag dictionary containing "table-id" and optional
+                "source-filters" entries with "field-id" values.
+            source_db_id: The source database ID for table/field lookups.
+
+        Returns:
+            A deep copy of the tag with table and field IDs remapped.
+        """
+        tag_data_copy = copy.deepcopy(tag_data)
+
+        source_table_id = tag_data_copy.get("table-id")
+        if isinstance(source_table_id, int):
+            target_table_id = self.id_mapper.resolve_table_id(source_db_id, source_table_id)
+            if target_table_id:
+                tag_data_copy["table-id"] = target_table_id
+                logger.debug(
+                    f"Remapped table tag '{tag_name}' table-id "
+                    f"{source_table_id} -> {target_table_id}"
+                )
+            else:
+                logger.warning(
+                    f"No table mapping found for template tag '{tag_name}' "
+                    f"with table-id {source_table_id}. Keeping original."
+                )
+
+        source_filters = tag_data_copy.get("source-filters")
+        if isinstance(source_filters, list):
+            for source_filter in source_filters:
+                if not isinstance(source_filter, dict):
+                    continue
+                source_field_id = source_filter.get("field-id")
+                if not isinstance(source_field_id, int):
+                    continue
+                target_field_id = self.id_mapper.resolve_field_id(source_db_id, source_field_id)
+                if target_field_id:
+                    source_filter["field-id"] = target_field_id
+                else:
+                    logger.warning(
+                        f"No field mapping found for source-filter field-id "
+                        f"{source_field_id} in table tag '{tag_name}'. Keeping original."
+                    )
+
+        return tag_data_copy
 
     def _remap_tag_name(self, tag_name: str, source_card_id: int, target_card_id: int) -> str:
         """Remaps a template tag name by replacing the old card ID with the new one.
