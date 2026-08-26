@@ -274,6 +274,22 @@ class MetabaseClient:
         # The main PUT endpoint handles dashcard and tab updates
         return self._request("put", f"/dashboard/{dashboard_id}", json=payload).json()
 
+    # --- Measure API Methods (v63) ---
+
+    def get_measures(self) -> list[dict]:
+        """Fetches all measures (v63 Data Studio saved aggregations)."""
+        response = self._request("get", "/measure").json()
+        if isinstance(response, dict) and "data" in response:
+            data: list[dict] = response["data"]
+            return data
+        if isinstance(response, list):
+            return response
+        return []
+
+    def create_measure(self, payload: dict) -> Any:
+        """Creates a new measure (v63)."""
+        return self._request("post", "/measure", json=payload).json()
+
     # --- Permissions API Methods ---
 
     def get_permission_groups(self) -> Any:

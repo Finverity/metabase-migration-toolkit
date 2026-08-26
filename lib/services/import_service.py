@@ -163,6 +163,7 @@ class ImportService:
             permissions_graph=manifest_data.get("permissions_graph", {}),
             collection_permissions_graph=manifest_data.get("collection_permissions_graph", {}),
             database_metadata=database_metadata_with_int_keys,
+            measures=manifest_data.get("measures", []),
         )
 
     def _validate_metabase_version(self) -> None:
@@ -344,6 +345,7 @@ class ImportService:
         context = self._get_context()
         logger.info("Pre-fetching target collection items for conflict detection...")
         context.prefetch_collection_items()
+        self._import_measures()
         self._import_cards()
         if manifest.dashboards:
             self._import_dashboards()
@@ -366,6 +368,92 @@ class ImportService:
         manifest = self._get_manifest()
         handler = CollectionHandler(context)
         handler.import_collections(manifest.collections)
+
+    def _import_measures(self) -> None:
+        """Imports v63 measures and records source->target measure ID mappings.
+
+        Measures must exist before cards are imported because card aggregations
+        reference them via ["measure", {...}, measure_id] clauses. Existing
+        target measures are matched by (table_id, name) so re-imports are
+        idempotent.
+        """
+        manifest = self._get_manifest()
+        if not manifest.measures:
+            return
+
+        id_mapper = self._get_id_mapper()
+        query_remapper = self._query_remapper
+        if query_remapper is None:
+            raise RuntimeError("Query remapper not initialized")
+
+        logger.info(f"Importing {len(manifest.measures)} measure(s)...")
+
+        try:
+            existing = {
+                (measure.get("table_id"), measure.get("name")): measure.get("id")
+                for measure in self.client.get_measures()
+            }
+        except MetabaseAPIError as e:
+            logger.warning(f"Could not list target measures: {e}")
+            existing = {}
+
+        # table_id -> source db id lookup from manifest metadata
+        table_to_db: dict[int, int] = {}
+        for db_id, metadata in manifest.database_metadata.items():
+            for table in metadata.get("tables", []):
+                table_to_db[table["id"]] = db_id
+
+        for measure in manifest.measures:
+            source_measure_id = measure.get("id")
+            name = measure.get("name")
+            source_table_id = measure.get("table_id")
+            if source_measure_id is None or name is None or not isinstance(source_table_id, int):
+                logger.warning(f"Skipping measure '{name}': incomplete manifest entry.")
+                continue
+
+            source_db_id = table_to_db.get(source_table_id)
+            if source_db_id is None:
+                logger.warning(
+                    f"Skipping measure '{name}': table {source_table_id} not found "
+                    f"in the export's database metadata."
+                )
+                continue
+
+            target_table_id = id_mapper.resolve_table_id(source_db_id, source_table_id)
+            if not target_table_id:
+                logger.warning(
+                    f"Skipping measure '{name}': no table mapping for source table "
+                    f"{source_table_id} (database {source_db_id})."
+                )
+                continue
+
+            existing_id = existing.get((target_table_id, name))
+            if existing_id:
+                id_mapper.set_measure_mapping(source_measure_id, existing_id)
+                logger.info(f"Measure '{name}' already exists on target (ID: {existing_id}).")
+                continue
+
+            definition = query_remapper.remap_field_ids_recursively(
+                measure.get("definition") or {}, source_db_id
+            )
+            payload: dict[str, Any] = {
+                "name": name,
+                "table_id": target_table_id,
+                "definition": definition,
+            }
+            if measure.get("description"):
+                payload["description"] = measure["description"]
+
+            try:
+                created = self.client.create_measure(payload)
+                target_id = created.get("id") if isinstance(created, dict) else None
+                if target_id:
+                    id_mapper.set_measure_mapping(source_measure_id, target_id)
+                    logger.info(f"Created measure '{name}' (ID: {target_id}).")
+                else:
+                    logger.warning(f"Measure '{name}' was created but returned no ID.")
+            except MetabaseAPIError as e:
+                logger.error(f"Failed to create measure '{name}': {e}")
 
     def _import_cards(self) -> None:
         """Imports cards using the CardHandler."""
