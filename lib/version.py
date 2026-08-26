@@ -626,6 +626,23 @@ class V58Adapter(VersionAdapter):
 
 
 # =============================================================================
+# Version 63 Adapter Implementation
+# =============================================================================
+
+
+class V63Adapter(V58Adapter):
+    """Version adapter for Metabase v63.
+
+    v63 uses the same MBQL 5 format and API endpoints as v58. The semantic
+    differences are handled elsewhere in the toolkit:
+    - template-tags may be serialized as a list of tag objects (metabase#77133)
+    - new "table" template-tag type (Table Variables) with raw table/field IDs
+    - measures referenced from aggregations as ["measure", {...}, id]
+    - documents and Library collections (detected and reported during export)
+    """
+
+
+# =============================================================================
 # Version Adapter Factory
 # =============================================================================
 
@@ -649,6 +666,15 @@ _VERSION_CONFIGS: dict[MetabaseVersion, VersionConfig] = {
     ),
     MetabaseVersion.V58: VersionConfig(
         version=MetabaseVersion.V58,
+        api_endpoints=APIEndpoints(),
+        mbql_config=MBQLConfig(
+            uses_stages=True,
+            filter_key="filters",
+        ),
+        dashboard_config=DashboardConfig(),
+    ),
+    MetabaseVersion.V63: VersionConfig(
+        version=MetabaseVersion.V63,
         api_endpoints=APIEndpoints(),
         mbql_config=MBQLConfig(
             uses_stages=True,
@@ -698,6 +724,9 @@ def get_version_adapter(version: MetabaseVersion) -> VersionAdapter:
 
     if version == MetabaseVersion.V58:
         return V58Adapter(config)
+
+    if version == MetabaseVersion.V63:
+        return V63Adapter(config)
 
     raise ValueError(f"No adapter implementation for version: {version}")
 
