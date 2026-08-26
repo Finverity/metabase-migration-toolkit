@@ -343,6 +343,11 @@ class DashboardHandler(BaseHandler):
                 )
             )
 
+        # Preserve v63 filter-widget placement (header-/card-level filters).
+        # Parameter id strings are stable across import, so a straight copy is correct.
+        if dashcard.get("inline_parameters"):
+            clean_dashcard["inline_parameters"] = list(dashcard["inline_parameters"])
+
         # Remap series
         if dashcard.get("series"):
             clean_dashcard["series"] = self._remap_series(dashcard["series"])
