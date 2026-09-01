@@ -15,6 +15,7 @@ from lib.constants import (
     SOURCE_TABLE_KEY,
     STAGES_KEY,
     V57_SOURCE_CARD_KEY,
+    MetabaseVersion,
 )
 from lib.models import Card, Collection, Dashboard, Manifest, ManifestMeta, PermissionGroup
 from lib.utils import (
@@ -50,6 +51,7 @@ class ExportService:
         self._collection_path_map: dict[int, str] = {}
         self._processed_collections: set[int] = set()
         self._exported_cards: set[int] = set()  # Track exported cards to prevent duplicates
+        self._skipped_documents: list[str] = []  # v63 documents found but not migrated
         self._dependency_chain: list[int] = (
             []
         )  # Track current dependency chain for circular detection
@@ -91,7 +93,23 @@ class ExportService:
             self._fetch_and_store_databases()
 
             logger.info("Fetching collection tree...")
-            collection_tree = self.client.get_collections_tree()
+            tree_params: dict[str, Any] = {}
+            if self.config.include_library:
+                if self.config.metabase_version == MetabaseVersion.V63:
+                    # v63 excludes the Library (Data Studio) subtree from the
+                    # collection tree unless explicitly requested.
+                    tree_params["include-library"] = "true"
+                else:
+                    logger.warning(
+                        "--include-library is only supported for Metabase v63; ignoring."
+                    )
+            if tree_params:
+                collection_tree = self.client.get_collections_tree(params=tree_params)
+            else:
+                # Regression guard: never pass params here unless required —
+                # e.g. {"archived": "true"} makes the API return only archived
+                # collections instead of the full tree.
+                collection_tree = self.client.get_collections_tree()
 
             # Filter tree if root_collection_ids are specified
             if self.config.root_collection_ids:
@@ -120,6 +138,10 @@ class ExportService:
                 logger.info("Exporting permissions...")
                 self._export_permissions()
 
+            # Export measures (v63 Data Studio saved aggregations)
+            if self.config.metabase_version == MetabaseVersion.V63:
+                self._export_measures()
+
             # Write the final manifest file
             manifest_path = self.export_dir / "manifest.json"
             logger.info(f"Writing manifest to {manifest_path}")
@@ -134,6 +156,13 @@ class ExportService:
             logger.info(f"  Databases: {len(self.manifest.databases)}")
             if self.config.include_permissions:
                 logger.info(f"  Permission Groups: {len(self.manifest.permission_groups)}")
+            if self.manifest.measures:
+                logger.info(f"  Measures: {len(self.manifest.measures)}")
+            if self._skipped_documents:
+                logger.warning(
+                    f"  Documents skipped (migration not supported): "
+                    f"{len(self._skipped_documents)}"
+                )
             logger.info("=" * 80)
             logger.info("Export completed successfully.")
 
@@ -185,6 +214,47 @@ class ExportService:
             except Exception as e:
                 logger.warning(f"Failed to fetch metadata for database {db_id}: {e}")
                 # Continue with other databases
+
+    def _export_measures(self) -> None:
+        """Exports v63 measures (Data Studio saved aggregations) into the manifest.
+
+        Only measures attached to tables of exported databases are kept — the
+        importer needs the table in the database metadata to remap it.
+        """
+        logger.info("Fetching measures...")
+        try:
+            measures = self.client.get_measures()
+        except MetabaseAPIError as e:
+            logger.warning(f"Failed to fetch measures: {e}. Continuing without measures.")
+            return
+
+        known_table_ids = {
+            table["id"]
+            for metadata in self.manifest.database_metadata.values()
+            for table in metadata.get("tables", [])
+        }
+
+        for measure in measures:
+            if measure.get("archived"):
+                continue
+            table_id = measure.get("table_id")
+            if table_id not in known_table_ids:
+                logger.debug(
+                    f"Skipping measure '{measure.get('name')}' (ID: {measure.get('id')}): "
+                    f"table {table_id} is not part of the exported databases."
+                )
+                continue
+            self.manifest.measures.append(
+                {
+                    "id": measure.get("id"),
+                    "name": measure.get("name"),
+                    "description": measure.get("description"),
+                    "table_id": table_id,
+                    "definition": measure.get("definition"),
+                }
+            )
+
+        logger.info(f"Exported {len(self.manifest.measures)} measure(s).")
 
     def _traverse_collections(
         self, collections: list[dict], parent_path: str = "", parent_id: int | None = None
@@ -274,8 +344,13 @@ class ExportService:
             # Use pinned_state="all" to get both pinned and non-pinned items.
             # Note: archived items never appear in collection item listings — they are
             # fetched separately via _export_archived_cards() when include_archived=True.
+            models = ["card", "dashboard", "dataset", "metric"]
+            if self.config.metabase_version == MetabaseVersion.V63:
+                # v63 collections can also contain documents; request them so the
+                # export can report what the migration does not carry.
+                models.append("document")
             params = {
-                "models": ["card", "dashboard", "dataset", "metric"],
+                "models": models,
                 "archived": "false",
                 "pinned_state": "all",
             }
@@ -298,6 +373,14 @@ class ExportService:
                     )
                 elif model == "dashboard" and self.config.include_dashboards:
                     self._export_dashboard(item["id"], base_path)
+                elif model == "document":
+                    document_name = item.get("name") or f"id={item.get('id')}"
+                    self._skipped_documents.append(document_name)
+                    logger.warning(
+                        f"Skipping document '{document_name}' (ID: {item.get('id')}) in "
+                        f"collection {collection_id}: document migration is not supported. "
+                        f"Recreate it manually on the target instance."
+                    )
 
         except MetabaseAPIError as e:
             logger.error(f"Failed to process items for collection {collection_id}: {e}")

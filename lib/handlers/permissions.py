@@ -228,7 +228,35 @@ class PermissionsHandler(BaseHandler):
                 f"not included in the export: {sorted(unmapped_collections)}"
             )
 
+        self._fill_absent_collection_permissions(remapped_graph)
+
         return remapped_graph if remapped_graph["groups"] else {}
+
+    def _fill_absent_collection_permissions(self, remapped_graph: dict[str, Any]) -> None:
+        """Adds explicit "none" entries for group/collection pairs absent from the source.
+
+        Since Metabase 0.56.13 the collection graph omits "none" entries — absence
+        means no permission. PUT /collection/graph only overwrites pairs present in
+        the request, and newly created collections inherit their parent's
+        permissions on the target, so absent pairs must be sent explicitly as
+        "none" or source-side revocations silently become inherited access.
+
+        The Administrators group is excluded (its permissions are fixed in
+        Metabase), and the "root" collection is never synthesized — that would
+        alter access to pre-existing target content.
+        """
+        admin_source_ids = {
+            group.id
+            for group in self.context.manifest.permission_groups
+            if group.name == "Administrators"
+        }
+
+        for source_group_id, target_group_id in self.id_mapper.group_map.items():
+            if source_group_id in admin_source_ids:
+                continue
+            group_perms = remapped_graph["groups"].setdefault(str(target_group_id), {})
+            for target_coll_id in self.id_mapper.collection_map.values():
+                group_perms.setdefault(str(target_coll_id), "none")
 
     def _get_current_permissions_revision(self) -> int:
         """Gets the current permissions graph revision from target."""
