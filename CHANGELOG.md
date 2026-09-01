@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dashboard question `collection_id` mismatch**: Cards created directly within a dashboard
+  ("dashboard questions") were imported with their raw source `dashboard_id`, which points to a
+  dashboard that doesn't exist yet on the target (dashboards import after cards). The target
+  instance rejected the request with `Mismatch detected between Dashboard's collection_id
+  (null) and collection_id (<n>)`. The importer now clears `dashboard_id` on initial card
+  creation/update and relinks the card to its parent dashboard once that dashboard has been
+  imported.
 - **"table" template-tag remapping (v63)**: Table Variables store a raw source table ID
   (`table-id`) and filter field IDs (`source-filters[].field-id`); both are now remapped on
   import instead of being copied verbatim and resolving to the wrong table on the target.
@@ -35,7 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   importer now sends explicit "none" for mapped group/collection pairs absent from the source
   graph, so source-side revocations no longer become inherited access on the target
   (Administrators excluded; the "root" collection is never synthesized).
-
 - **Card parameter value source remapping**: Card filters that source dropdown values from
   another card (`parameters[].values_source_config.card_id`) kept staging card IDs on import,
   causing `parameter_card` foreign key failures. These references are now treated as card

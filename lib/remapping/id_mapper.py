@@ -39,6 +39,10 @@ class IDMapper:
         self._group_map: dict[int, int] = {}
         self._measure_map: dict[int, int] = {}
 
+        # Dashboard questions whose parent dashboard hasn't been imported yet:
+        # source_dashboard_id -> list of target card IDs awaiting dashboard_id relink
+        self._pending_dashboard_questions: dict[int, list[int]] = {}
+
         # Table and field mappings: (source_db_id, source_id) -> target_id
         self._table_map: dict[tuple[int, int], int] = {}
         self._field_map: dict[tuple[int, int], int] = {}
@@ -198,6 +202,32 @@ class IDMapper:
             The target dashboard ID, or None if not mapped.
         """
         return self._dashboard_map.get(source_dashboard_id)
+
+    def register_pending_dashboard_question(
+        self, source_dashboard_id: int, target_card_id: int
+    ) -> None:
+        """Registers a dashboard-question card awaiting its parent dashboard.
+
+        Dashboard questions (cards created inside a dashboard) must have their
+        `dashboard_id` relinked once the parent dashboard has been imported,
+        since dashboards are imported after cards.
+
+        Args:
+            source_dashboard_id: The source dashboard ID the card belongs to.
+            target_card_id: The target card ID to relink once possible.
+        """
+        self._pending_dashboard_questions.setdefault(source_dashboard_id, []).append(target_card_id)
+
+    def pop_pending_dashboard_questions(self, source_dashboard_id: int) -> list[int]:
+        """Returns and clears target card IDs awaiting relink to this dashboard.
+
+        Args:
+            source_dashboard_id: The source dashboard ID.
+
+        Returns:
+            List of target card IDs to relink, empty if none are pending.
+        """
+        return self._pending_dashboard_questions.pop(source_dashboard_id, [])
 
     # --- Build table and field mappings ---
 
