@@ -99,6 +99,17 @@ class CardHandler(BaseHandler):
             target_collection_id = self.id_mapper.resolve_collection_id(card.collection_id)
             card_data["collection_id"] = target_collection_id
 
+            # Dashboard questions (cards created inside a dashboard) carry a
+            # dashboard_id that must match their parent dashboard's collection_id
+            # on the target. Dashboards are imported after cards, so the parent
+            # dashboard doesn't exist yet - sending the raw source dashboard_id
+            # would reference a non-existent (or wrong) target dashboard and the
+            # target rejects the request with a collection_id mismatch. Strip it
+            # here and relink it once the dashboard has been imported.
+            source_dashboard_id = card_data.get("dashboard_id")
+            if source_dashboard_id is not None:
+                card_data["dashboard_id"] = self.id_mapper.resolve_dashboard_id(source_dashboard_id)
+
             # Handle conflicts using cached collection items lookup
             card_type = card_data.get("type")
             # If card_type is None, all types are searched
@@ -111,6 +122,15 @@ class CardHandler(BaseHandler):
                 self._handle_existing_card(card, card_data, existing_card, target_collection_id)
             else:
                 self._create_card(card, card_data)
+
+            # If the parent dashboard hasn't been imported yet, queue this card for
+            # relinking once DashboardHandler creates/updates that dashboard.
+            if source_dashboard_id is not None and card_data["dashboard_id"] is None:
+                target_card_id = self.id_mapper.resolve_card_id(card.id)
+                if target_card_id is not None:
+                    self.id_mapper.register_pending_dashboard_question(
+                        source_dashboard_id, target_card_id
+                    )
 
         except MetabaseAPIError as e:
             self._handle_api_error(card, e)

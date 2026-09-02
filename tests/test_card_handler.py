@@ -990,6 +990,87 @@ class TestImportSingleCard:
         # Should report failure
         import_context.report.add.assert_called()
 
+    def test_import_dashboard_question_strips_unmapped_dashboard_id(
+        self, import_context, mock_client, mock_id_mapper, mock_query_remapper, tmp_path
+    ):
+        """Dashboard-question cards must not send a stale source dashboard_id.
+
+        Regression test for the collection_id mismatch error raised by the target
+        instance when a dashboard question's dashboard hasn't been imported yet.
+        """
+        card_file = tmp_path / "test_card.json"
+        card_file.write_text(
+            json.dumps(
+                {
+                    "name": "Test Card",
+                    "dataset_query": {"query": {"source-table": 10}, "database": 1},
+                    "dashboard_id": 55,
+                }
+            )
+        )
+
+        # Pass card data through unchanged so dashboard_id survives remapping
+        mock_query_remapper.remap_card_data.side_effect = lambda data, cards: (data, True)
+        mock_id_mapper.resolve_dashboard_id.return_value = None  # Dashboard not imported yet
+        mock_client.get_collection_items.return_value = {"data": []}
+        mock_client.create_card.return_value = {"id": 1000, "name": "Test Card"}
+        mock_id_mapper.resolve_card_id.return_value = 1000  # Newly created card's target ID
+
+        handler = CardHandler(import_context)
+        card = Card(
+            id=1,
+            name="Test Card",
+            file_path="test_card.json",
+            collection_id=10,
+            database_id=1,
+            archived=False,
+            dataset=False,
+        )
+
+        handler._import_single_card(card)
+
+        created_payload = mock_client.create_card.call_args[0][0]
+        assert created_payload["dashboard_id"] is None
+        mock_id_mapper.register_pending_dashboard_question.assert_called_once_with(55, 1000)
+
+    def test_import_dashboard_question_uses_mapped_dashboard_id(
+        self, import_context, mock_client, mock_id_mapper, mock_query_remapper, tmp_path
+    ):
+        """If the parent dashboard was already imported, use its mapped target ID."""
+        card_file = tmp_path / "test_card.json"
+        card_file.write_text(
+            json.dumps(
+                {
+                    "name": "Test Card",
+                    "dataset_query": {"query": {"source-table": 10}, "database": 1},
+                    "dashboard_id": 55,
+                }
+            )
+        )
+
+        mock_query_remapper.remap_card_data.side_effect = lambda data, cards: (data, True)
+        mock_id_mapper.resolve_dashboard_id.return_value = 555  # Already mapped
+        mock_client.get_collection_items.return_value = {"data": []}
+        mock_client.create_card.return_value = {"id": 1000, "name": "Test Card"}
+        mock_id_mapper.resolve_card_id.return_value = 1000
+
+        handler = CardHandler(import_context)
+        card = Card(
+            id=1,
+            name="Test Card",
+            file_path="test_card.json",
+            collection_id=10,
+            database_id=1,
+            archived=False,
+            dataset=False,
+        )
+
+        handler._import_single_card(card)
+
+        created_payload = mock_client.create_card.call_args[0][0]
+        assert created_payload["dashboard_id"] == 555
+        mock_id_mapper.register_pending_dashboard_question.assert_not_called()
+
 
 class TestMetricCardConflictResolution:
     """Tests that metric and question cards with the same name don't collide."""
@@ -1158,3 +1239,29 @@ class TestImportCards:
 
             # Should import both cards
             assert mock_import.call_count == 2
+
+
+class TestIDMapperPendingDashboardQuestions:
+    """Tests for IDMapper's dashboard-question relink registry."""
+
+    @pytest.fixture
+    def id_mapper(self):
+        """Create a real IDMapper instance."""
+        from lib.models_core import DatabaseMap
+
+        manifest = Mock(spec=Manifest)
+        manifest.databases = {}
+        return IDMapper(manifest=manifest, db_map=DatabaseMap())
+
+    def test_register_and_pop_pending_dashboard_question(self, id_mapper):
+        """Registered cards are returned once, then the queue is cleared."""
+        id_mapper.register_pending_dashboard_question(55, 1000)
+        id_mapper.register_pending_dashboard_question(55, 1001)
+
+        assert id_mapper.pop_pending_dashboard_questions(55) == [1000, 1001]
+        # Popping again returns an empty list (already cleared)
+        assert id_mapper.pop_pending_dashboard_questions(55) == []
+
+    def test_pop_pending_dashboard_questions_none_registered(self, id_mapper):
+        """Popping with no registrations returns an empty list."""
+        assert id_mapper.pop_pending_dashboard_questions(99) == []
