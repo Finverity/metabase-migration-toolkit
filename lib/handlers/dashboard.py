@@ -584,6 +584,12 @@ class DashboardHandler(BaseHandler):
         if "auto_apply_filters" in payload:
             update_payload["auto_apply_filters"] = payload["auto_apply_filters"]
 
+        # Preserve static embedding configuration without silently disabling it.
+        if payload.get("enable_embedding"):
+            update_payload["enable_embedding"] = True
+            if "embedding_params" in payload:
+                update_payload["embedding_params"] = payload["embedding_params"]
+
         # Add tabs if any (must be sent together with dashcards in v57)
         if tabs:
             update_payload["tabs"] = tabs
