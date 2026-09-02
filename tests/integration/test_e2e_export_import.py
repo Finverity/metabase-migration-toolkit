@@ -34,6 +34,7 @@ from export_metabase import MetabaseExporter
 from import_metabase import MetabaseImporter
 from lib.config import ExportConfig, ImportConfig
 from lib.constants import DEFAULT_METABASE_VERSION, MetabaseVersion
+from lib.utils.query import iter_template_tags
 from tests.integration.test_helpers import MetabaseTestHelper
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,8 @@ def get_metabase_version() -> MetabaseVersion:
         return MetabaseVersion.V57
     if version_str == "v58":
         return MetabaseVersion.V58
+    if version_str == "v63":
+        return MetabaseVersion.V63
     return DEFAULT_METABASE_VERSION
 
 
@@ -75,9 +78,18 @@ def is_v58() -> bool:
     return get_metabase_version() == MetabaseVersion.V58
 
 
+def is_v63() -> bool:
+    """Check if we're testing against v63."""
+    return get_metabase_version() == MetabaseVersion.V63
+
+
 def is_mbql5() -> bool:
     """Check if we're testing against a version that uses MBQL 5 (stages format)."""
-    return get_metabase_version() in (MetabaseVersion.V57, MetabaseVersion.V58)
+    return get_metabase_version() in (
+        MetabaseVersion.V57,
+        MetabaseVersion.V58,
+        MetabaseVersion.V63,
+    )
 
 
 def get_query_from_card(card: dict[str, Any]) -> dict[str, Any]:
@@ -223,37 +235,44 @@ def is_native_query(card: dict[str, Any]) -> bool:
 
 
 def get_template_tags_from_card(card: dict[str, Any]) -> dict[str, Any]:
-    """Get template tags from a native query card, handling both v56 and v57 formats.
+    """Get template tags from a native query card, handling v56, v57, and v63 formats.
 
     v56: dataset_query.native.template-tags
     v57: dataset_query.stages[0].template-tags (or top-level template-tags)
+    v63: same locations, but serialized as a list of tag objects (metabase#77133)
+
+    The result is always normalized to a name-keyed dict so assertions can use
+    a single shape regardless of the API's serialization.
 
     Args:
         card: The card data dictionary.
 
     Returns:
-        The template tags dictionary, or empty dict if not found.
+        The template tags as a name-keyed dictionary, or empty dict if not found.
     """
     dataset_query = card.get("dataset_query", {})
+
+    def normalize(tags: Any) -> dict[str, Any]:
+        return dict(iter_template_tags(tags))
 
     # v57 uses stages with template-tags
     stages = dataset_query.get("stages", [])
     if stages and isinstance(stages, list) and len(stages) > 0:
         stage = stages[0]
         if isinstance(stage, dict):
-            tags = stage.get("template-tags", {})
+            tags = stage.get("template-tags")
             if tags:
-                return tags
+                return normalize(tags)
 
     # Also check top-level template-tags in v57
-    top_level_tags = dataset_query.get("template-tags", {})
+    top_level_tags = dataset_query.get("template-tags")
     if top_level_tags:
-        return top_level_tags
+        return normalize(top_level_tags)
 
     # v56 uses native.template-tags
     native = dataset_query.get("native", {})
     if isinstance(native, dict):
-        return native.get("template-tags", {})
+        return normalize(native.get("template-tags", {}))
 
     return {}
 
@@ -373,6 +392,8 @@ def docker_compose_file():
     Uses docker-compose.test.yml for v56 (default), version-specific files for v57/v58.
     """
     base_path = Path(__file__).parent.parent.parent
+    if is_v63():
+        return base_path / "docker-compose.test.v63.yml"
     if is_v58():
         return base_path / "docker-compose.test.v58.yml"
     if is_v57():

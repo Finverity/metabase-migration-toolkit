@@ -1156,6 +1156,79 @@ class TestDimensionTemplateTagRemapping:
         # Unmapped field should be preserved with original ID
         assert tag["dimension"][2] == 99999
 
+    def test_remap_v57_list_form_dimension_template_tags(self, remapper):
+        """v0.63+ exports template-tags as a list; field IDs must still remap."""
+        remapper.id_mapper._field_map[(1, 3000)] = 9000
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM venues WHERE {{venue_type_label}}",
+                        "template-tags": [
+                            {
+                                "type": "dimension",
+                                "name": "venue_type_label",
+                                "id": "abc-123",
+                                "display-name": "Venue Type Label",
+                                "widget-type": "string/=",
+                                "dimension": [
+                                    "field",
+                                    {
+                                        "base-type": "type/Text",
+                                        "lib/uuid": "550e8400-e29b-41d4-a716-446655440000",
+                                    },
+                                    3000,
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        tags = result["dataset_query"]["stages"][0]["template-tags"]
+        assert isinstance(tags, list)
+        assert tags[0]["dimension"][2] == 9000
+
+    def test_remap_list_form_card_template_tag(self, remapper):
+        """List-form card template-tags must remap card-id and name."""
+        card_data = {
+            "database_id": 1,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 1,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT * FROM {{#50-my-model}}",
+                        "template-tags": [
+                            {
+                                "type": "card",
+                                "name": "50-my-model",
+                                "display-name": "#50 My Model",
+                                "card-id": 50,
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+
+        result, success = remapper.remap_card_data(card_data)
+
+        assert success
+        tags = result["dataset_query"]["stages"][0]["template-tags"]
+        assert isinstance(tags, list)
+        assert tags[0]["card-id"] == 500
+        assert tags[0]["name"] == "500-my-model"
+
 
 class TestQueryRemapperEdgeCases:
     """Tests for edge cases in query remapping."""

@@ -37,6 +37,7 @@ class IDMapper:
         self._card_map: dict[int, int] = {}
         self._dashboard_map: dict[int, int] = {}
         self._group_map: dict[int, int] = {}
+        self._measure_map: dict[int, int] = {}
 
         # Table and field mappings: (source_db_id, source_id) -> target_id
         self._table_map: dict[tuple[int, int], int] = {}
@@ -68,6 +69,11 @@ class IDMapper:
         return self._group_map
 
     @property
+    def measure_map(self) -> dict[int, int]:
+        """Returns the measure ID mapping (v63)."""
+        return self._measure_map
+
+    @property
     def table_map(self) -> dict[tuple[int, int], int]:
         """Returns the table ID mapping."""
         return self._table_map
@@ -94,6 +100,10 @@ class IDMapper:
     def set_group_mapping(self, source_id: int, target_id: int) -> None:
         """Sets a permission group ID mapping."""
         self._group_map[source_id] = target_id
+
+    def set_measure_mapping(self, source_id: int, target_id: int) -> None:
+        """Sets a measure ID mapping (v63)."""
+        self._measure_map[source_id] = target_id
 
     # --- Database ID resolution ---
 
@@ -166,6 +176,17 @@ class IDMapper:
             The target card ID, or None if not mapped.
         """
         return self._card_map.get(source_card_id)
+
+    def resolve_measure_id(self, source_measure_id: int) -> int | None:
+        """Resolves a source measure ID to a target measure ID (v63).
+
+        Args:
+            source_measure_id: The source measure ID.
+
+        Returns:
+            The target measure ID, or None if not mapped.
+        """
+        return self._measure_map.get(source_measure_id)
 
     def resolve_dashboard_id(self, source_dashboard_id: int) -> int | None:
         """Resolves a source dashboard ID to a target dashboard ID.

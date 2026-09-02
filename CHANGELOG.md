@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Metabase v63 support**: New `v63` version option with a dedicated adapter (same MBQL 5
+  stages format as v58). Versions v0.59–v0.62 remain unvalidated.
+- **Measure migration (v63)**: Measures (Data Studio saved aggregations) are exported into the
+  manifest, recreated on the target with remapped table and field IDs (matched by table + name
+  for idempotency), and `["measure", {...}, id]` aggregation references in card queries are
+  remapped.
+- **`--include-library` export flag (v63)**: Includes the Library (Data Studio) collection
+  subtree, which Metabase v63 excludes from the collection tree by default.
+- **Document detection (v63)**: Documents found in collections are counted and reported with a
+  warning during export (document migration itself is not yet supported).
+
 ### Fixed
+
+- **"table" template-tag remapping (v63)**: Table Variables store a raw source table ID
+  (`table-id`) and filter field IDs (`source-filters[].field-id`); both are now remapped on
+  import instead of being copied verbatim and resolving to the wrong table on the target.
+- **Parameter `label_field` remapping (v63)**: Filters sourcing dropdown values from another
+  card can specify a separate label column; `values_source_config.label_field` is now remapped
+  alongside `value_field`.
+- **Dashcard `inline_parameters` preserved (v63)**: Header- and card-level filter-widget
+  placement is no longer dropped when dashcards are rebuilt on import.
+- **Collection permission revocations propagated**: Metabase 0.56.13+ omits "none" entries from
+  the collection permissions graph, and PUT only overwrites pairs present in the request. The
+  importer now sends explicit "none" for mapped group/collection pairs absent from the source
+  graph, so source-side revocations no longer become inherited access on the target
+  (Administrators excluded; the "root" collection is never synthesized).
 
 - **Card parameter value source remapping**: Card filters that source dropdown values from
   another card (`parameters[].values_source_config.card_id`) kept staging card IDs on import,
@@ -16,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Temporal-unit template-tag field remapping**: Time-grouping variables (e.g. `date_grouping`)
   use template-tag type `temporal-unit` and were left with staging field IDs while `dimension`
   tags remapped correctly. Field IDs in `temporal-unit` tags are now remapped as well.
+- **List-form template-tags field remapping**: Metabase v0.63+ exports `template-tags` as a list
+  of tag objects rather than a name-keyed dict (PR
+  [metabase#77133](https://github.com/metabase/metabase/pull/77133)). Import only remapped the
+  dict shape, so field filters such as `date_range` (`dbo.DimDate.Date`) kept source field IDs
+  and resolved to unrelated fields on the target (e.g. `MonthDate`). List-form tags are now
+  remapped the same way as dict-form tags.
 
 ## [1.2.0] - 2026-03-20
 

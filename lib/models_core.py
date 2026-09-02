@@ -89,6 +89,8 @@ class Manifest:
     collection_permissions_graph: dict[str, Any] = dataclasses.field(default_factory=dict)
     # Database metadata: db_id -> {tables: [{id, name, fields: [{id, name}, ...]}, ...]}
     database_metadata: dict[int, dict[str, Any]] = dataclasses.field(default_factory=dict)
+    # v63 measures: [{id, name, description, table_id, definition}, ...]
+    measures: list[dict[str, Any]] = dataclasses.field(default_factory=list)
 
 
 # --- Import-specific Models ---

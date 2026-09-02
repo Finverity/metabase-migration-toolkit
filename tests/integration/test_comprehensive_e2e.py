@@ -64,6 +64,8 @@ def get_metabase_version() -> MetabaseVersion:
         return MetabaseVersion.V57
     if version_str == "v58":
         return MetabaseVersion.V58
+    if version_str == "v63":
+        return MetabaseVersion.V63
     return DEFAULT_METABASE_VERSION
 
 
@@ -77,9 +79,18 @@ def is_v58() -> bool:
     return get_metabase_version() == MetabaseVersion.V58
 
 
+def is_v63() -> bool:
+    """Check if we're testing against v63."""
+    return get_metabase_version() == MetabaseVersion.V63
+
+
 def is_mbql5() -> bool:
     """Check if we're testing against a version that uses MBQL 5 (stages format)."""
-    return get_metabase_version() in (MetabaseVersion.V57, MetabaseVersion.V58)
+    return get_metabase_version() in (
+        MetabaseVersion.V57,
+        MetabaseVersion.V58,
+        MetabaseVersion.V63,
+    )
 
 
 # =============================================================================
@@ -91,6 +102,8 @@ def is_mbql5() -> bool:
 def docker_compose_file():
     """Return path to docker-compose file based on MB_METABASE_VERSION."""
     base_path = Path(__file__).parent.parent.parent
+    if is_v63():
+        return base_path / "docker-compose.test.v63.yml"
     if is_v58():
         return base_path / "docker-compose.test.v58.yml"
     if is_v57():
