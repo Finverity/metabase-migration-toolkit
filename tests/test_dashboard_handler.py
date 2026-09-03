@@ -944,6 +944,20 @@ class TestBuildUpdatePayload:
         assert result["width"] == "full"
         assert result["auto_apply_filters"] is True
 
+    def test_build_update_payload_with_embedding_configuration(self, import_context):
+        """Test that enabled static embedding configuration is preserved."""
+        handler = DashboardHandler(import_context)
+        embedding_params = {"locked": True}
+        payload = {
+            "enable_embedding": True,
+            "embedding_params": embedding_params,
+        }
+
+        result = handler._build_update_payload("Test", payload, [], [])
+
+        assert result["enable_embedding"] is True
+        assert result["embedding_params"] == embedding_params
+
     def test_build_update_payload_removes_none_values(self, import_context):
         """Test that None values are removed from payload."""
         handler = DashboardHandler(import_context)
