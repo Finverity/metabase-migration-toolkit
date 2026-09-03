@@ -1,6 +1,28 @@
 """Helpers for extracting card dependencies from Metabase query structures."""
 
+from collections.abc import Iterator
 from typing import Any
+
+
+def iter_template_tags(
+    template_tags: Any,
+) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Yield (name, tag_data) pairs from dict or list template-tags.
+
+    Metabase historically stores template-tags as a dict keyed by name.
+    From v0.63 onward (metabase#77133) they are serialized as a list of
+    tag objects, each with a ``name`` field. Both shapes are accepted.
+    """
+    if isinstance(template_tags, dict):
+        for tag_name, tag_data in template_tags.items():
+            if isinstance(tag_data, dict):
+                yield str(tag_name), tag_data
+        return
+
+    if isinstance(template_tags, list):
+        for tag_data in template_tags:
+            if isinstance(tag_data, dict):
+                yield str(tag_data.get("name") or ""), tag_data
 
 
 def extract_parameter_card_dependencies(card_data: dict[str, Any]) -> set[int]:

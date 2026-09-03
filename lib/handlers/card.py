@@ -24,7 +24,11 @@ from lib.constants import (
 from lib.handlers.base import _CARD_TYPE_TO_MODEL, BaseHandler, ImportContext
 from lib.models import Card
 from lib.utils import clean_for_create, read_json_file
-from lib.utils.query import extract_metric_deps_from_clause, extract_parameter_card_dependencies
+from lib.utils.query import (
+    extract_metric_deps_from_clause,
+    extract_parameter_card_dependencies,
+    iter_template_tags,
+)
 
 logger = logging.getLogger("metabase_migration")
 
@@ -95,6 +99,17 @@ class CardHandler(BaseHandler):
             target_collection_id = self.id_mapper.resolve_collection_id(card.collection_id)
             card_data["collection_id"] = target_collection_id
 
+            # Dashboard questions (cards created inside a dashboard) carry a
+            # dashboard_id that must match their parent dashboard's collection_id
+            # on the target. Dashboards are imported after cards, so the parent
+            # dashboard doesn't exist yet - sending the raw source dashboard_id
+            # would reference a non-existent (or wrong) target dashboard and the
+            # target rejects the request with a collection_id mismatch. Strip it
+            # here and relink it once the dashboard has been imported.
+            source_dashboard_id = card_data.get("dashboard_id")
+            if source_dashboard_id is not None:
+                card_data["dashboard_id"] = self.id_mapper.resolve_dashboard_id(source_dashboard_id)
+
             # Handle conflicts using cached collection items lookup
             card_type = card_data.get("type")
             # If card_type is None, all types are searched
@@ -107,6 +122,15 @@ class CardHandler(BaseHandler):
                 self._handle_existing_card(card, card_data, existing_card, target_collection_id)
             else:
                 self._create_card(card, card_data)
+
+            # If the parent dashboard hasn't been imported yet, queue this card for
+            # relinking once DashboardHandler creates/updates that dashboard.
+            if source_dashboard_id is not None and card_data["dashboard_id"] is None:
+                target_card_id = self.id_mapper.resolve_card_id(card.id)
+                if target_card_id is not None:
+                    self.id_mapper.register_pending_dashboard_question(
+                        source_dashboard_id, target_card_id
+                    )
 
         except MetabaseAPIError as e:
             self._handle_api_error(card, e)
@@ -451,18 +475,19 @@ class CardHandler(BaseHandler):
                 logger.warning(f"Invalid card ID in SQL reference: {card_id_str}")
 
     @staticmethod
-    def _extract_template_tag_deps(template_tags: dict[str, Any], dependencies: set[int]) -> None:
+    def _extract_template_tag_deps(
+        template_tags: dict[str, Any] | list[Any], dependencies: set[int]
+    ) -> None:
         """Extracts card IDs from template-tags with type "card".
 
+        Supports both dict (keyed by name) and list (v0.63+ export) forms.
+
         Args:
-            template_tags: The template-tags dictionary.
+            template_tags: The template-tags dictionary or list.
             dependencies: Set to add found card IDs to.
         """
-        if not isinstance(template_tags, dict):
-            return
-
-        for _tag_name, tag_data in template_tags.items():
-            if isinstance(tag_data, dict) and tag_data.get("type") == "card":
+        for _tag_name, tag_data in iter_template_tags(template_tags):
+            if tag_data.get("type") == "card":
                 card_id = tag_data.get("card-id")
                 if card_id is not None:
                     dependencies.add(card_id)

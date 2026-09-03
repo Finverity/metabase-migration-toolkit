@@ -49,6 +49,9 @@ The toolkit supports the following Metabase versions:
 | `v56`   | v0.56.x          | MBQL 4              | Default, fully supported |
 | `v57`   | v0.57.x          | MBQL 5 (stages)     | Fully supported          |
 | `v58`   | v0.58.x          | MBQL 5 (stages)     | Fully supported          |
+| `v63`   | v0.63.x          | MBQL 5 (stages)     | Supported (see notes)    |
+
+Versions v0.59–v0.62 have no dedicated support and have not been validated.
 
 ### Key Differences Between Versions
 
@@ -70,6 +73,21 @@ The toolkit supports the following Metabase versions:
 - Same query format as v57 (`:stages` array)
 - Card fields `dashboard_tab_id`, `entity_id`, `parameter_mappings` are now nullable
 - New MBQL clauses: `measure` (aggregation reference) and `collate` (SQL collation)
+
+**v63 (MBQL 5):**
+
+- Same query format as v58 (`:stages` array)
+- `template-tags` may be exported as a list of tag objects instead of a name-keyed dict
+- New `table` template-tag type (Table Variables); `table-id` and `source-filters` field IDs
+  are remapped on import
+- Measures (Data Studio saved aggregations) are exported and recreated on the target, and
+  `measure` aggregation references in card queries are remapped
+- Documents are detected and reported during export but are **not** migrated
+- The Library (Data Studio) subtree is excluded from the collection tree by Metabase unless
+  the export is run with `--include-library`
+- Filters can source dropdown labels from a separate column (`label_field`), and filter
+  widgets can be placed at dashboard, header, or card level (`inline_parameters`) — both are
+  migrated
 
 ### Version Compatibility
 
@@ -213,6 +231,7 @@ metabase-export \
 - `--include-dashboards` - Include dashboards in export
 - `--include-archived` - Include archived items
 - `--include-permissions` - Include permissions (groups and access control) in export
+- `--include-library` - Include the Library (Data Studio) collection subtree (v63 only)
 - `--root-collections` - Comma-separated collection IDs to export (optional)
 - `--exclude-databases` - Comma-separated database IDs whose cards are skipped during export (optional).
   Useful when the source instance still has questions pointing to removed databases (e.g. the legacy
@@ -341,6 +360,7 @@ metabase-sync \
 - `--include-dashboards` - Include dashboards in the export
 - `--include-archived` - Include archived items
 - `--include-permissions` - Include permissions (groups and access control)
+- `--include-library` - Include the Library (Data Studio) collection subtree (v63 only)
 - `--root-collections` - Comma-separated list of root collection IDs to export
 - `--exclude-databases` - Comma-separated list of database IDs whose cards are skipped during export
 

@@ -944,6 +944,20 @@ class TestBuildUpdatePayload:
         assert result["width"] == "full"
         assert result["auto_apply_filters"] is True
 
+    def test_build_update_payload_with_embedding_configuration(self, import_context):
+        """Test that enabled static embedding configuration is preserved."""
+        handler = DashboardHandler(import_context)
+        embedding_params = {"locked": True}
+        payload = {
+            "enable_embedding": True,
+            "embedding_params": embedding_params,
+        }
+
+        result = handler._build_update_payload("Test", payload, [], [])
+
+        assert result["enable_embedding"] is True
+        assert result["embedding_params"] == embedding_params
+
     def test_build_update_payload_removes_none_values(self, import_context):
         """Test that None values are removed from payload."""
         handler = DashboardHandler(import_context)
@@ -1057,6 +1071,80 @@ class TestImportSingleDashboard:
 
         # Should report failure
         import_context.report.add.assert_called()
+
+    def test_import_dashboard_relinks_pending_dashboard_questions(
+        self, import_context, mock_client, mock_id_mapper, tmp_path
+    ):
+        """Cards created before their parent dashboard must be relinked afterwards."""
+        dash_file = tmp_path / "test_dashboard.json"
+        dash_file.write_text(
+            json.dumps(
+                {
+                    "name": "Test Dashboard",
+                    "description": "A test dashboard",
+                    "collection_id": 10,
+                    "parameters": [],
+                    "dashcards": [],
+                }
+            )
+        )
+
+        mock_client.get_collection_items.return_value = {"data": []}
+        mock_client.create_dashboard.return_value = {"id": 1000, "name": "Test Dashboard"}
+        mock_client.update_dashboard.return_value = {"id": 1000, "name": "Test Dashboard"}
+        mock_id_mapper.pop_pending_dashboard_questions.return_value = [2000, 2001]
+
+        handler = DashboardHandler(import_context)
+        dash = Dashboard(
+            id=1,
+            name="Test Dashboard",
+            file_path="test_dashboard.json",
+            collection_id=10,
+            archived=False,
+        )
+
+        handler._import_single_dashboard(dash)
+
+        mock_id_mapper.pop_pending_dashboard_questions.assert_called_once_with(1)
+        mock_client.update_card.assert_any_call(2000, {"dashboard_id": 1000})
+        mock_client.update_card.assert_any_call(2001, {"dashboard_id": 1000})
+
+    def test_import_dashboard_relink_failure_does_not_fail_import(
+        self, import_context, mock_client, mock_id_mapper, tmp_path
+    ):
+        """A relink failure should be logged, not fail the whole dashboard import."""
+        dash_file = tmp_path / "test_dashboard.json"
+        dash_file.write_text(
+            json.dumps(
+                {
+                    "name": "Test Dashboard",
+                    "collection_id": 10,
+                    "parameters": [],
+                    "dashcards": [],
+                }
+            )
+        )
+
+        mock_client.get_collection_items.return_value = {"data": []}
+        mock_client.create_dashboard.return_value = {"id": 1000, "name": "Test Dashboard"}
+        mock_client.update_dashboard.return_value = {"id": 1000, "name": "Test Dashboard"}
+        mock_id_mapper.pop_pending_dashboard_questions.return_value = [2000]
+        mock_client.update_card.side_effect = Exception("API Error")
+
+        handler = DashboardHandler(import_context)
+        dash = Dashboard(
+            id=1,
+            name="Test Dashboard",
+            file_path="test_dashboard.json",
+            collection_id=10,
+            archived=False,
+        )
+
+        handler._import_single_dashboard(dash)
+
+        # Dashboard import itself should still be reported as successful
+        report_call = import_context.report.add.call_args[0][0]
+        assert report_call.status == "created"
 
 
 class TestImportDashboards:

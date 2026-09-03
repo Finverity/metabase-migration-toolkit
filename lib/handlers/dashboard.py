@@ -118,6 +118,9 @@ class DashboardHandler(BaseHandler):
             # Store dashboard ID mapping for click_behavior remapping
             self.id_mapper.set_dashboard_mapping(dash.id, updated_dash["id"])
 
+            # Relink dashboard questions created before this dashboard existed
+            self._relink_pending_dashboard_questions(dash.id, updated_dash["id"])
+
             # Add to collection cache to keep it up-to-date for conflict detection
             if action_taken == "created":
                 self.context.add_to_collection_cache(
@@ -140,6 +143,29 @@ class DashboardHandler(BaseHandler):
                 exc_info=True,
             )
             self._add_report_item("dashboard", "failed", dash.id, None, dash.name, str(e))
+
+    def _relink_pending_dashboard_questions(
+        self, source_dashboard_id: int, target_dashboard_id: int
+    ) -> None:
+        """Relinks dashboard-question cards imported before their parent dashboard.
+
+        Args:
+            source_dashboard_id: The source dashboard ID.
+            target_dashboard_id: The newly created/updated target dashboard ID.
+        """
+        pending_card_ids = self.id_mapper.pop_pending_dashboard_questions(source_dashboard_id)
+        for target_card_id in pending_card_ids:
+            try:
+                self.client.update_card(target_card_id, {"dashboard_id": target_dashboard_id})
+                logger.debug(
+                    f"Relinked dashboard question card {target_card_id} "
+                    f"to dashboard {target_dashboard_id}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to relink dashboard question card {target_card_id} "
+                    f"to dashboard {target_dashboard_id}: {e}"
+                )
 
     def _handle_existing_dashboard(
         self,
@@ -342,6 +368,11 @@ class DashboardHandler(BaseHandler):
                     dashcard["parameter_mappings"], source_db_id
                 )
             )
+
+        # Preserve v63 filter-widget placement (header-/card-level filters).
+        # Parameter id strings are stable across import, so a straight copy is correct.
+        if dashcard.get("inline_parameters"):
+            clean_dashcard["inline_parameters"] = list(dashcard["inline_parameters"])
 
         # Remap series
         if dashcard.get("series"):
@@ -552,6 +583,12 @@ class DashboardHandler(BaseHandler):
             update_payload["width"] = payload["width"]
         if "auto_apply_filters" in payload:
             update_payload["auto_apply_filters"] = payload["auto_apply_filters"]
+
+        # Preserve static embedding configuration without silently disabling it.
+        if payload.get("enable_embedding"):
+            update_payload["enable_embedding"] = True
+            if "embedding_params" in payload:
+                update_payload["embedding_params"] = payload["embedding_params"]
 
         # Add tabs if any (must be sent together with dashcards in v57)
         if tabs:

@@ -192,3 +192,94 @@ class TestTemporalUnitTemplateTagRemapping:
             "date_grouping"
         ]["dimension"]
         assert tag_dimension[2] == 301
+
+    def test_remap_card_data_remaps_list_form_date_range_dimension(self):
+        """v0.63+ exports template-tags as a list; date_range field IDs must remap.
+
+        Without this, source DimDate.Date (field 159) keeps its staging ID and
+        resolves to an unrelated target field (e.g. MonthDate).
+        """
+        id_mapper = _create_test_id_mapper(db_mapping={2: 2})
+        id_mapper._field_map[(2, 159)] = 301
+
+        remapper = QueryRemapper(id_mapper)
+        card_data = {
+            "database_id": 2,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 2,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": "SELECT 1 WHERE {{date_range}}",
+                        "template-tags": [
+                            {
+                                "widget-type": "date/all-options",
+                                "default": "past7days",
+                                "name": "date_range",
+                                "type": "dimension",
+                                "id": "213629bc-f979-4e6e-a2e1-5670baf79855",
+                                "dimension": [
+                                    "field",
+                                    {"lib/uuid": "1156aab8-566e-45d0-8e19-cd181d67590c"},
+                                    159,
+                                ],
+                                "display-name": "Date Range",
+                                "required": True,
+                            },
+                            {
+                                "name": "client",
+                                "type": "text",
+                                "id": "a9de63f6-4ea2-496c-84a7-098ca0769b91",
+                                "display-name": "Client",
+                            },
+                        ],
+                    }
+                ],
+            },
+        }
+
+        remapped_data, success = remapper.remap_card_data(card_data)
+
+        assert success is True
+        tags = remapped_data["dataset_query"]["stages"][0]["template-tags"]
+        assert isinstance(tags, list)
+        date_range = next(tag for tag in tags if tag["name"] == "date_range")
+        assert date_range["dimension"][2] == 301
+        # Non-dimension tags stay in the list unchanged
+        assert any(tag.get("name") == "client" for tag in tags)
+
+    def test_remap_card_data_remaps_list_form_temporal_unit_tag(self):
+        id_mapper = _create_test_id_mapper(db_mapping={2: 2})
+        id_mapper._field_map[(2, 159)] = 301
+
+        remapper = QueryRemapper(id_mapper)
+        card_data = {
+            "database_id": 2,
+            "dataset_query": {
+                "lib/type": "mbql/query",
+                "database": 2,
+                "stages": [
+                    {
+                        "lib/type": "mbql.stage/native",
+                        "native": 'SELECT {{date_grouping}} AS "Date"',
+                        "template-tags": [
+                            {
+                                "type": "temporal-unit",
+                                "name": "date_grouping",
+                                "display-name": "Date Grouping",
+                                "default": "day",
+                                "dimension": ["field", {"lib/uuid": "abc"}, 159],
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+
+        remapped_data, success = remapper.remap_card_data(card_data)
+
+        assert success is True
+        tags = remapped_data["dataset_query"]["stages"][0]["template-tags"]
+        assert isinstance(tags, list)
+        assert tags[0]["dimension"][2] == 301
