@@ -272,6 +272,21 @@ class TestSyncConfigValidation:
 
         assert "positive" in str(exc_info.value).lower()
 
+    def test_negative_exclude_database_ids(self):
+        """Test that negative excluded database IDs are rejected."""
+        with pytest.raises(ValidationError) as exc_info:
+            SyncConfig(
+                source_url="https://source.example.com",
+                source_session_token="token",
+                target_url="https://target.example.com",
+                target_session_token="token",
+                export_dir="./export",
+                db_map_path="./db_map.json",
+                exclude_database_ids=[4, -24],
+            )
+
+        assert "positive" in str(exc_info.value).lower()
+
 
 class TestSyncConfigConversion:
     """Test SyncConfig conversion to ExportConfig and ImportConfig."""
@@ -290,6 +305,7 @@ class TestSyncConfigConversion:
             include_archived=True,
             include_permissions=True,
             root_collection_ids=[1, 2, 3],
+            exclude_database_ids=[4, 24],
             log_level="DEBUG",
         )
 
@@ -303,6 +319,7 @@ class TestSyncConfigConversion:
         assert export_config.include_archived is True
         assert export_config.include_permissions is True
         assert export_config.root_collection_ids == [1, 2, 3]
+        assert export_config.exclude_database_ids == [4, 24]
         assert export_config.log_level == "DEBUG"
 
     def test_to_import_config(self):
@@ -419,6 +436,8 @@ class TestGetSyncArgs:
             "overwrite",
             "--root-collections",
             "24,25",
+            "--exclude-databases",
+            "4,39",
             "--log-level",
             "DEBUG",
         ],
@@ -442,6 +461,7 @@ class TestGetSyncArgs:
         assert config.apply_permissions is True
         assert config.conflict_strategy == "overwrite"
         assert config.root_collection_ids == [24, 25]
+        assert config.exclude_database_ids == [4, 39]
         assert config.log_level == "DEBUG"
 
     @patch.dict(

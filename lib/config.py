@@ -146,6 +146,7 @@ class ExportConfig(BaseModel):
     include_permissions: bool = False
     include_library: bool = False
     root_collection_ids: list[int] | None = None
+    exclude_database_ids: list[int] | None = None
     log_level: str = "INFO"
 
     @field_validator("source_url")
@@ -187,6 +188,25 @@ class ExportConfig(BaseModel):
                 raise ConfigValidationError(
                     f"Collection IDs must be positive integers, got {collection_id} at index {i}",
                     field="root_collection_ids",
+                )
+
+        return v
+
+    @field_validator("exclude_database_ids")
+    @classmethod
+    def validate_database_ids(cls, v: list[int] | None) -> list[int] | None:
+        """Validate that database IDs are positive integers."""
+        if v is None:
+            return v
+
+        if not v:
+            return None  # Empty list treated as None (exclude nothing)
+
+        for i, database_id in enumerate(v):
+            if database_id <= 0:
+                raise ConfigValidationError(
+                    f"Database IDs must be positive integers, got {database_id} at index {i}",
+                    field="exclude_database_ids",
                 )
 
         return v
@@ -341,6 +361,10 @@ def get_export_args() -> ExportConfig:
         help="Comma-separated list of root collection IDs to export (empty=all)",
     )
     parser.add_argument(
+        "--exclude-databases",
+        help="Comma-separated list of database IDs whose cards are skipped during export",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -372,6 +396,18 @@ def get_export_args() -> ExportConfig:
                 f"--root-collections must be comma-separated integers, got '{args.root_collections}'"
             )
 
+    # Parse excluded database IDs
+    exclude_database_ids: list[int] | None = None
+    if args.exclude_databases:
+        try:
+            exclude_database_ids = [
+                int(db_id.strip()) for db_id in args.exclude_databases.split(",")
+            ]
+        except ValueError:
+            parser.error(
+                f"--exclude-databases must be comma-separated integers, got '{args.exclude_databases}'"
+            )
+
     # Create config object with validation
     try:
         return ExportConfig(
@@ -387,6 +423,7 @@ def get_export_args() -> ExportConfig:
             include_permissions=args.include_permissions,
             include_library=args.include_library,
             root_collection_ids=root_collection_ids,
+            exclude_database_ids=exclude_database_ids,
             log_level=args.log_level,
         )
     except ConfigValidationError as e:
@@ -535,6 +572,7 @@ class SyncConfig(BaseModel):
     include_permissions: bool = False
     include_library: bool = False
     root_collection_ids: list[int] | None = None
+    exclude_database_ids: list[int] | None = None
 
     # Import options
     conflict_strategy: Literal["skip", "overwrite", "rename"] = "skip"
@@ -608,6 +646,25 @@ class SyncConfig(BaseModel):
 
         return v
 
+    @field_validator("exclude_database_ids")
+    @classmethod
+    def validate_database_ids(cls, v: list[int] | None) -> list[int] | None:
+        """Validate that database IDs are positive integers."""
+        if v is None:
+            return v
+
+        if not v:
+            return None  # Empty list treated as None (exclude nothing)
+
+        for i, database_id in enumerate(v):
+            if database_id <= 0:
+                raise ConfigValidationError(
+                    f"Database IDs must be positive integers, got {database_id} at index {i}",
+                    field="exclude_database_ids",
+                )
+
+        return v
+
     @model_validator(mode="after")
     def validate_authentication(self) -> "SyncConfig":
         """Validate that at least one authentication method is provided for both source and target."""
@@ -652,6 +709,7 @@ class SyncConfig(BaseModel):
             include_permissions=self.include_permissions,
             include_library=self.include_library,
             root_collection_ids=self.root_collection_ids,
+            exclude_database_ids=self.exclude_database_ids,
             log_level=self.log_level,
         )
 
@@ -767,6 +825,10 @@ def get_sync_args() -> SyncConfig:
         "--root-collections",
         help="Comma-separated list of root collection IDs to export (empty=all)",
     )
+    export_group.add_argument(
+        "--exclude-databases",
+        help="Comma-separated list of database IDs whose cards are skipped during export",
+    )
 
     # Import options
     import_group = parser.add_argument_group("Import Options")
@@ -814,6 +876,18 @@ def get_sync_args() -> SyncConfig:
                 f"--root-collections must be comma-separated integers, got '{args.root_collections}'"
             )
 
+    # Parse excluded database IDs
+    exclude_database_ids: list[int] | None = None
+    if args.exclude_databases:
+        try:
+            exclude_database_ids = [
+                int(db_id.strip()) for db_id in args.exclude_databases.split(",")
+            ]
+        except ValueError:
+            parser.error(
+                f"--exclude-databases must be comma-separated integers, got '{args.exclude_databases}'"
+            )
+
     # Create config object with validation
     try:
         return SyncConfig(
@@ -835,6 +909,7 @@ def get_sync_args() -> SyncConfig:
             include_permissions=args.include_permissions,
             include_library=args.include_library,
             root_collection_ids=root_collection_ids,
+            exclude_database_ids=exclude_database_ids,
             conflict_strategy=args.conflict,
             dry_run=args.dry_run,
             apply_permissions=args.apply_permissions,

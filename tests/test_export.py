@@ -374,6 +374,138 @@ class TestModelExport:
             assert exported_card.dataset is False
 
 
+class TestExcludeDatabases:
+    """Test suite for skipping cards from excluded databases."""
+
+    @staticmethod
+    def _make_config(tmp_path, exclude_database_ids):
+        return ExportConfig(
+            source_url="https://example.com",
+            export_dir=str(tmp_path / "export"),
+            source_session_token="token",
+            exclude_database_ids=exclude_database_ids,
+        )
+
+    @staticmethod
+    def _make_card(card_id, database_id):
+        return {
+            "id": card_id,
+            "name": f"Card {card_id}",
+            "database_id": database_id,
+            "dataset_query": {"database": database_id, "type": "query", "query": {}},
+        }
+
+    def test_excluded_card_not_exported(self, tmp_path):
+        """Test that a card from an excluded database is skipped entirely."""
+        config = self._make_config(tmp_path, exclude_database_ids=[4])
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = self._make_card(100, database_id=4)
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card_with_dependencies(100, "test-collection")
+
+            assert exporter.manifest.cards == []
+            assert 100 in exporter._excluded_cards
+            # No card file must be written
+            assert not list(Path(config.export_dir).rglob("card_*.json"))
+
+    def test_non_excluded_card_still_exported(self, tmp_path):
+        """Test that cards from other databases are exported normally."""
+        config = self._make_config(tmp_path, exclude_database_ids=[4])
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = self._make_card(100, database_id=1)
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card_with_dependencies(100, "test-collection")
+
+            assert len(exporter.manifest.cards) == 1
+            assert exporter.manifest.cards[0].id == 100
+            assert exporter._excluded_cards == set()
+
+    def test_no_exclusion_when_flag_absent(self, tmp_path):
+        """Test that no cards are skipped when exclude_database_ids is None."""
+        config = self._make_config(tmp_path, exclude_database_ids=None)
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = self._make_card(100, database_id=4)
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card_with_dependencies(100, "test-collection")
+
+            assert len(exporter.manifest.cards) == 1
+            assert exporter.manifest.cards[0].database_id == 4
+
+    def test_excluded_card_dependencies_not_fetched(self, tmp_path):
+        """Test that dependencies of an excluded card are not traversed."""
+        config = self._make_config(tmp_path, exclude_database_ids=[4])
+
+        excluded_card = self._make_card(100, database_id=4)
+        excluded_card["dataset_query"]["query"] = {"source-table": "card__55"}
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = excluded_card
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card_with_dependencies(100, "test-collection")
+
+            # Only the excluded card itself is fetched; its dependency (55) is not
+            mock_client.get_card.assert_called_once_with(100)
+            assert exporter.manifest.cards == []
+
+    def test_exclusion_resolves_database_from_dataset_query(self, tmp_path):
+        """Test that the database ID falls back to dataset_query when database_id is absent."""
+        config = self._make_config(tmp_path, exclude_database_ids=[4])
+
+        card = self._make_card(100, database_id=4)
+        del card["database_id"]
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_card.return_value = card
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_card_with_dependencies(100, "test-collection")
+
+            assert exporter.manifest.cards == []
+            assert 100 in exporter._excluded_cards
+
+    def test_dashboard_keeps_excluded_card_reference(self, tmp_path):
+        """Test that dashboards export fully, listing excluded cards without exporting them."""
+        config = self._make_config(tmp_path, exclude_database_ids=[4])
+
+        with patch("lib.services.export_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_dashboard.return_value = {
+                "id": 1,
+                "name": "Test Dashboard",
+                "collection_id": 10,
+                "dashcards": [{"id": 1, "card_id": 100}],
+                "parameters": [],
+            }
+            mock_client.get_card.return_value = self._make_card(100, database_id=4)
+            mock_client_class.return_value = mock_client
+
+            exporter = MetabaseExporter(config)
+            exporter._export_dashboard(1, "test-collection")
+
+            # Dashboard is exported in full; the excluded card is not
+            assert len(exporter.manifest.dashboards) == 1
+            assert exporter.manifest.dashboards[0].ordered_cards == [100]
+            assert exporter.manifest.cards == []
+            assert 100 in exporter._excluded_cards
+
+
 class TestExportDashboard:
     """Test suite for _export_dashboard method."""
 

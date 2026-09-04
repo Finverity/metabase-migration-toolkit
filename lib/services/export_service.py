@@ -51,6 +51,7 @@ class ExportService:
         self._collection_path_map: dict[int, str] = {}
         self._processed_collections: set[int] = set()
         self._exported_cards: set[int] = set()  # Track exported cards to prevent duplicates
+        self._excluded_cards: set[int] = set()  # Cards skipped due to excluded databases
         self._skipped_documents: list[str] = []  # v63 documents found but not migrated
         self._dependency_chain: list[int] = (
             []
@@ -85,6 +86,11 @@ class ExportService:
         """Main entry point to start the export process."""
         logger.info(f"Starting Metabase export from {self.config.source_url}")
         logger.info(f"Export directory: {self.export_dir.resolve()}")
+
+        if self.config.exclude_database_ids:
+            logger.info(
+                f"Excluding cards from databases: {sorted(set(self.config.exclude_database_ids))}"
+            )
 
         self.export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -152,6 +158,8 @@ class ExportService:
             logger.info("Export Summary:")
             logger.info(f"  Collections: {len(self.manifest.collections)}")
             logger.info(f"  Cards: {len(self.manifest.cards)}")
+            if self.config.exclude_database_ids:
+                logger.info(f"  Cards skipped (excluded databases): {len(self._excluded_cards)}")
             logger.info(f"  Dashboards: {len(self.manifest.dashboards)}")
             logger.info(f"  Databases: {len(self.manifest.databases)}")
             if self.config.include_permissions:
@@ -420,6 +428,44 @@ class ExportService:
                 )
 
     @staticmethod
+    def _resolve_card_database_id(card_data: dict) -> int | None:
+        """Resolves the database ID a card belongs to.
+
+        Args:
+            card_data: The card data dictionary.
+
+        Returns:
+            The database ID, or None if the card has no database reference.
+        """
+        return card_data.get("database_id") or (card_data.get("dataset_query") or {}).get(
+            "database"
+        )
+
+    def _is_card_excluded(self, card_id: int, card_data: dict) -> bool:
+        """Checks whether a card belongs to an excluded database.
+
+        Args:
+            card_id: The ID of the card being checked.
+            card_data: The card data dictionary.
+
+        Returns:
+            True if the card's database is in the configured exclusion list.
+        """
+        if not self.config.exclude_database_ids:
+            return False
+
+        db_id = self._resolve_card_database_id(card_data)
+        if db_id in self.config.exclude_database_ids:
+            self._excluded_cards.add(card_id)
+            logger.info(
+                f"Skipping card '{card_data.get('name', 'Unknown')}' (ID: {card_id}): "
+                f"database {db_id} is excluded"
+            )
+            return True
+
+        return False
+
+    @staticmethod
     def _extract_card_dependencies(card_data: dict) -> set[int]:
         """Extracts card IDs that this card depends on.
 
@@ -503,8 +549,8 @@ class ExportService:
             is_model_hint: Hint from collection listing that this is a model (model='dataset').
             dependency_chain: List of card IDs in the current dependency chain (for circular detection).
         """
-        # Skip if already exported
-        if card_id in self._exported_cards:
+        # Skip if already exported or already excluded
+        if card_id in self._exported_cards or card_id in self._excluded_cards:
             return
 
         # Initialize dependency chain if not provided
@@ -522,6 +568,10 @@ class ExportService:
 
         try:
             card_data = self.client.get_card(card_id)
+
+            # Skip cards from excluded databases before traversing their dependencies
+            if self._is_card_excluded(card_id, card_data):
+                return
 
             # Extract dependencies
             dependencies = self._extract_card_dependencies(card_data)
@@ -603,13 +653,16 @@ class ExportService:
             if card_data is None:
                 card_data = self.client.get_card(card_id)
 
+            if self._is_card_excluded(card_id, card_data):
+                return
+
             if not card_data.get("dataset_query"):
                 logger.warning(
                     f"Card ID {card_id} ('{card_data['name']}') has no dataset_query. Skipping."
                 )
                 return
 
-            db_id = card_data.get("database_id") or card_data["dataset_query"].get("database")
+            db_id = self._resolve_card_database_id(card_data)
             if db_id is None:
                 logger.warning(
                     f"Card ID {card_id} ('{card_data['name']}') has no database ID. Skipping."
@@ -707,7 +760,7 @@ class ExportService:
 
             # Export all card dependencies
             for card_id in card_ids:
-                if card_id not in self._exported_cards:
+                if card_id not in self._exported_cards and card_id not in self._excluded_cards:
                     logger.info(
                         f"     Exporting card {card_id} (required by dashboard {dashboard_id})"
                     )
