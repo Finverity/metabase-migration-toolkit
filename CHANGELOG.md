@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dashboard parameters pruned on update**: Metabase drops the dashboard-level parameters
+  that are referenced as `inline_parameters` by a dashcard when `parameters` and `dashcards`
+  are sent within the same `PUT /api/dashboard/:id`. The dashcards keep their references, but
+  the parameter definitions disappear, leaving dangling references and no filter rendered on
+  the card — on every update, including one with no changes, and re-applying a previous
+  version does not repair it. The parameters are now re-applied in a separate, isolated call
+  right after the full update, which the server accepts.
+
 ### Added
 
 - **`--exclude-databases` export flag**: Skip every card whose database is in a comma-separated
