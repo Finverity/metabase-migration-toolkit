@@ -333,9 +333,11 @@ class TestDashboardFilterImport:
             # Import dashboards
             importer._import_dashboards()
 
-            # Verify update_dashboard was called with remapped parameter_mappings
+            # Verify update_dashboard was called with remapped parameter_mappings.
+            # The full payload travels on the FIRST update call: a second call is
+            # issued afterwards with the parameters only (see DashboardHandler).
             assert mock_client.update_dashboard.called
-            update_payload = mock_client.update_dashboard.call_args[0][1]
+            update_payload = mock_client.update_dashboard.call_args_list[0][0][1]
 
             assert "dashcards" in update_payload
             dashcards = update_payload["dashcards"]
@@ -408,8 +410,8 @@ class TestDashboardFilterImport:
             # Import dashboards
             importer._import_dashboards()
 
-            # Verify parameter relationships are preserved
-            update_payload = mock_client.update_dashboard.call_args[0][1]
+            # Verify parameter relationships are preserved (full payload = first call)
+            update_payload = mock_client.update_dashboard.call_args_list[0][0][1]
             dashcards = update_payload["dashcards"]
 
             # Verify that parameter_id references match between parameters and mappings
@@ -541,8 +543,9 @@ class TestDashboardFilterImport:
             importer._import_dashboards()
 
             # Verify update_dashboard was called with display settings
+            # (full payload = first call, see DashboardHandler)
             assert mock_client.update_dashboard.called
-            update_payload = mock_client.update_dashboard.call_args[0][1]
+            update_payload = mock_client.update_dashboard.call_args_list[0][0][1]
 
             # Verify width setting is preserved
             assert "width" in update_payload
@@ -551,3 +554,126 @@ class TestDashboardFilterImport:
             # Verify auto_apply_filters setting is preserved
             assert "auto_apply_filters" in update_payload
             assert update_payload["auto_apply_filters"] is True
+
+    def test_import_dashboard_reapplies_parameters_in_separate_call(self, setup_import_test):
+        """Test that dashboard parameters are re-applied in a dedicated update call.
+
+        Metabase prunes the dashboard-level parameters that are referenced as
+        "inline_parameters" by a dashcard when parameters and dashcards are sent
+        within the same PUT. The dashcards keep their references, but the parameter
+        definitions disappear, leaving dangling references and no filter rendered on
+        the card. Sending the parameters in a separate, isolated call avoids this.
+        """
+        from lib.handlers.base import ImportContext
+
+        config = ImportConfig(
+            target_url="https://target.example.com",
+            export_dir=str(setup_import_test["export_dir"]),
+            db_map_path=str(setup_import_test["db_map_path"]),
+            dry_run=False,
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
+
+            created_dashboard = {"id": 301, "name": "Sales Dashboard with Filters"}
+            mock_client.create_dashboard.return_value = created_dashboard
+            mock_client.update_dashboard.return_value = created_dashboard
+
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+
+            importer._context = ImportContext(
+                config=importer.config,
+                client=importer.client,
+                manifest=importer.manifest,
+                export_dir=importer.export_dir,
+                id_mapper=importer._id_mapper,
+                query_remapper=importer._query_remapper,
+                report=importer.report,
+                target_collections=[],
+            )
+
+            importer._id_mapper.set_collection_mapping(1, 10)
+            importer._id_mapper.set_card_mapping(100, 200)
+            importer._id_mapper.set_card_mapping(101, 201)
+
+            importer._import_dashboards()
+
+            # Two update calls: the full payload, then the parameters on their own.
+            assert mock_client.update_dashboard.call_count == 2
+
+            full_payload = mock_client.update_dashboard.call_args_list[0][0][1]
+            assert "dashcards" in full_payload
+            assert "parameters" in full_payload
+
+            # The second call carries the parameters and nothing else, so that the
+            # server does not prune the ones referenced by a dashcard.
+            dashboard_id, params_payload = mock_client.update_dashboard.call_args_list[1][0]
+            assert dashboard_id == 301
+            assert list(params_payload.keys()) == ["parameters"]
+            assert params_payload["parameters"] == full_payload["parameters"]
+
+    def test_import_dashboard_skips_reapply_when_no_parameters(self, setup_import_test):
+        """Test that no extra update call is issued for a dashboard without parameters."""
+        from lib.handlers.base import ImportContext
+
+        # Strip the parameters from the exported dashboard.
+        dash_path = (
+            setup_import_test["export_dir"]
+            / "collections"
+            / "test"
+            / "dashboards"
+            / "dash_201_sales.json"
+        )
+        dash_data = read_json_file(dash_path)
+        dash_data["parameters"] = []
+        for dashcard in dash_data.get("dashcards", []):
+            dashcard["parameter_mappings"] = []
+        write_json_file(dash_data, dash_path)
+
+        config = ImportConfig(
+            target_url="https://target.example.com",
+            export_dir=str(setup_import_test["export_dir"]),
+            db_map_path=str(setup_import_test["db_map_path"]),
+            dry_run=False,
+            target_session_token="token",
+        )
+
+        with patch("lib.services.import_service.MetabaseClient") as mock_client_class:
+            mock_client = Mock()
+            mock_client.get_collections_tree.return_value = []
+            mock_client.get_collection_items.return_value = {"data": []}
+
+            created_dashboard = {"id": 301, "name": "Sales Dashboard with Filters"}
+            mock_client.create_dashboard.return_value = created_dashboard
+            mock_client.update_dashboard.return_value = created_dashboard
+
+            mock_client_class.return_value = mock_client
+
+            importer = MetabaseImporter(config)
+            importer._load_export_package()
+
+            importer._context = ImportContext(
+                config=importer.config,
+                client=importer.client,
+                manifest=importer.manifest,
+                export_dir=importer.export_dir,
+                id_mapper=importer._id_mapper,
+                query_remapper=importer._query_remapper,
+                report=importer.report,
+                target_collections=[],
+            )
+
+            importer._id_mapper.set_collection_mapping(1, 10)
+            importer._id_mapper.set_card_mapping(100, 200)
+            importer._id_mapper.set_card_mapping(101, 201)
+
+            importer._import_dashboards()
+
+            assert mock_client.update_dashboard.call_count == 1
