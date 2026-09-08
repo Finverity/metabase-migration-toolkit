@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Duplicate target detection**: The import now stops before writing anything when several
+  exported objects resolve to the same target object — the same name in the same collection for
+  collections, cards or dashboards. Previously only one of them reached the target (skipped or
+  overwritten depending on processing order) while the run reported `0 failed` and declared
+  success. The error lists each group with its source IDs. The new `--allow-duplicate-names`
+  flag (import and sync) downgrades it to a warning and keeps the previous behaviour.
+  Fixes [#80](https://github.com/Finverity/metabase-migration-toolkit/issues/80).
+- **`card_type` in the manifest**: Exports now record each card's Metabase `type` (`question`,
+  `model` or `metric`), so duplicate detection and the dry run can tell a metric from a question
+  of the same name. Older manifests without the field keep working.
 - **`--exclude-databases` export flag**: Skip every card whose database is in a comma-separated
   list of database IDs (e.g. `--exclude-databases "4,24,39"`). Useful for legacy instances with
   questions pointing to databases that no longer exist (such as the removed Google Analytics

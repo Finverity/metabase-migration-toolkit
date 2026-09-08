@@ -115,6 +115,13 @@ MODEL_TYPE_CARD = "card"
 MODEL_TYPE_DATASET = "dataset"
 MODEL_TYPE_DASHBOARD = "dashboard"
 
+# Map from card data 'type' field to Metabase collection API 'model' field
+CARD_TYPE_TO_MODEL: dict[str, str] = {
+    "question": MODEL_TYPE_CARD,
+    "metric": "metric",
+    "model": MODEL_TYPE_DATASET,
+}
+
 # Conflict resolution strategies
 CONFLICT_SKIP = "skip"
 CONFLICT_OVERWRITE = "overwrite"

@@ -27,6 +27,7 @@ from lib.models import (
     UnmappedDatabase,
 )
 from lib.remapping import IDMapper, QueryRemapper
+from lib.services.duplicate_check import find_duplicate_targets, format_duplicate_report
 from lib.utils import read_json_file, write_json_file
 from lib.version import validate_version_compatibility
 
@@ -280,6 +281,9 @@ class ImportService:
             raise ValueError("Unmapped databases found. Import cannot proceed.")
 
         logger.info("Database mappings are valid.")
+
+        self._check_for_duplicate_targets()
+
         logger.info("\n--- Import Plan ---")
         logger.info(f"Conflict Strategy: {self.config.conflict_strategy.upper()}")
 
@@ -314,6 +318,8 @@ class ImportService:
         if unmapped_dbs:
             self._log_unmapped_databases_error(unmapped_dbs)
             raise ValueError("Unmapped databases found. Import cannot proceed.")
+
+        self._check_for_duplicate_targets()
 
         # Validate and build mappings
         logger.info("Validating database mappings against target instance...")
@@ -475,6 +481,43 @@ class ImportService:
         logger.info("\nApplying permissions...")
         handler = PermissionsHandler(context)
         handler.import_permissions()
+
+    def _check_for_duplicate_targets(self) -> None:
+        """Fails the import when several exported objects share a target identity.
+
+        The importer matches target objects by name within a collection, so two
+        exported objects with the same name in the same collection resolve to the
+        same target object: one of them is silently skipped or overwritten, and
+        which one survives depends on processing order. Detecting this before the
+        first write keeps the choice from being made arbitrarily.
+
+        Raises:
+            ValueError: If duplicates are found and they are not explicitly allowed.
+        """
+        groups = find_duplicate_targets(self._get_manifest(), self.config.include_archived)
+        if not groups:
+            return
+
+        log = logger.warning if self.config.allow_duplicate_names else logger.error
+        log("=" * 80)
+        log("DUPLICATE TARGET OBJECTS FOUND!")
+        log("=" * 80)
+        for line in format_duplicate_report(groups):
+            log(line)
+        log("")
+
+        if self.config.allow_duplicate_names:
+            log("Continuing anyway because --allow-duplicate-names was given.")
+            log("=" * 80)
+            return
+
+        log("SOLUTION: remove or rename the duplicates in the source instance,")
+        log("or re-run with --allow-duplicate-names to import them anyway.")
+        log("=" * 80)
+        raise ValueError(
+            f"{len(groups)} group(s) of exported objects resolve to the same target object. "
+            "Import cannot proceed. Use --allow-duplicate-names to override."
+        )
 
     def _log_unmapped_databases_error(self, unmapped_dbs: list[UnmappedDatabase]) -> None:
         """Logs an error about unmapped databases."""

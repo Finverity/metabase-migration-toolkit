@@ -13,6 +13,41 @@ from lib.utils import clean_for_create, sanitize_filename
 logger = logging.getLogger("metabase_migration")
 
 
+def flatten_collection_tree(
+    collections: list[dict[str, Any]], parent_id: int | None = None
+) -> list[dict[str, Any]]:
+    """Recursively flattens a collection tree into a list.
+
+    Args:
+        collections: The collection tree.
+        parent_id: The parent collection ID.
+
+    Returns:
+        A flat list of collections, each with 'id', 'name' and 'parent_id'.
+    """
+    flat_list = []
+    for coll in collections:
+        # Skip root collection (special case)
+        if coll.get("id") == "root":
+            if "children" in coll:
+                flat_list.extend(flatten_collection_tree(coll["children"], None))
+            continue
+
+        # Add current collection with its parent_id
+        flat_coll = {
+            "id": coll["id"],
+            "name": coll["name"],
+            "parent_id": parent_id,
+        }
+        flat_list.append(flat_coll)
+
+        # Recursively process children
+        if "children" in coll and coll["children"]:
+            flat_list.extend(flatten_collection_tree(coll["children"], coll["id"]))
+
+    return flat_list
+
+
 class CollectionHandler(BaseHandler):
     """Handles import of collections."""
 
@@ -179,27 +214,7 @@ class CollectionHandler(BaseHandler):
         Returns:
             A flat list of collections.
         """
-        flat_list = []
-        for coll in collections:
-            # Skip root collection (special case)
-            if coll.get("id") == "root":
-                if "children" in coll:
-                    flat_list.extend(self._flatten_collection_tree(coll["children"], None))
-                continue
-
-            # Add current collection with its parent_id
-            flat_coll = {
-                "id": coll["id"],
-                "name": coll["name"],
-                "parent_id": parent_id,
-            }
-            flat_list.append(flat_coll)
-
-            # Recursively process children
-            if "children" in coll and coll["children"]:
-                flat_list.extend(self._flatten_collection_tree(coll["children"], coll["id"]))
-
-        return flat_list
+        return flatten_collection_tree(collections, parent_id)
 
     @staticmethod
     def find_collection_by_path(

@@ -341,6 +341,9 @@ MB_METABASE_VERSION=v56
 --db-map              Path to database mapping JSON file (required)
 --conflict            Conflict resolution: skip, overwrite, or rename
 --dry-run             Preview changes without applying them
+--allow-duplicate-names
+                      Continue when several exported objects resolve to the same
+                      target object (same name in the same collection)
 --log-level          Logging level: DEBUG, INFO, WARNING, ERROR
 ```
 

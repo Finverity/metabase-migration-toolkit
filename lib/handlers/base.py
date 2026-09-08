@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from lib.client import MetabaseClient
 from lib.config import ImportConfig
+from lib.constants import CARD_TYPE_TO_MODEL
 from lib.models import ImportReport, Manifest
 from lib.remapping.id_mapper import IDMapper
 from lib.remapping.query_remapper import QueryRemapper
@@ -17,12 +18,8 @@ logger = logging.getLogger("metabase_migration")
 # Default number of parallel workers for prefetching
 DEFAULT_PREFETCH_WORKERS = 5
 
-# Map from card data 'type' field to Metabase collection API 'model' field
-_CARD_TYPE_TO_MODEL: dict[str, str] = {
-    "question": "card",
-    "metric": "metric",
-    "model": "dataset",
-}
+# Backwards-compatible alias for the shared card type -> model mapping.
+_CARD_TYPE_TO_MODEL = CARD_TYPE_TO_MODEL
 
 
 @dataclass

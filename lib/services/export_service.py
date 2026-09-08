@@ -693,6 +693,7 @@ class ExportService:
                 checksum=checksum,
                 archived=card_data.get("archived", False),
                 dataset=is_model,
+                card_type=card_type,
             )
             self.manifest.cards.append(card_obj)
 

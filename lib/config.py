@@ -245,6 +245,7 @@ class ImportConfig(BaseModel):
     dry_run: bool = False
     include_archived: bool = False
     apply_permissions: bool = False
+    allow_duplicate_names: bool = False
     log_level: str = "INFO"
 
     @field_validator("target_url")
@@ -494,6 +495,13 @@ def get_import_args() -> ImportConfig:
         help="Apply permissions from the export (requires admin privileges)",
     )
     parser.add_argument(
+        "--allow-duplicate-names",
+        action="store_true",
+        help="Continue when several exported objects resolve to the same target "
+        "object (same name in the same collection). Only one of them would reach "
+        "the target",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -530,6 +538,7 @@ def get_import_args() -> ImportConfig:
             dry_run=args.dry_run,
             include_archived=args.include_archived,
             apply_permissions=args.apply_permissions,
+            allow_duplicate_names=args.allow_duplicate_names,
             log_level=args.log_level,
         )
     except ConfigValidationError as e:
@@ -578,6 +587,7 @@ class SyncConfig(BaseModel):
     conflict_strategy: Literal["skip", "overwrite", "rename"] = "skip"
     dry_run: bool = False
     apply_permissions: bool = False
+    allow_duplicate_names: bool = False
 
     @field_validator("source_url")
     @classmethod
@@ -728,6 +738,7 @@ class SyncConfig(BaseModel):
             dry_run=self.dry_run,
             include_archived=self.include_archived,
             apply_permissions=self.apply_permissions,
+            allow_duplicate_names=self.allow_duplicate_names,
             log_level=self.log_level,
         )
 
@@ -846,6 +857,13 @@ def get_sync_args() -> SyncConfig:
         action="store_true",
         help="Apply permissions from the export (requires admin privileges)",
     )
+    import_group.add_argument(
+        "--allow-duplicate-names",
+        action="store_true",
+        help="Continue when several exported objects resolve to the same target "
+        "object (same name in the same collection). Only one of them would reach "
+        "the target",
+    )
 
     args = parser.parse_args()
 
@@ -913,6 +931,7 @@ def get_sync_args() -> SyncConfig:
             conflict_strategy=args.conflict,
             dry_run=args.dry_run,
             apply_permissions=args.apply_permissions,
+            allow_duplicate_names=args.allow_duplicate_names,
             log_level=args.log_level,
         )
     except ConfigValidationError as e:

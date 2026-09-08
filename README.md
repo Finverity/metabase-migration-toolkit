@@ -289,7 +289,25 @@ metabase-import \
 - `--dry-run` - Preview changes without applying them
 - `--include-archived` - Include archived items in the import
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
+- `--allow-duplicate-names` - Continue when several exported objects resolve to the same target object
+  (see [Duplicate Names](#duplicate-names))
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+### Duplicate Names
+
+The importer matches target objects by name within a collection. Two exported objects with the same name in
+the same collection therefore resolve to the same target object: only one of them would reach the target, and
+which one depends on processing order.
+
+The import stops before writing anything when it detects such a group, listing the source IDs involved:
+
+```
+DUPLICATE TARGET OBJECTS FOUND!
+  - 2 dashboards named 'Dashboard Assistenza' in collection 12 (source IDs: 233, 234)
+```
+
+Remove or rename the duplicates in the source instance, or pass `--allow-duplicate-names` to import them
+anyway — in which case only one object per group reaches the target.
 
 ### 3. Syncing (Export + Import in One Operation)
 
@@ -369,6 +387,7 @@ metabase-sync \
 - `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
 - `--dry-run` - Perform a dry run without making any changes
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
+- `--allow-duplicate-names` - Continue when several exported objects resolve to the same target object
 
 ## Table & Field ID Remapping
 
