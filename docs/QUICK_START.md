@@ -340,7 +340,7 @@ MB_METABASE_VERSION=v56
 --export-dir          Directory with exported files (required)
 --db-map              Path to database mapping JSON file (required)
 --conflict            Conflict resolution: skip, overwrite, or rename
---dry-run             Preview changes without applying them
+--dry-run             Preview changes without applying them, resolved against the target
 --allow-duplicate-names
                       Continue when several exported objects resolve to the same
                       target object (same name in the same collection)

@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`--dry-run` is now target-aware**: The plan is resolved against the target instance and each
+  object is labelled `[CREATE]`, `[UPDATE]`, `[SKIP]` or `[RENAME]` according to the conflict
+  strategy, followed by a one-line summary. Previously every object was reported as `[CREATE]`
+  regardless of the target's contents, so the plan and the outcome disagreed completely on any
+  target that already held the objects, and an `overwrite` run could not be previewed at all.
+  The dry run reads from the target (collection tree, collection items, databases) but never
+  writes to it, and it now also validates the database mapping against the target.
+  Fixes [#81](https://github.com/Finverity/metabase-migration-toolkit/issues/81).
 - **Unit test coverage raised to 97.76%** (from 86.81%) and the enforced coverage threshold
   raised from 85% to 95%. New suites cover the previously untested branches of
   `lib/remapping/query_remapper.py` (64.79% → 99.86%), `lib/services/export_service.py`

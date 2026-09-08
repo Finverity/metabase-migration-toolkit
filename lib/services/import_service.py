@@ -20,6 +20,7 @@ from lib.models import (
     Collection,
     Dashboard,
     DatabaseMap,
+    ImportPlan,
     ImportReport,
     Manifest,
     ManifestMeta,
@@ -27,6 +28,7 @@ from lib.models import (
     UnmappedDatabase,
 )
 from lib.remapping import IDMapper, QueryRemapper
+from lib.services.dry_run import DryRunPlanner, format_plan
 from lib.services.duplicate_check import find_duplicate_targets, format_duplicate_report
 from lib.utils import read_json_file, write_json_file
 from lib.version import validate_version_compatibility
@@ -55,6 +57,8 @@ class ImportService:
         self.manifest: Manifest | None = None
         self.db_map: DatabaseMap | None = None
         self.report = ImportReport()
+        # Populated by a dry run with the plan resolved against the target.
+        self.plan: ImportPlan | None = None
 
         # These will be initialized after loading the manifest
         self._id_mapper: IDMapper | None = None
@@ -271,8 +275,12 @@ class ImportService:
         logger.error("=" * 80)
 
     def _perform_dry_run(self) -> None:
-        """Simulates the import process and reports on planned actions."""
-        manifest = self._get_manifest()
+        """Reports what the import would do, without writing to the target.
+
+        The plan is resolved against the target instance, so every object is
+        labelled the way the real run would handle it under the configured
+        conflict strategy.
+        """
         logger.info("--- Starting Dry Run ---")
 
         unmapped_dbs = self._validate_database_mappings()
@@ -281,28 +289,21 @@ class ImportService:
             raise ValueError("Unmapped databases found. Import cannot proceed.")
 
         logger.info("Database mappings are valid.")
+        self._validate_target_databases()
 
         self._check_for_duplicate_targets()
 
-        logger.info("\n--- Import Plan ---")
-        logger.info(f"Conflict Strategy: {self.config.conflict_strategy.upper()}")
+        logger.info("Resolving the export against the target instance...")
+        planner = DryRunPlanner(
+            manifest=self._get_manifest(),
+            client=self.client,
+            conflict_strategy=self.config.conflict_strategy,
+            include_archived=self.config.include_archived,
+        )
+        self.plan = planner.build_plan()
 
-        logger.info("\nCollections:")
-        for collection in sorted(manifest.collections, key=lambda c: c.path):
-            logger.info(f"  [CREATE] Collection '{collection.name}' at path '{collection.path}'")
-
-        logger.info("\nCards:")
-        for card in sorted(manifest.cards, key=lambda c: c.file_path):
-            if card.archived and not self.config.include_archived:
-                continue
-            logger.info(f"  [CREATE] Card '{card.name}' from '{card.file_path}'")
-
-        if manifest.dashboards:
-            logger.info("\nDashboards:")
-            for dash in sorted(manifest.dashboards, key=lambda d: d.file_path):
-                if dash.archived and not self.config.include_archived:
-                    continue
-                logger.info(f"  [CREATE] Dashboard '{dash.name}' from '{dash.file_path}'")
+        for line in format_plan(self.plan, self.config.conflict_strategy):
+            logger.info(line)
 
         logger.info("\n--- Dry Run Complete ---")
 

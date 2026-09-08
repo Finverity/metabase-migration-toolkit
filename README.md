@@ -286,12 +286,31 @@ metabase-import \
 - `--export-dir` - Directory with exported files (required)
 - `--db-map` - Path to database mapping JSON file (required)
 - `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
-- `--dry-run` - Preview changes without applying them
+- `--dry-run` - Preview changes without applying them (see [Dry Run](#dry-run))
 - `--include-archived` - Include archived items in the import
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
 - `--allow-duplicate-names` - Continue when several exported objects resolve to the same target object
   (see [Duplicate Names](#duplicate-names))
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+### Dry Run
+
+`--dry-run` resolves the export against the target instance and reports, for every object, the action the
+real run would take under the configured conflict strategy:
+
+```
+Collections:
+  [SKIP] Collection 'Reports' in 'root'
+
+Dashboards:
+  [UPDATE] Dashboard 'Overview' in 'collections/Reports'
+  [CREATE] Dashboard 'Revenue breakdown' in 'collections/Reports'
+
+Planned: 1 to create, 1 to skip, 1 to update.
+```
+
+The dry run reads from the target (collections, collection items and databases) but never writes to it. It
+also validates the database mapping against the target, so an unusable `db_map.json` fails before any import.
 
 ### Duplicate Names
 
@@ -385,7 +404,7 @@ metabase-sync \
 *Import Options:*
 
 - `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
-- `--dry-run` - Perform a dry run without making any changes
+- `--dry-run` - Perform a dry run without making any changes (see [Dry Run](#dry-run))
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
 - `--allow-duplicate-names` - Continue when several exported objects resolve to the same target object
 

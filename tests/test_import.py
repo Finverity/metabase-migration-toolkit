@@ -1185,12 +1185,16 @@ class TestRunImport:
             dry_run=True,
         )
 
-        with patch("lib.services.import_service.MetabaseClient"):
+        with patch("lib.services.import_service.MetabaseClient") as client_class:
+            client = _stub_empty_target(client_class.return_value)
             importer = MetabaseImporter(config)
             importer.run_import()
 
-            # Dry run should complete without making API calls
             assert importer.manifest is not None
+            # A dry run reads the target, but never writes to it.
+            client.create_collection.assert_not_called()
+            client.update_collection.assert_not_called()
+            assert [a.action for a in importer.plan.actions] == ["create"]
 
     def test_run_import_file_not_found(self, tmp_path):
         """Test run_import raises FileNotFoundError for missing manifest."""
@@ -1409,6 +1413,18 @@ class TestValidateMetabaseVersion:
             importer._validate_metabase_version()
 
 
+def _stub_empty_target(client):
+    """Stubs a reachable target instance holding nothing.
+
+    A dry run resolves the export against the target, so the read-only endpoints
+    it consults have to answer.
+    """
+    client.get_databases.return_value = [{"id": 10, "name": "Target DB"}]
+    client.get_collections_tree.return_value = []
+    client.get_collection_items.return_value = {"data": []}
+    return client
+
+
 class TestPerformDryRun:
     """Test suite for _perform_dry_run method."""
 
@@ -1496,10 +1512,15 @@ class TestPerformDryRun:
             dry_run=True,
         )
 
-        with patch("lib.services.import_service.MetabaseClient"):
+        with patch("lib.services.import_service.MetabaseClient") as client_class:
+            _stub_empty_target(client_class.return_value)
             importer = MetabaseImporter(config)
             importer.run_import()
-            # Should complete without errors
+
+        # The dashboard does not exist in the target, so it would be created.
+        assert [(a.entity_type, a.action) for a in importer.plan.actions] == [
+            ("dashboard", "create")
+        ]
 
     def test_dry_run_skips_archived_cards(self, tmp_path):
         """Test dry run skips archived cards when include_archived is False."""
@@ -1542,10 +1563,12 @@ class TestPerformDryRun:
             include_archived=False,
         )
 
-        with patch("lib.services.import_service.MetabaseClient"):
+        with patch("lib.services.import_service.MetabaseClient") as client_class:
+            _stub_empty_target(client_class.return_value)
             importer = MetabaseImporter(config)
             importer.run_import()
-            # Should complete without errors
+
+        assert importer.plan.actions == []
 
 
 class TestPerformImport:
