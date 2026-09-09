@@ -312,11 +312,15 @@ Planned: 1 to create, 1 to skip, 1 to update.
 The dry run reads from the target (collections, collection items and databases) but never writes to it. It
 also validates the database mapping against the target, so an unusable `db_map.json` fails before any import.
 
+**Breaking change:** `--dry-run` now requires reachable, valid target credentials (the same `--target-*` flags
+as a real import) — it previously ran fully offline. Pipelines that invoked `--dry-run` without target
+credentials need to supply them.
+
 ### Duplicate Names
 
-The importer matches target objects by name within a collection. Two exported objects with the same name in
-the same collection therefore resolve to the same target object: only one of them would reach the target, and
-which one depends on processing order.
+The importer matches target objects by name within a collection (and, for cards, by model — a card, dataset
+or metric). Two exported objects with the same identity therefore resolve to the same target object: only one
+of them would reach the target, and which one depends on processing order.
 
 The import stops before writing anything when it detects such a group, listing the source IDs involved:
 

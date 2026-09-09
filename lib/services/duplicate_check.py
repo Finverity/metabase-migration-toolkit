@@ -1,9 +1,10 @@
 """Pre-flight detection of export objects that collapse into one target object.
 
-The importer identifies target objects by name within a collection, so two
-exported objects sharing that identity resolve to the same target: one of them is
-overwritten or skipped, and which one survives depends on processing order. This
-module surfaces the ambiguity from the manifest alone, before anything is written.
+The importer identifies target objects by name within a collection (and, for
+cards, by model — a card, dataset or metric), so two exported objects sharing
+that identity resolve to the same target: one of them is overwritten or
+skipped, and which one survives depends on processing order. This module
+surfaces the ambiguity from the manifest alone, before anything is written.
 """
 
 import dataclasses

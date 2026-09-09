@@ -486,11 +486,12 @@ class ImportService:
     def _check_for_duplicate_targets(self) -> None:
         """Fails the import when several exported objects share a target identity.
 
-        The importer matches target objects by name within a collection, so two
-        exported objects with the same name in the same collection resolve to the
-        same target object: one of them is silently skipped or overwritten, and
-        which one survives depends on processing order. Detecting this before the
-        first write keeps the choice from being made arbitrarily.
+        The importer matches target objects by name within a collection (and, for
+        cards, by model — a card, dataset or metric), so two exported objects with
+        the same identity resolve to the same target object: one of them is
+        silently skipped or overwritten, and which one survives depends on
+        processing order. Detecting this before the first write keeps the choice
+        from being made arbitrarily.
 
         Raises:
             ValueError: If duplicates are found and they are not explicitly allowed.

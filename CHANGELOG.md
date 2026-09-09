@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   target that already held the objects, and an `overwrite` run could not be previewed at all.
   The dry run reads from the target (collection tree, collection items, databases) but never
   writes to it, and it now also validates the database mapping against the target.
+  **Breaking:** `--dry-run` now requires reachable, valid target credentials — it previously ran
+  fully offline.
   Fixes [#81](https://github.com/Finverity/metabase-migration-toolkit/issues/81).
 - **Unit test coverage raised to 97.76%** (from 86.81%) and the enforced coverage threshold
   raised from 85% to 95%. New suites cover the previously untested branches of
