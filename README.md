@@ -332,6 +332,12 @@ DUPLICATE TARGET OBJECTS FOUND!
 Remove or rename the duplicates in the source instance, or pass `--allow-duplicate-names` to import them
 anyway — in which case only one object per group reaches the target.
 
+**Legacy exports:** packages produced before `card_type` was recorded in the manifest (toolkit 1.3.0 and
+earlier) only note whether a card is a model, so a metric and a question sharing a name in the same
+collection are reported as a duplicate even though the importer treats them as distinct objects. The check
+errs towards over-reporting and never lets a real collision through; use `--allow-duplicate-names` to import
+such a package, or re-export it with the current version to remove the ambiguity.
+
 ### 3. Syncing (Export + Import in One Operation)
 
 The `metabase-sync` command combines export and import into a single operation, making it easy to synchronize

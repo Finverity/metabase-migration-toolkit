@@ -50,7 +50,12 @@ def card_target_model(card: Card) -> str:
     """
     if card.card_type:
         return CARD_TYPE_TO_MODEL.get(card.card_type, MODEL_TYPE_CARD)
-    # Exports predating the card_type field only record whether a card is a model.
+    # Exports predating the card_type field only record whether a card is a model,
+    # so a metric collapses onto "card" here while the importer — which reads the
+    # type from the card file — keeps the two apart. The check therefore
+    # over-reports on those exports (a metric and a question of the same name in
+    # one collection look like a collision) and never misses a real one;
+    # --allow-duplicate-names is the escape hatch, or re-export to record the type.
     return MODEL_TYPE_DATASET if card.dataset else MODEL_TYPE_CARD
 
 
