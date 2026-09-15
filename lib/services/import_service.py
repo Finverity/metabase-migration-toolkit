@@ -488,15 +488,20 @@ class ImportService:
 
         The importer matches target objects by name within a collection (and, for
         cards, by model — a card, dataset or metric), so two exported objects with
-        the same identity resolve to the same target object: one of them is
-        silently skipped or overwritten, and which one survives depends on
-        processing order. Detecting this before the first write keeps the choice
-        from being made arbitrarily.
+        the same identity resolve to the same target object: under ``skip`` and
+        ``overwrite`` one of them is silently skipped or overwritten, and which one
+        survives depends on processing order. Under ``rename`` cards and dashboards
+        are renamed instead, so only colliding collections are checked. Detecting
+        this before the first write keeps the choice from being made arbitrarily.
 
         Raises:
             ValueError: If duplicates are found and they are not explicitly allowed.
         """
-        groups = find_duplicate_targets(self._get_manifest(), self.config.include_archived)
+        groups = find_duplicate_targets(
+            self._get_manifest(),
+            self.config.include_archived,
+            self.config.conflict_strategy,
+        )
         if not groups:
             return
 

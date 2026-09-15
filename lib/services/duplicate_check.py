@@ -2,14 +2,24 @@
 
 The importer identifies target objects by name within a collection (and, for
 cards, by model — a card, dataset or metric), so two exported objects sharing
-that identity resolve to the same target: one of them is overwritten or
-skipped, and which one survives depends on processing order. This module
-surfaces the ambiguity from the manifest alone, before anything is written.
+that identity resolve to the same target: under the ``skip`` and ``overwrite``
+strategies one of them is overwritten or skipped, and which one survives
+depends on processing order. Under ``rename`` the importer gives colliding
+cards and dashboards a fresh name instead, so both reach the target; only
+sibling collections still merge, because rename reuses the existing collection
+as the container. This module surfaces the ambiguity from the manifest alone,
+before anything is written.
 """
 
 import dataclasses
 
-from lib.constants import CARD_TYPE_TO_MODEL, MODEL_TYPE_CARD, MODEL_TYPE_DATASET
+from lib.constants import (
+    CARD_TYPE_TO_MODEL,
+    CONFLICT_RENAME,
+    CONFLICT_SKIP,
+    MODEL_TYPE_CARD,
+    MODEL_TYPE_DATASET,
+)
 from lib.models import Card, Manifest
 
 # Order used when reporting groups, mirroring the order entities are imported in.
@@ -60,13 +70,18 @@ def card_target_model(card: Card) -> str:
 
 
 def find_duplicate_targets(
-    manifest: Manifest, include_archived: bool = False
+    manifest: Manifest,
+    include_archived: bool = False,
+    conflict_strategy: str = CONFLICT_SKIP,
 ) -> list[DuplicateGroup]:
-    """Finds exported objects that share a target identity.
+    """Finds exported objects that would collapse into one target object.
 
     Args:
         manifest: The parsed export manifest.
         include_archived: Whether archived objects are part of the import.
+        conflict_strategy: The configured conflict strategy. Under ``rename``
+            colliding cards and dashboards are renamed rather than merged, so
+            only collection groups are reported.
 
     Returns:
         Duplicate groups ordered by entity type, then name.
@@ -81,6 +96,9 @@ def find_duplicate_targets(
             [(c.parent_id, c.name, "collection", c.id) for c in manifest.collections],
         )
     )
+    if conflict_strategy == CONFLICT_RENAME:
+        return sorted(groups, key=lambda g: g.name)
+
     groups.extend(
         _group_by_identity(
             "card",
@@ -147,6 +165,7 @@ def format_duplicate_report(groups: list[DuplicateGroup]) -> list[str]:
         "The export contains objects that resolve to the same target object.",
         "Only one of each group would reach the target; the others would be",
         "skipped or overwritten, depending on processing order.",
+        "(--conflict rename resolves this for cards and dashboards, not collections.)",
         "",
     ]
     lines.extend(f"  - {group.describe()}" for group in groups)

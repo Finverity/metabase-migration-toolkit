@@ -17,6 +17,7 @@ from lib.constants import (
     MODEL_TYPE_CARD,
     MODEL_TYPE_DASHBOARD,
     MODEL_TYPE_DATASET,
+    MODEL_TYPE_METRIC,
     ROOT_COLLECTION,
 )
 from lib.handlers.collection import flatten_collection_tree
@@ -25,7 +26,7 @@ from lib.models import Card, Dashboard, ImportAction, ImportPlan, Manifest
 logger = logging.getLogger("metabase_migration")
 
 # Models a card may match when the export does not record its type.
-_ANY_CARD_MODEL = frozenset({MODEL_TYPE_CARD, MODEL_TYPE_DATASET, "metric"})
+_ANY_CARD_MODEL = frozenset({MODEL_TYPE_CARD, MODEL_TYPE_DATASET, MODEL_TYPE_METRIC})
 
 PlanAction = Literal["create", "update", "skip", "rename"]
 

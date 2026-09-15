@@ -498,8 +498,8 @@ def get_import_args() -> ImportConfig:
         "--allow-duplicate-names",
         action="store_true",
         help="Continue when several exported objects resolve to the same target "
-        "object (same name in the same collection). Only one of them would reach "
-        "the target",
+        "object (same name and, for cards, type in the same collection). Only one "
+        "of them would reach the target unless --conflict rename is used",
     )
     parser.add_argument(
         "--log-level",
@@ -861,8 +861,8 @@ def get_sync_args() -> SyncConfig:
         "--allow-duplicate-names",
         action="store_true",
         help="Continue when several exported objects resolve to the same target "
-        "object (same name in the same collection). Only one of them would reach "
-        "the target",
+        "object (same name and, for cards, type in the same collection). Only one "
+        "of them would reach the target unless --conflict rename is used",
     )
 
     args = parser.parse_args()

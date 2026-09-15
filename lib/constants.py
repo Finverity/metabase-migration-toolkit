@@ -113,12 +113,13 @@ BUILTIN_PERMISSION_GROUPS = frozenset({"All Users", "Administrators"})
 # Model types in Metabase API
 MODEL_TYPE_CARD = "card"
 MODEL_TYPE_DATASET = "dataset"
+MODEL_TYPE_METRIC = "metric"
 MODEL_TYPE_DASHBOARD = "dashboard"
 
 # Map from card data 'type' field to Metabase collection API 'model' field
 CARD_TYPE_TO_MODEL: dict[str, str] = {
     "question": MODEL_TYPE_CARD,
-    "metric": "metric",
+    "metric": MODEL_TYPE_METRIC,
     "model": MODEL_TYPE_DATASET,
 }
 

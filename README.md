@@ -319,8 +319,11 @@ credentials need to supply them.
 ### Duplicate Names
 
 The importer matches target objects by name within a collection (and, for cards, by model — a card, dataset
-or metric). Two exported objects with the same identity therefore resolve to the same target object: only one
-of them would reach the target, and which one depends on processing order.
+or metric). Two exported objects with the same identity therefore resolve to the same target object: under
+`--conflict skip` or `--conflict overwrite` only one of them would reach the target, and which one depends on
+processing order. Under `--conflict rename` the importer gives colliding cards and dashboards a new name
+(`Name (1)`), so both reach the target and the check only covers collections, which rename merges into the
+existing one.
 
 The import stops before writing anything when it detects such a group, listing the source IDs involved:
 
@@ -329,8 +332,8 @@ DUPLICATE TARGET OBJECTS FOUND!
   - 2 dashboards named 'Dashboard Assistenza' in collection 12 (source IDs: 233, 234)
 ```
 
-Remove or rename the duplicates in the source instance, or pass `--allow-duplicate-names` to import them
-anyway — in which case only one object per group reaches the target.
+Remove or rename the duplicates in the source instance, switch to `--conflict rename`, or pass
+`--allow-duplicate-names` to import them anyway — in which case only one object per group reaches the target.
 
 **Legacy exports:** packages produced before `card_type` was recorded in the manifest (toolkit 1.3.0 and
 earlier) only note whether a card is a model, so a metric and a question sharing a name in the same

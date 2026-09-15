@@ -180,6 +180,44 @@ class TestArchivedHandling:
         assert len(find_duplicate_targets(manifest, include_archived=True)) == 1
 
 
+class TestRenameStrategy:
+    """Under --conflict rename the importer gives colliding cards and dashboards a
+    new name, so both reach the target and there is nothing to warn about.
+    Collections are different: rename reuses the existing collection."""
+
+    def test_duplicate_dashboards_are_not_reported_under_rename(self):
+        manifest = make_manifest(dashboards=[dashboard(1, "D"), dashboard(2, "D")])
+
+        assert find_duplicate_targets(manifest, conflict_strategy="rename") == []
+
+    def test_duplicate_cards_are_not_reported_under_rename(self):
+        manifest = make_manifest(
+            cards=[card(1, "Revenue", card_type="question"), card(2, "Revenue", "question")]
+        )
+
+        assert find_duplicate_targets(manifest, conflict_strategy="rename") == []
+
+    def test_duplicate_collections_are_still_reported_under_rename(self):
+        manifest = make_manifest(
+            collections=[collection(1, "Reports", parent_id=5), collection(2, "Reports", 5)]
+        )
+
+        groups = find_duplicate_targets(manifest, conflict_strategy="rename")
+
+        assert [g.entity_type for g in groups] == ["collection"]
+
+    @pytest.mark.parametrize("strategy", ["skip", "overwrite"])
+    def test_other_strategies_still_report_cards_and_dashboards(self, strategy):
+        manifest = make_manifest(
+            cards=[card(1, "C"), card(2, "C")],
+            dashboards=[dashboard(3, "D"), dashboard(4, "D")],
+        )
+
+        groups = find_duplicate_targets(manifest, conflict_strategy=strategy)
+
+        assert [g.entity_type for g in groups] == ["card", "dashboard"]
+
+
 class TestReporting:
     """The groups must be describable for the operator."""
 
@@ -220,7 +258,7 @@ class TestImportServiceGuard:
     """The importer must refuse to write an ambiguous export by default."""
 
     @staticmethod
-    def _service(tmp_path, manifest, allow_duplicate_names=False):
+    def _service(tmp_path, manifest, allow_duplicate_names=False, conflict_strategy="skip"):
         from unittest.mock import patch
 
         from lib.config import ImportConfig
@@ -232,6 +270,7 @@ class TestImportServiceGuard:
             db_map_path=str(tmp_path / "db_map.json"),
             target_session_token="token",  # pragma: allowlist secret
             allow_duplicate_names=allow_duplicate_names,
+            conflict_strategy=conflict_strategy,
         )
         with patch("lib.services.import_service.MetabaseClient"):
             service = ImportService(config)
@@ -265,6 +304,22 @@ class TestImportServiceGuard:
         service = self._service(tmp_path, manifest)
 
         service._check_for_duplicate_targets()
+
+    def test_rename_strategy_lets_duplicate_dashboards_through(self, tmp_path):
+        """The rename strategy already resolves the collision by renaming the second one."""
+        manifest = make_manifest(dashboards=[dashboard(1, "D"), dashboard(2, "D")])
+        service = self._service(tmp_path, manifest, conflict_strategy="rename")
+
+        service._check_for_duplicate_targets()
+
+    def test_rename_strategy_still_raises_for_duplicate_collections(self, tmp_path):
+        manifest = make_manifest(
+            collections=[collection(1, "Reports", parent_id=5), collection(2, "Reports", 5)]
+        )
+        service = self._service(tmp_path, manifest, conflict_strategy="rename")
+
+        with pytest.raises(ValueError, match="same target object"):
+            service._check_for_duplicate_targets()
 
 
 if __name__ == "__main__":

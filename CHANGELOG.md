@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   collections, cards or dashboards. Previously only one of them reached the target (skipped or
   overwritten depending on processing order) while the run reported `0 failed` and declared
   success. The error lists each group with its source IDs. The new `--allow-duplicate-names`
-  flag (import and sync) downgrades it to a warning and keeps the previous behaviour.
+  flag (import and sync) downgrades it to a warning and keeps the previous behaviour. Under
+  `--conflict rename` cards and dashboards are renamed rather than merged, so only colliding
+  collections are checked.
   Fixes [#80](https://github.com/Finverity/metabase-migration-toolkit/issues/80).
 - **`card_type` in the manifest**: Exports now record each card's Metabase `type` (`question`,
   `model` or `metric`), so duplicate detection and the dry run can tell a metric from a question
