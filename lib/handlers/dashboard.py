@@ -104,6 +104,21 @@ class DashboardHandler(BaseHandler):
             )
             updated_dash = self.client.update_dashboard(dashboard_id, update_payload)
 
+            # Metabase prunes the dashboard-level parameters that are referenced as
+            # "inline_parameters" by a dashcard when parameters and dashcards are sent
+            # within the same PUT: the dashcards keep their references, but the parameter
+            # definitions disappear, leaving dangling references and no filter rendered
+            # on the card. The very same parameters are accepted when sent in a separate,
+            # isolated call, so re-apply them here.
+            if update_payload.get("parameters"):
+                self.client.update_dashboard(
+                    dashboard_id, {"parameters": update_payload["parameters"]}
+                )
+                logger.debug(
+                    "Re-applied %d dashboard parameters in a separate call",
+                    len(update_payload["parameters"]),
+                )
+
             self._add_report_item(
                 "dashboard",
                 cast(
