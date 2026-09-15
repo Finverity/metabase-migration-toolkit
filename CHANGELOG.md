@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Duplicate target detection**: The import now stops before writing anything when several
+  exported objects resolve to the same target object — the same name in the same collection for
+  collections, cards or dashboards. Previously only one of them reached the target (skipped or
+  overwritten depending on processing order) while the run reported `0 failed` and declared
+  success. The error lists each group with its source IDs. The new `--allow-duplicate-names`
+  flag (import and sync) downgrades it to a warning and keeps the previous behaviour. Under
+  `--conflict rename` cards and dashboards are renamed rather than merged, so only colliding
+  collections are checked.
+  Fixes [#80](https://github.com/Finverity/metabase-migration-toolkit/issues/80).
+- **`card_type` in the manifest**: Exports now record each card's Metabase `type` (`question`,
+  `model` or `metric`), so duplicate detection and the dry run can tell a metric from a question
+  of the same name. Older manifests without the field keep working.
 - **`--exclude-databases` export flag**: Skip every card whose database is in a comma-separated
   list of database IDs (e.g. `--exclude-databases "4,24,39"`). Useful for legacy instances with
   questions pointing to databases that no longer exist (such as the removed Google Analytics
@@ -19,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`--dry-run` is now target-aware**: The plan is resolved against the target instance and each
+  object is labelled `[CREATE]`, `[UPDATE]`, `[SKIP]` or `[RENAME]` according to the conflict
+  strategy, followed by a one-line summary. Previously every object was reported as `[CREATE]`
+  regardless of the target's contents, so the plan and the outcome disagreed completely on any
+  target that already held the objects, and an `overwrite` run could not be previewed at all.
+  The dry run reads from the target (collection tree, collection items, databases) but never
+  writes to it, and it now also validates the database mapping against the target.
+  **Breaking:** `--dry-run` now requires reachable, valid target credentials — it previously ran
+  fully offline.
+  Fixes [#81](https://github.com/Finverity/metabase-migration-toolkit/issues/81).
 - **Unit test coverage raised to 97.76%** (from 86.81%) and the enforced coverage threshold
   raised from 85% to 95%. New suites cover the previously untested branches of
   `lib/remapping/query_remapper.py` (64.79% → 99.86%), `lib/services/export_service.py`

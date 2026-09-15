@@ -1,0 +1,172 @@
+"""Pre-flight detection of export objects that collapse into one target object.
+
+The importer identifies target objects by name within a collection (and, for
+cards, by model — a card, dataset or metric), so two exported objects sharing
+that identity resolve to the same target: under the ``skip`` and ``overwrite``
+strategies one of them is overwritten or skipped, and which one survives
+depends on processing order. Under ``rename`` the importer gives colliding
+cards and dashboards a fresh name instead, so both reach the target; only
+sibling collections still merge, because rename reuses the existing collection
+as the container. This module surfaces the ambiguity from the manifest alone,
+before anything is written.
+"""
+
+import dataclasses
+
+from lib.constants import (
+    CARD_TYPE_TO_MODEL,
+    CONFLICT_RENAME,
+    CONFLICT_SKIP,
+    MODEL_TYPE_CARD,
+    MODEL_TYPE_DATASET,
+)
+from lib.models import Card, Manifest
+
+# Order used when reporting groups, mirroring the order entities are imported in.
+_ENTITY_ORDER = {"collection": 0, "card": 1, "dashboard": 2}
+
+
+@dataclasses.dataclass(frozen=True)
+class DuplicateGroup:
+    """A set of exported objects that resolve to a single target object."""
+
+    entity_type: str
+    name: str
+    collection_id: int | None
+    source_ids: tuple[int, ...]
+
+    def describe(self) -> str:
+        """Returns a single-line, operator-facing description of the collision."""
+        location = (
+            "the root collection"
+            if self.collection_id is None
+            else (f"collection {self.collection_id}")
+        )
+        ids = ", ".join(str(source_id) for source_id in self.source_ids)
+        return (
+            f"{len(self.source_ids)} {self.entity_type}s named '{self.name}' in "
+            f"{location} (source IDs: {ids})"
+        )
+
+
+def card_target_model(card: Card) -> str:
+    """Returns the Metabase model a card is matched against in the target.
+
+    Args:
+        card: The manifest card entry.
+
+    Returns:
+        The model name used for conflict lookup ("card", "dataset" or "metric").
+    """
+    if card.card_type:
+        return CARD_TYPE_TO_MODEL.get(card.card_type, MODEL_TYPE_CARD)
+    # Exports predating the card_type field only record whether a card is a model,
+    # so a metric collapses onto "card" here while the importer — which reads the
+    # type from the card file — keeps the two apart. The check therefore
+    # over-reports on those exports (a metric and a question of the same name in
+    # one collection look like a collision) and never misses a real one;
+    # --allow-duplicate-names is the escape hatch, or re-export to record the type.
+    return MODEL_TYPE_DATASET if card.dataset else MODEL_TYPE_CARD
+
+
+def find_duplicate_targets(
+    manifest: Manifest,
+    include_archived: bool = False,
+    conflict_strategy: str = CONFLICT_SKIP,
+) -> list[DuplicateGroup]:
+    """Finds exported objects that would collapse into one target object.
+
+    Args:
+        manifest: The parsed export manifest.
+        include_archived: Whether archived objects are part of the import.
+        conflict_strategy: The configured conflict strategy. Under ``rename``
+            colliding cards and dashboards are renamed rather than merged, so
+            only collection groups are reported.
+
+    Returns:
+        Duplicate groups ordered by entity type, then name.
+    """
+    groups: list[DuplicateGroup] = []
+
+    groups.extend(
+        _group_by_identity(
+            # Collections are matched by name and parent, so the parent stands in
+            # for the containing collection.
+            "collection",
+            [(c.parent_id, c.name, "collection", c.id) for c in manifest.collections],
+        )
+    )
+    if conflict_strategy == CONFLICT_RENAME:
+        return sorted(groups, key=lambda g: g.name)
+
+    groups.extend(
+        _group_by_identity(
+            "card",
+            [
+                (c.collection_id, c.name, card_target_model(c), c.id)
+                for c in manifest.cards
+                if include_archived or not c.archived
+            ],
+        )
+    )
+    groups.extend(
+        _group_by_identity(
+            "dashboard",
+            [
+                (d.collection_id, d.name, "dashboard", d.id)
+                for d in manifest.dashboards
+                if include_archived or not d.archived
+            ],
+        )
+    )
+
+    return sorted(groups, key=lambda g: (_ENTITY_ORDER[g.entity_type], g.name))
+
+
+def _group_by_identity(
+    entity_type: str,
+    entries: list[tuple[int | None, str, str, int]],
+) -> list[DuplicateGroup]:
+    """Groups entries that share a (collection, name, model) identity.
+
+    Args:
+        entity_type: The entity type being grouped.
+        entries: Tuples of (collection_id, name, target_model, source_id).
+
+    Returns:
+        The groups holding more than one source object.
+    """
+    by_identity: dict[tuple[int | None, str, str], list[int]] = {}
+    for collection_id, name, target_model, source_id in entries:
+        by_identity.setdefault((collection_id, name, target_model), []).append(source_id)
+
+    return [
+        DuplicateGroup(
+            entity_type=entity_type,
+            name=name,
+            collection_id=collection_id,
+            source_ids=tuple(sorted(source_ids)),
+        )
+        for (collection_id, name, _model), source_ids in by_identity.items()
+        if len(source_ids) > 1
+    ]
+
+
+def format_duplicate_report(groups: list[DuplicateGroup]) -> list[str]:
+    """Formats duplicate groups as log lines explaining the consequence.
+
+    Args:
+        groups: The duplicate groups to report.
+
+    Returns:
+        A list of log lines.
+    """
+    lines = [
+        "The export contains objects that resolve to the same target object.",
+        "Only one of each group would reach the target; the others would be",
+        "skipped or overwritten, depending on processing order.",
+        "(--conflict rename resolves this for cards and dashboards, not collections.)",
+        "",
+    ]
+    lines.extend(f"  - {group.describe()}" for group in groups)
+    return lines

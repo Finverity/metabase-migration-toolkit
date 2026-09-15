@@ -37,6 +37,7 @@ class Card:
     archived: bool = False
     dataset_query: dict[str, Any] | None = None
     dataset: bool = False  # True if this card is a model (dataset)
+    card_type: str | None = None  # Metabase 'type' field: question, model or metric
 
 
 @dataclasses.dataclass

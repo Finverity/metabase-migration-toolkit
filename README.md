@@ -286,10 +286,60 @@ metabase-import \
 - `--export-dir` - Directory with exported files (required)
 - `--db-map` - Path to database mapping JSON file (required)
 - `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
-- `--dry-run` - Preview changes without applying them
+- `--dry-run` - Preview changes without applying them (see [Dry Run](#dry-run))
 - `--include-archived` - Include archived items in the import
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
+- `--allow-duplicate-names` - Continue when several exported objects resolve to the same target object
+  (see [Duplicate Names](#duplicate-names))
 - `--log-level` - Logging level: DEBUG, INFO, WARNING, ERROR
+
+### Dry Run
+
+`--dry-run` resolves the export against the target instance and reports, for every object, the action the
+real run would take under the configured conflict strategy:
+
+```
+Collections:
+  [SKIP] Collection 'Reports' in 'root'
+
+Dashboards:
+  [UPDATE] Dashboard 'Overview' in 'collections/Reports'
+  [CREATE] Dashboard 'Revenue breakdown' in 'collections/Reports'
+
+Planned: 1 to create, 1 to skip, 1 to update.
+```
+
+The dry run reads from the target (collections, collection items and databases) but never writes to it. It
+also validates the database mapping against the target, so an unusable `db_map.json` fails before any import.
+
+**Breaking change:** `--dry-run` now requires reachable, valid target credentials (the same `--target-*` flags
+as a real import) — it previously ran fully offline. Pipelines that invoked `--dry-run` without target
+credentials need to supply them.
+
+### Duplicate Names
+
+The importer matches target objects by name within a collection (and, for cards, by model — a card, dataset
+or metric). Two exported objects with the same identity therefore resolve to the same target object: under
+`--conflict skip` or `--conflict overwrite` only one of them would reach the target, and which one depends on
+processing order. Under `--conflict rename` the importer gives colliding cards and dashboards a new name
+(`Name (1)`), so both reach the target and the check only covers collections, which rename merges into the
+existing one.
+
+The import stops before writing anything when it detects such a group, listing the source IDs involved:
+
+```
+DUPLICATE TARGET OBJECTS FOUND!
+  - 2 dashboards named 'Dashboard Assistenza' in collection 12 (source IDs: 233, 234)
+```
+
+Remove or rename the duplicates in the source instance, switch to `--conflict rename`, or pass
+`--allow-duplicate-names` to import them anyway — in which case only one object per group reaches the target.
+
+**Legacy exports:** packages produced before `card_type` was recorded in the manifest (toolkit 1.3.0 and
+earlier) only note whether a card is a model, so a metric and a question sharing a name in the same
+collection are reported as a duplicate even though the importer treats them as distinct objects. The check
+errs towards over-reporting and never lets a real collision through; use `--allow-duplicate-names` to import
+such a package, or re-export it with the current version to remove the ambiguity.
 
 ### 3. Syncing (Export + Import in One Operation)
 
@@ -367,8 +417,9 @@ metabase-sync \
 *Import Options:*
 
 - `--conflict` - Conflict resolution: `skip`, `overwrite`, or `rename` (default: skip)
-- `--dry-run` - Perform a dry run without making any changes
+- `--dry-run` - Perform a dry run without making any changes (see [Dry Run](#dry-run))
 - `--apply-permissions` - Apply permissions from the export (requires admin privileges)
+- `--allow-duplicate-names` - Continue when several exported objects resolve to the same target object
 
 ## Table & Field ID Remapping
 

@@ -20,6 +20,7 @@ from lib.models import (
     Collection,
     Dashboard,
     DatabaseMap,
+    ImportPlan,
     ImportReport,
     Manifest,
     ManifestMeta,
@@ -27,6 +28,8 @@ from lib.models import (
     UnmappedDatabase,
 )
 from lib.remapping import IDMapper, QueryRemapper
+from lib.services.dry_run import DryRunPlanner, format_plan
+from lib.services.duplicate_check import find_duplicate_targets, format_duplicate_report
 from lib.utils import read_json_file, write_json_file
 from lib.version import validate_version_compatibility
 
@@ -54,6 +57,8 @@ class ImportService:
         self.manifest: Manifest | None = None
         self.db_map: DatabaseMap | None = None
         self.report = ImportReport()
+        # Populated by a dry run with the plan resolved against the target.
+        self.plan: ImportPlan | None = None
 
         # These will be initialized after loading the manifest
         self._id_mapper: IDMapper | None = None
@@ -270,8 +275,12 @@ class ImportService:
         logger.error("=" * 80)
 
     def _perform_dry_run(self) -> None:
-        """Simulates the import process and reports on planned actions."""
-        manifest = self._get_manifest()
+        """Reports what the import would do, without writing to the target.
+
+        The plan is resolved against the target instance, so every object is
+        labelled the way the real run would handle it under the configured
+        conflict strategy.
+        """
         logger.info("--- Starting Dry Run ---")
 
         unmapped_dbs = self._validate_database_mappings()
@@ -280,25 +289,21 @@ class ImportService:
             raise ValueError("Unmapped databases found. Import cannot proceed.")
 
         logger.info("Database mappings are valid.")
-        logger.info("\n--- Import Plan ---")
-        logger.info(f"Conflict Strategy: {self.config.conflict_strategy.upper()}")
+        self._validate_target_databases()
 
-        logger.info("\nCollections:")
-        for collection in sorted(manifest.collections, key=lambda c: c.path):
-            logger.info(f"  [CREATE] Collection '{collection.name}' at path '{collection.path}'")
+        self._check_for_duplicate_targets()
 
-        logger.info("\nCards:")
-        for card in sorted(manifest.cards, key=lambda c: c.file_path):
-            if card.archived and not self.config.include_archived:
-                continue
-            logger.info(f"  [CREATE] Card '{card.name}' from '{card.file_path}'")
+        logger.info("Resolving the export against the target instance...")
+        planner = DryRunPlanner(
+            manifest=self._get_manifest(),
+            client=self.client,
+            conflict_strategy=self.config.conflict_strategy,
+            include_archived=self.config.include_archived,
+        )
+        self.plan = planner.build_plan()
 
-        if manifest.dashboards:
-            logger.info("\nDashboards:")
-            for dash in sorted(manifest.dashboards, key=lambda d: d.file_path):
-                if dash.archived and not self.config.include_archived:
-                    continue
-                logger.info(f"  [CREATE] Dashboard '{dash.name}' from '{dash.file_path}'")
+        for line in format_plan(self.plan, self.config.conflict_strategy):
+            logger.info(line)
 
         logger.info("\n--- Dry Run Complete ---")
 
@@ -314,6 +319,8 @@ class ImportService:
         if unmapped_dbs:
             self._log_unmapped_databases_error(unmapped_dbs)
             raise ValueError("Unmapped databases found. Import cannot proceed.")
+
+        self._check_for_duplicate_targets()
 
         # Validate and build mappings
         logger.info("Validating database mappings against target instance...")
@@ -475,6 +482,49 @@ class ImportService:
         logger.info("\nApplying permissions...")
         handler = PermissionsHandler(context)
         handler.import_permissions()
+
+    def _check_for_duplicate_targets(self) -> None:
+        """Fails the import when several exported objects share a target identity.
+
+        The importer matches target objects by name within a collection (and, for
+        cards, by model — a card, dataset or metric), so two exported objects with
+        the same identity resolve to the same target object: under ``skip`` and
+        ``overwrite`` one of them is silently skipped or overwritten, and which one
+        survives depends on processing order. Under ``rename`` cards and dashboards
+        are renamed instead, so only colliding collections are checked. Detecting
+        this before the first write keeps the choice from being made arbitrarily.
+
+        Raises:
+            ValueError: If duplicates are found and they are not explicitly allowed.
+        """
+        groups = find_duplicate_targets(
+            self._get_manifest(),
+            self.config.include_archived,
+            self.config.conflict_strategy,
+        )
+        if not groups:
+            return
+
+        log = logger.warning if self.config.allow_duplicate_names else logger.error
+        log("=" * 80)
+        log("DUPLICATE TARGET OBJECTS FOUND!")
+        log("=" * 80)
+        for line in format_duplicate_report(groups):
+            log(line)
+        log("")
+
+        if self.config.allow_duplicate_names:
+            log("Continuing anyway because --allow-duplicate-names was given.")
+            log("=" * 80)
+            return
+
+        log("SOLUTION: remove or rename the duplicates in the source instance,")
+        log("or re-run with --allow-duplicate-names to import them anyway.")
+        log("=" * 80)
+        raise ValueError(
+            f"{len(groups)} group(s) of exported objects resolve to the same target object. "
+            "Import cannot proceed. Use --allow-duplicate-names to override."
+        )
 
     def _log_unmapped_databases_error(self, unmapped_dbs: list[UnmappedDatabase]) -> None:
         """Logs an error about unmapped databases."""
