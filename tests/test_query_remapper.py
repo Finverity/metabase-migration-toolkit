@@ -348,6 +348,120 @@ class TestJoinRemapping:
         remapper._remap_joins(query, 1)
         assert query["joins"][0]["condition"] == ["=", ["field", 2000, None], 5]
 
+    def test_v63_join_with_conditions_plural(self):
+        """Metabase v63 joins use 'conditions' array instead of 'condition'."""
+        mapper = build_mapper(
+            db_mapping={1: 10},
+            table_mapping={(1, 100): 1000},
+            field_mapping={(1, 210): 2100, (1, 83): 830},
+        )
+        remapper = QueryRemapper(mapper)
+        query = {
+            "joins": [
+                {
+                    "source-table": 100,
+                    "conditions": [
+                        [
+                            "=",
+                            ["field", {"base-type": "type/Text"}, 210],
+                            ["field", {"base-type": "type/Text", "join-alias": "Commune"}, 83],
+                        ]
+                    ],
+                }
+            ]
+        }
+        remapper._remap_joins(query, 1)
+        assert query["joins"][0]["source-table"] == 1000
+        assert query["joins"][0]["conditions"] == [
+            [
+                "=",
+                ["field", {"base-type": "type/Text"}, 2100],
+                ["field", {"base-type": "type/Text", "join-alias": "Commune"}, 830],
+            ]
+        ]
+
+    def test_v63_join_with_nested_stages_and_conditions(self):
+        """A v63 join with nested stages and conditions remaps correctly."""
+        mapper = build_mapper(
+            db_mapping={1: 10},
+            table_mapping={(1, 100): 1000},
+            field_mapping={(1, 210): 2100, (1, 83): 830},
+        )
+        remapper = QueryRemapper(mapper)
+
+        query = {
+            "joins": [
+                {
+                    "stages": [
+                        {
+                            "lib/type": "mbql.stage/mbql",
+                            "source-table": 100,
+                        }
+                    ],
+                    "conditions": [
+                        [
+                            "=",
+                            [
+                                "field",
+                                {"base-type": "type/Text"},
+                                210,
+                            ],
+                            [
+                                "field",
+                                {
+                                    "base-type": "type/Text",
+                                    "join-alias": "Commune",
+                                },
+                                83,
+                            ],
+                        ]
+                    ],
+                }
+            ]
+        }
+
+        remapper._remap_joins(query, 1)
+
+        assert query["joins"][0]["stages"][0]["source-table"] == 1000
+        assert query["joins"][0]["conditions"] == [
+            [
+                "=",
+                [
+                    "field",
+                    {"base-type": "type/Text"},
+                    2100,
+                ],
+                [
+                    "field",
+                    {
+                        "base-type": "type/Text",
+                        "join-alias": "Commune",
+                    },
+                    830,
+                ],
+            ]
+        ]
+
+    def test_join_conditions_remapped_only_once(self):
+        """Ensures that join condition remapping is executed exactly once."""
+        mapper = build_mapper(
+            db_mapping={1: 10},
+            table_mapping={(1, 100): 1000},
+            field_mapping={(1, 200): 2000, (1, 2000): 9999},
+        )
+        remapper = QueryRemapper(mapper)
+        query = {
+            "joins": [
+                {
+                    "source-table": 100,
+                    "conditions": [["=", ["field", 200, None], 1]],
+                }
+            ]
+        }
+        remapper._remap_joins(query, 1)
+        # Should be 2000, not double-remapped to 9999
+        assert query["joins"][0]["conditions"][0][1] == ["field", 2000, None]
+
     def test_join_without_source_table_or_card(self, remapper):
         query = {"joins": [{"alias": "j0"}]}
         remapper._remap_joins(query, 1)

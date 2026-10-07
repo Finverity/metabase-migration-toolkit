@@ -262,13 +262,18 @@ class QueryRemapper:
     def _remap_joins(self, query: dict[str, Any], source_db_id: int) -> None:
         """Remaps source-table and source-card references in join clauses.
 
-        Handles both v56 and v57 join formats:
+        Handles v56, v57, and v63 join formats:
         - v56: {"joins": [{"source-table": 123 or "card__123", ...}]}
         - v57: {"joins": [{"source-card": 123, ...}]} or nested stages
+        - v63: {"joins": [{"stages": [{"source-table": 123} or {"source-card": 123}], "conditions": [...], ...}]}
+
+        In v63, nested stages define the join source using either "source-table"
+        or "source-card". Join predicates are stored in "conditions" (plural).
+        The legacy "condition" key remains supported for backward compatibility.
         """
         joins = query.get(JOINS_KEY, [])
         for join in joins:
-            # v57: Check for nested stages in join
+            # v57/v63: Check for nested stages in join
             if STAGES_KEY in join and isinstance(join[STAGES_KEY], list):
                 for join_stage in join[STAGES_KEY]:
                     if isinstance(join_stage, dict):
@@ -276,10 +281,11 @@ class QueryRemapper:
                         # Also remap field IDs in join conditions within stages
                         self._remap_query_clauses(join_stage, source_db_id)
                 # Also remap condition at join level if present
-                if "condition" in join:
-                    join["condition"] = self.remap_field_ids_recursively(
-                        join["condition"], source_db_id
-                    )
+                for condition_key in ("condition", "conditions"):
+                    if condition_key in join:
+                        join[condition_key] = self.remap_field_ids_recursively(
+                            join[condition_key], source_db_id
+                        )
                 continue
 
             # v57: Check for source-card (integer card ID)
@@ -311,10 +317,11 @@ class QueryRemapper:
                         )
 
             # Remap condition field IDs
-            if "condition" in join:
-                join["condition"] = self.remap_field_ids_recursively(
-                    join["condition"], source_db_id
-                )
+            for condition_key in ("condition", "conditions"):
+                if condition_key in join:
+                    join[condition_key] = self.remap_field_ids_recursively(
+                        join[condition_key], source_db_id
+                    )
 
     def _remap_query_clauses(self, query: dict[str, Any], source_db_id: int) -> None:
         """Remaps field IDs in query clauses (filter, aggregation, etc.).
