@@ -106,9 +106,15 @@ class CardHandler(BaseHandler):
             # would reference a non-existent (or wrong) target dashboard and the
             # target rejects the request with a collection_id mismatch. Strip it
             # here and relink it once the dashboard has been imported.
+            # Omit it rather than send null: on an overwrite, null would detach the
+            # existing card from its dashboard.
             source_dashboard_id = card_data.get("dashboard_id")
+            target_dashboard_id = None
             if source_dashboard_id is not None:
-                card_data["dashboard_id"] = self.id_mapper.resolve_dashboard_id(source_dashboard_id)
+                target_dashboard_id = self.id_mapper.resolve_dashboard_id(source_dashboard_id)
+                card_data = {k: v for k, v in card_data.items() if k != "dashboard_id"}
+                if target_dashboard_id is not None:
+                    card_data["dashboard_id"] = target_dashboard_id
 
             # Handle conflicts using cached collection items lookup
             card_type = card_data.get("type")
@@ -125,7 +131,7 @@ class CardHandler(BaseHandler):
 
             # If the parent dashboard hasn't been imported yet, queue this card for
             # relinking once DashboardHandler creates/updates that dashboard.
-            if source_dashboard_id is not None and card_data["dashboard_id"] is None:
+            if source_dashboard_id is not None and target_dashboard_id is None:
                 target_card_id = self.id_mapper.resolve_card_id(card.id)
                 if target_card_id is not None:
                     self.id_mapper.register_pending_dashboard_question(

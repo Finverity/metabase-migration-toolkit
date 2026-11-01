@@ -12,6 +12,7 @@ from typing import Any, Literal
 from lib.client import MetabaseClient
 from lib.constants import (
     CARD_TYPE_TO_MODEL,
+    COLLECTION_ITEMS_LOOKUP_PARAMS,
     CONFLICT_OVERWRITE,
     CONFLICT_RENAME,
     MODEL_TYPE_CARD,
@@ -252,7 +253,7 @@ class DryRunPlanner:
             return self._items[cache_key]
 
         try:
-            response = self.client.get_collection_items(cache_key)
+            response = self.client.get_collection_items(cache_key, COLLECTION_ITEMS_LOOKUP_PARAMS)
             self._items[cache_key] = list(response.get("data", []))
         except Exception as e:
             logger.warning(

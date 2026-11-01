@@ -75,6 +75,11 @@ FIELD_CONTAINING_CLAUSES = (
     "expressions",
 )
 
+# Query parameters for looking up existing objects in a target collection.
+# Metabase leaves dashboard questions out of /collection/:id/items by default, so
+# without this they look absent from the target and are created again on re-import.
+COLLECTION_ITEMS_LOOKUP_PARAMS = {"show_dashboard_questions": "true"}
+
 # Fields to remove when creating new items via API
 IMMUTABLE_FIELDS = frozenset(
     {
