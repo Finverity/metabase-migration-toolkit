@@ -12,6 +12,7 @@ import pytest
 
 from lib.client import MetabaseAPIError
 from lib.config import ImportConfig
+from lib.constants import COLLECTION_ITEMS_LOOKUP_PARAMS
 from lib.handlers.base import ImportContext
 from lib.handlers.card import CardHandler
 from lib.models_core import Card, ImportReport, Manifest
@@ -369,7 +370,9 @@ class TestFindExistingCard:
 
         import_context.find_existing_card("Test Card", None)
 
-        mock_client.get_collection_items.assert_called_once_with("root")
+        mock_client.get_collection_items.assert_called_once_with(
+            "root", COLLECTION_ITEMS_LOOKUP_PARAMS
+        )
 
     def test_find_existing_card_handles_exception(self, import_context, mock_client):
         """Test handling of exception when finding card."""
@@ -1030,7 +1033,7 @@ class TestImportSingleCard:
         handler._import_single_card(card)
 
         created_payload = mock_client.create_card.call_args[0][0]
-        assert created_payload["dashboard_id"] is None
+        assert "dashboard_id" not in created_payload
         mock_id_mapper.register_pending_dashboard_question.assert_called_once_with(55, 1000)
 
     def test_import_dashboard_question_uses_mapped_dashboard_id(

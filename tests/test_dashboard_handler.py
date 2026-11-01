@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from lib.config import ImportConfig
+from lib.constants import COLLECTION_ITEMS_LOOKUP_PARAMS
 from lib.handlers.base import ImportContext
 from lib.handlers.dashboard import DashboardHandler
 from lib.models_core import Card, Dashboard, ImportReport, Manifest
@@ -179,7 +180,9 @@ class TestFindExistingDashboard:
 
         import_context.find_existing_dashboard("Test Dashboard", None)
 
-        mock_client.get_collection_items.assert_called_once_with("root")
+        mock_client.get_collection_items.assert_called_once_with(
+            "root", COLLECTION_ITEMS_LOOKUP_PARAMS
+        )
 
     def test_find_existing_dashboard_handles_exception(self, import_context, mock_client):
         """Test handling of exception when finding dashboard."""
