@@ -12,6 +12,7 @@ import pytest
 
 from import_metabase import MetabaseImporter
 from lib.config import ImportConfig
+from lib.constants import COLLECTION_ITEMS_LOOKUP_PARAMS
 from lib.models import DatabaseMap, ImportReport, Manifest, ManifestMeta
 from lib.remapping import IDMapper, QueryRemapper
 
@@ -757,7 +758,9 @@ class TestConflictResolution:
         assert result is None
 
         # Verify correct API call
-        mock_context.client.get_collection_items.assert_called_with(10)
+        mock_context.client.get_collection_items.assert_called_with(
+            10, COLLECTION_ITEMS_LOOKUP_PARAMS
+        )
 
     def test_find_existing_dashboard_in_collection(self, mock_context):
         """Test finding an existing dashboard by name in a collection."""

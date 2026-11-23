@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from lib.client import MetabaseClient
 from lib.config import ImportConfig
-from lib.constants import CARD_TYPE_TO_MODEL
+from lib.constants import CARD_TYPE_TO_MODEL, COLLECTION_ITEMS_LOOKUP_PARAMS
 from lib.models import ImportReport, Manifest
 from lib.remapping.id_mapper import IDMapper
 from lib.remapping.query_remapper import QueryRemapper
@@ -90,7 +90,7 @@ class ImportContext:
         def fetch_collection_items(coll_id: int | str) -> tuple[int | str, list[dict]]:
             """Fetch items for a single collection."""
             try:
-                response = self.client.get_collection_items(coll_id)
+                response = self.client.get_collection_items(coll_id, COLLECTION_ITEMS_LOOKUP_PARAMS)
                 return coll_id, response.get("data", [])
             except Exception as e:
                 logger.warning(f"Failed to prefetch items for collection {coll_id}: {e}")
@@ -135,7 +135,9 @@ class ImportContext:
         if not self._collection_items_prefetched:
             logger.debug(f"Cache miss for collection {cache_key}, falling back to API call")
             try:
-                response = self.client.get_collection_items(cache_key)
+                response = self.client.get_collection_items(
+                    cache_key, COLLECTION_ITEMS_LOOKUP_PARAMS
+                )
                 items: list[dict[str, Any]] = response.get("data", [])
                 # Cache the result for future lookups
                 self._collection_items_cache[cache_key] = items
@@ -175,7 +177,9 @@ class ImportContext:
         if not self._collection_items_prefetched:
             logger.debug(f"Cache miss for collection {cache_key}, falling back to API call")
             try:
-                response = self.client.get_collection_items(cache_key)
+                response = self.client.get_collection_items(
+                    cache_key, COLLECTION_ITEMS_LOOKUP_PARAMS
+                )
                 items = response.get("data", [])
                 # Cache the result for future lookups
                 self._collection_items_cache[cache_key] = items

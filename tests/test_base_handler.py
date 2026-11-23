@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 from lib.config import ImportConfig
+from lib.constants import COLLECTION_ITEMS_LOOKUP_PARAMS
 from lib.handlers.base import ImportContext
 from lib.models import Card, Dashboard, DatabaseMap, ImportReport, Manifest, ManifestMeta
 from lib.remapping import IDMapper, QueryRemapper
@@ -251,7 +252,7 @@ class TestImportContextFindExisting:
         result = context.find_existing_dashboard("Dashboard", 100)
 
         assert result is not None
-        context.client.get_collection_items.assert_called_with(100)
+        context.client.get_collection_items.assert_called_with(100, COLLECTION_ITEMS_LOOKUP_PARAMS)
 
     def test_find_existing_card_distinguishes_metric_from_question(self):
         """Test that find_existing_card can distinguish metric from question cards with same name."""

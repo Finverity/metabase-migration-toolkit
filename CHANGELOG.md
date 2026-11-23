@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dashboard questions duplicated on re-import**: Metabase omits dashboard questions from
+  `GET /api/collection/:id/items` unless `show_dashboard_questions=true` is passed, so the
+  lookup of existing target objects never found them and every conflict strategy created
+  them again. The import and `--dry-run` lookups now request them, and an overwrite no longer
+  sends `dashboard_id: null` for a card whose parent dashboard is imported later (#84).
 - **Dashboard parameters pruned on update**: Metabase drops the dashboard-level parameters
   that are referenced as `inline_parameters` by a dashcard when `parameters` and `dashcards`
   are sent within the same `PUT /api/dashboard/:id`. The dashcards keep their references, but

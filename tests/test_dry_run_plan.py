@@ -10,6 +10,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from lib.constants import COLLECTION_ITEMS_LOOKUP_PARAMS
 from lib.models_core import Card, Collection, Dashboard, Manifest, ManifestMeta
 from lib.services.dry_run import DryRunPlanner
 
@@ -142,7 +143,7 @@ class TestExistingObjects:
 
         actions = plan_actions(manifest, target_client, "overwrite")
 
-        target_client.get_collection_items.assert_called_with(5)
+        target_client.get_collection_items.assert_called_with(5, COLLECTION_ITEMS_LOOKUP_PARAMS)
         assert action_for(actions, "Revenue").action == "update"
 
     def test_card_in_new_collection_is_created(self, target_client):
